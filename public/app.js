@@ -1072,7 +1072,6 @@ function showRole(first) {
   const seatNo = (id) => g.seats.findIndex(s => s.id === id) + 1;
   const mates = (me.knows || []).map(k => { const p = P(k.id, g.seats); return `<div class="mate">${av(p, 40)}<div class="grow"><b>${esc(p.name)}</b><div class="tiny muted">${esc(k.label)}</div></div><span class="seatpill ${k.label.includes('壞') ? 'e' : ''}">${seatNo(k.id)}號</span></div>`; }).join('');
   const ladyMine = (g.ladyLog || []).filter(l => l.side && l.holder === S.meId).map(l => { const p = P(l.target, g.seats); return `<div class="mate">${av(p, 34)}<div class="grow"><b>${esc(p.name)}</b><div class="tiny muted">第 ${l.round + 1} 輪後查驗</div></div><span class="seatpill ${l.side === 'evil' ? 'e' : ''}">${seatNo(l.target)}號 · ${l.side === 'good' ? '好人' : '壞人'}</span></div>`; }).join('');
-  const kmap = {}; (me.knows || []).forEach(k => { kmap[k.id] = k.label; });
   const special = !['servant', 'minion'].includes(me.role);
   const sk = skinOf(me.role);
   const art = skinArt(me.role, sk);
@@ -1085,7 +1084,6 @@ function showRole(first) {
     <div id="kn" class="hidden">
       <div class="rinfo">${ROLE_INFO[me.role] || r.d || ''}${g.lanceSwitched !== undefined && me.side !== r.side ? '<br><b>注意：蘭斯洛特已互換陣營</b>' : ''}</div>
       ${mates ? `<div class="matepanel"><div class="mp-h">${side === 'evil' ? '可看到的隊友' : '可看到的人物'}</div>${mates}</div>` : ''}
-      <div class="matepanel"><div class="mp-h">你開局睇到嘅人</div>${knowRing(g.seats.map(s => s.id === S.meId ? { me: true, art } : (kmap[s.id] ? { kind: /梅林/.test(kmap[s.id]) ? 'p' : (/壞|同伴|隊友/.test(kmap[s.id]) ? 'e' : 'p'), label: kmap[s.id], name: s.name } : { kind: 'u', name: s.name })), { role: r.n || me.roleName, side, n: Object.keys(kmap).length })}<div class="tiny muted center" style="margin-top:6px">灰色「?」= 你睇唔到佢嘅身份</div></div>
       ${ladyMine ? `<div class="matepanel"><div class="mp-h">🌊 湖中仙女查驗結果</div>${ladyMine}</div>` : ''}
     </div>
     <div class="cover" id="cov">翻開前請確認旁邊沒有人偷看</div>

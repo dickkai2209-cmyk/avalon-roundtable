@@ -503,19 +503,20 @@ async function makeGuest(name, avatar) {
     const know = await page.eval(`(() => {
       const kn = document.querySelector('#kn');
       const sheet = document.querySelector('.sheet');
-      const name = (document.querySelector('.rname, .kcen b') || {}).textContent || '';
-      if (kn && sheet) {
-        const top = kn.getBoundingClientRect().top - sheet.getBoundingClientRect().top + sheet.scrollTop - 8;
+      const name = (document.querySelector('.rname') || {}).textContent || '';
+      const info = document.querySelector('.rinfo');
+      if (info && sheet) {
+        const top = info.getBoundingClientRect().top - sheet.getBoundingClientRect().top + sheet.scrollTop - 8;
         sheet.scrollTop = Math.max(0, top);
       }
-      const ring = document.querySelector('.kring, .matepanel');
       const sr = sheet ? sheet.getBoundingClientRect() : null;
-      const rr = ring ? ring.getBoundingClientRect() : null;
-      const visible = !!(rr && sr && rr.top < sr.bottom - 24 && rr.bottom > sr.top + 24);
-      return { name, visible, text: kn ? kn.innerText.slice(0, 80) : '' };
+      const ir = info ? info.getBoundingClientRect() : null;
+      const visible = !!(ir && sr && ir.top < sr.bottom - 8 && name);
+      return { name, visible, ring: !!document.querySelector('.kring'), heading: !!(kn && kn.innerText.includes('你開局睇到')), text: kn ? kn.innerText.slice(0, 100) : '' };
     })()`);
     console.log('role view', role, JSON.stringify(know));
-    if (!know.visible) throw new Error('knowledge view is not on screen for ' + role);
+    if (know.ring || know.heading) throw new Error('example diagram still on ' + role);
+    if (!know.visible) throw new Error('role explanation is not on screen for ' + role);
     let clip = null;
     if (recordRoles) clip = startRec(path.join(OUT, 'roleclip-' + role + '.mp4'));
     await sleep(recordRoles ? 5200 : 700);

@@ -1431,10 +1431,17 @@ async function loadStats() {
 function skinsHtml() {
   const cbk = cardBackOf();
   return `<div class="card"><h3 style="margin:0 0 8px">卡背</h3><div class="skinrow">${CARDBACKS.map(([k, n, ty, need]) => `<div class="skin ${unlockOk(ty, need) ? '' : 'lock'} ${cbk === k ? 'sel' : ''}" data-a="cardback" data-k="${k}"><div class="rc"><div class="art" style="background-image:url(${thumbCb(k)})"></div></div><div style="margin-top:4px">${n}${unlockOk(ty, need) ? '' : `<div class="tiny muted">🔒 ${needText(ty, need)}</div>`}</div></div>`).join('')}</div></div>
-    <div class="card"><div class="toggle"><div class="grow"><b>✨ 閃光卡牌特效</b><div class="muted small">${mvpTotal() >= 10 ? '翻身份卡時有彩虹閃光同星星' : `達成「10次MVP」成就解鎖（${Math.min(myStats.mvp || 0, 10)}/10）`}</div></div><button class="sw ${shinyOn() ? 'on' : ''}" data-a="shiny" ${mvpTotal() >= 10 ? '' : 'disabled'}></button></div></div><div class="card"><div class="small muted">主要角色有不同服裝（日常便服、節日盛裝）及特效皮膚。玩得越多解鎖越多，揭曉身份時會顯示你所選的皮膚，並保存到帳號。</div></div>` + ROLE_ORDER.map(k => {
-    const played = rolePlayed(k); const cur = skinOf(k); const next = SKINS.find(s => s.need > played);
+    <div class="card shiny-card"><div class="toggle"><div class="grow"><b>✨ 閃光卡牌特效</b><div class="muted small" id="shiny-lock">${mvpTotal() >= 10 ? (shinyOn() ? '已裝備。下面係實際效果。' : '已解鎖，可以裝備。') : `預覽中，未裝備。裝備要 10 次真實 MVP（${Math.min(myStats.mvp || 0, 10)}/10），GM 都一樣。預覽唔會解鎖。`}</div></div><button class="sw ${shinyOn() ? 'on' : ''}" data-a="shiny" ${mvpTotal() >= 10 ? '' : 'disabled'} aria-label="裝備閃光卡牌特效"></button></div>
+      <button type="button" class="shiny-stage" data-a="shinyprev" aria-label="預覽閃光卡牌特效，不會裝備">
+        <div class="rcard good holo" id="shiny-sample"><div class="strip"></div><div class="rart" style="background-image:url(${img('merlin')})"></div><div class="rname">梅林</div></div>
+        <div class="shiny-status">預覽中 · 未裝備 · 撳卡再播一次</div>
+      </button>
+    </div><div class="card"><div class="small muted">主要角色有不同服裝（日常便服、節日盛裝）及特效皮膚。玩得越多解鎖越多，揭曉身份時會顯示你所選的皮膚，並保存到帳號。</div></div>` + ROLE_ORDER.map(k => {
+    const played = rolePlayed(k); const cur = skinOf(k); const mine = skinsFor(k); const next = mine.find(s => s.need > played);
+    const outfitWait = (k === 'mordred' || k === 'oberon') ? '<div class="tiny muted" style="margin-top:6px">日常便服同節日盛裝嘅原圖未收錄，暫時只有經典。</div>' : '';
     return `<div class="card"><div class="row between"><h3 style="margin:0">${ROLE[k].n}</h3><span class="small muted">已玩 ${played} 場</span></div>
       <div class="skinrow" style="margin-top:10px">${skinsFor(k).map(s => `<div class="skin ${played >= s.need ? '' : 'lock'} ${cur === s.id ? 'sel' : ''}" data-a="skin" data-r="${k}" data-s="${s.id}">${roleFace(k, s.id, true)}<div style="margin-top:4px">${s.n}${played >= s.need ? '' : ` 🔒${s.need}場`}</div></div>`).join('')}</div>
+      ${outfitWait}
       ${next ? `<div class="tiny muted" style="margin-top:6px">下一款「${next.n}」：${played}/${next.need} 場</div><div class="bar"><i style="width:${pct(played, next.need)}%"></i></div>` : '<div class="tiny gold" style="margin-top:6px">已解鎖全部皮膚 ✦</div>'}</div>`;
   }).join('');
 }
@@ -1855,7 +1862,10 @@ async function posterDialog() { return saveCard(window.__lastRecord, true); }
 // ================= actions =================
 function saveSkins(prev) {
   LS.setItem('cc.skins', JSON.stringify(skinSel));
-  return api('/api/me', { method: 'PUT', body: JSON.stringify({ skins: skinSel }) }).catch((err) => {
+  return api('/api/me', { method: 'PUT', body: JSON.stringify({ skins: skinSel }) }).then((r) => {
+    if (r && r.user && r.user.skins) { skinSel = r.user.skins; LS.setItem('cc.skins', JSON.stringify(skinSel)); }
+    return r;
+  }).catch((err) => {
     if (prev) { skinSel = prev; LS.setItem('cc.skins', JSON.stringify(skinSel)); }
     throw err;
   });
@@ -1873,12 +1883,32 @@ document.addEventListener('click', async (e) => {
     case 'emote': return toggleEmotes(el);
     case 'avoid': return openAvoidSheet();
     case 'vetoinfo': { const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards); return openModal(`<div class="vuse"><img src="/img/veto.webp" alt="回避卡" width="150" height="200"></div><div class="center name">${isGM() ? '∞' : vetoAmt(vc) + ' / 10'}</div><p class="small muted center">${isGM() ? 'GM 回避卡為無限（∞），使用時唔會扣減，但仍要喺投票階段且身為隊員，每局只可以用一次。' : '每贏一局 +1 張（上限 10 張），永久保存在帳號。房間開啟「回避卡」時，投票階段身為隊員可用一張退出隊伍，本次組隊作廢且不計否決。'}</p><button type="button" class="btn" id="ok">知道了</button>`, el2 => $('#ok', el2).onclick = closeModal); }
+    case 'shinyprev': {
+      const y = window.scrollY;
+      const card = document.querySelector('#shiny-sample');
+      if (!card) return;
+      card.classList.remove('holo');
+      void card.offsetWidth;
+      card.classList.add('holo');
+      const status = document.querySelector('.shiny-status');
+      if (status) status.textContent = mvpTotal() >= 10 ? (shinyOn() ? '已裝備 · 再播預覽' : '預覽中 · 未裝備') : `預覽中 · 未裝備 · ${Math.min(myStats.mvp || 0, 10)}/10 MVP`;
+      window.scrollTo(0, y);
+      return;
+    }
     case 'shiny': {
       if (mvpTotal() < 10) return toast('達成「10次MVP」即可解鎖');
       const prev = { ...skinSel }; const on = !skinSel._shiny;
       skinSel._shiny = on; el.classList.toggle('on', on);
-      saveSkins(prev).then(() => toast(on ? '已開啟：閃光卡牌特效' : '已關閉：閃光卡牌特效', 'ok'))
-        .catch(() => { el.classList.toggle('on', !!skinSel._shiny); toast('儲存失敗，已恢復原先選擇', 'bad'); });
+      saveSkins(prev).then((r) => {
+        const saved = r && r.user && r.user.skins;
+        if (saved && !!saved._shiny !== on) {
+          skinSel = saved;
+          LS.setItem('cc.skins', JSON.stringify(skinSel));
+          el.classList.toggle('on', !!saved._shiny);
+          return toast('未夠 10 次 MVP，未有裝備', 'bad');
+        }
+        toast(on ? '已開啟：閃光卡牌特效' : '已關閉：閃光卡牌特效', 'ok');
+      }).catch(() => { el.classList.toggle('on', !!skinSel._shiny); toast('儲存失敗，已恢復原先選擇', 'bad'); });
       return;
     }
     case 'cardback': {

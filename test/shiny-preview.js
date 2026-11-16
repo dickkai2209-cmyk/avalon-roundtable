@@ -22,7 +22,28 @@ async function putSkins(token, skins) {
   return j.user;
 }
 
+const PROTECTED = {
+  'servant.webp': ['40676', 'a59fb264250ce508e29066e3e00c44d9da7abc6f46bfb54810b7b3c06ffa63f1'],
+  'servant_t.webp': ['7538', 'f4a4f41c6df09a0523887d363aff38789b3a710291315307417b6dd8249fda06'],
+  'servant_casual.webp': ['40810', 'ff9a50ab0379ebbf2c9f0ed9305bd2e4b40fa98fa2d6835c06d8c0b348b4be0e'],
+  'servant_casual_t.webp': ['7972', '665eea863839aca21da5a7a6f735da3ebd99d3d6b703cf726c2caf794e3ac4ad'],
+  'servant_festive.webp': ['45174', '3aaa7b79109de45269dc5132772e0bbed0a027ac5d9f911e7a8e65f718b83ea2'],
+  'servant_festive_t.webp': ['7946', '353d0be9de63fd77e52575898a4447424c2ea26db57ecd416195b5720c7391cf'],
+  'mordred.webp': ['51674', 'd2b043f7f245ce9d06c5343ee6abb7950b2bf99978dc429b1630535076390f0d'],
+  'oberon.webp': ['49654', '2b4ccf93b625e3fa94b2cbb04f99bcc2f77d72a40fb981513c8ecbf1c730e1fe'],
+};
+const NEW_ART = ['mordred_casual.webp', 'mordred_casual_t.webp', 'mordred_festive.webp', 'mordred_festive_t.webp', 'oberon_casual.webp', 'oberon_casual_t.webp', 'oberon_festive.webp', 'oberon_festive_t.webp', 'servant_male.webp', 'servant_male_t.webp', 'servant_casual_male.webp', 'servant_casual_male_t.webp'];
 (async () => {
+  const crypto = require('crypto');
+  const imgDir = path.join(__dirname, '..', 'public', 'img');
+  for (const [name, [bytes, hash]] of Object.entries(PROTECTED)) {
+    const buf = fs.readFileSync(path.join(imgDir, name));
+    assert(String(buf.length) === bytes && crypto.createHash('sha256').update(buf).digest('hex') === hash, name + ' bytes are unchanged');
+  }
+  const female = fs.readFileSync(path.join(imgDir, 'servant.webp'));
+  const male = fs.readFileSync(path.join(imgDir, 'servant_male.webp'));
+  assert(!female.equals(male), 'classic male art is not a copy of the female classic');
+  for (const name of NEW_ART) assert(fs.existsSync(path.join(imgDir, name)), 'new art exists: ' + name);
   fs.mkdirSync(DATA, { recursive: true });
   process.env.DATA_DIR = DATA;
   process.env.DATABASE_URL = '';
@@ -107,7 +128,11 @@ async function putSkins(token, skins) {
     fs.mkdirSync('/opt/cursor/artifacts', { recursive: true });
     fs.writeFileSync('/opt/cursor/artifacts/shiny-preview-375.png', Buffer.from(shot.data, 'base64'));
     const mordred = await cdp.eval(`(() => { const h = [...document.querySelectorAll('h3')].find(x => x.textContent.includes('莫德雷德')); if (!h) return { missing: true, heads: [...document.querySelectorAll('h3')].map(x => x.textContent) }; const card = h.closest('.card'); return { tiles: [...card.querySelectorAll('[data-a=skin]')].map(s => s.dataset.s), note: card.innerText }; })()`);
-    assert(mordred.tiles && !mordred.tiles.includes('casual') && !mordred.tiles.includes('festive') && /原圖未收錄/.test(mordred.note || ''), 'Mordred does not invent casual or festive tiles');
+    assert(mordred.tiles && mordred.tiles.includes('casual') && mordred.tiles.includes('festive') && !/原圖未收錄/.test(mordred.note || ''), 'Mordred has casual and festive tiles from real art');
+    const mordredArt = await cdp.eval(`(() => [...document.querySelectorAll('[data-r=mordred][data-a=skin]')].map(s => ({ id: s.dataset.s, art: getComputedStyle(s.querySelector('.art')).backgroundImage, name: s.querySelector('.rn').textContent })))()`);
+    assert(mordredArt.find(t => t.id === 'casual').art.includes('/img/mordred_casual.webp') && mordredArt.find(t => t.id === 'festive').art.includes('/img/mordred_festive.webp') && mordredArt.every(t => t.name === '莫德雷德'), 'Mordred tiles use the new outfit files');
+    const oberonArt = await cdp.eval(`(() => [...document.querySelectorAll('[data-r=oberon][data-a=skin]')].map(s => ({ id: s.dataset.s, art: getComputedStyle(s.querySelector('.art')).backgroundImage, name: s.querySelector('.rn').textContent })))()`);
+    assert(oberonArt.find(t => t.id === 'casual').art.includes('/img/oberon_casual.webp') && oberonArt.find(t => t.id === 'festive').art.includes('/img/oberon_festive.webp'), 'Oberon tiles use the new outfit files');
     const servant = await cdp.eval(`(() => {
       const h = [...document.querySelectorAll('h3')].find(x => x.textContent.includes('亞瑟的忠臣'));
       const card = h.closest('.card');
@@ -115,9 +140,32 @@ async function putSkins(token, skins) {
       return { tiles, note: card.innerText.includes('男仕') };
     })()`);
     const byId = Object.fromEntries(servant.tiles.map(t => [t.id, t]));
-    assert(byId.classic && byId.classic.art.includes('/img/servant.webp') && byId.classic.label.startsWith('經典 · 女') && byId.classic.name === '亞瑟的忠臣', 'female classic servant art and role name stay');
-    assert(byId.casual && byId.casual.art.includes('/img/servant_casual.webp') && byId.casual.label.startsWith('日常便服 · 女'), 'female casual servant art stays');
-    assert(!byId.classic_male && !servant.tiles.some(t => /男/.test(t.id)) && servant.note, 'no invented male servant tile');
+    assert(byId.classic && byId.classic.art.includes('/img/servant.webp') && !byId.classic.art.includes('servant_male') && byId.classic.label.startsWith('經典 · 女') && byId.classic.name === '亞瑟的忠臣', 'female classic servant art and role name stay');
+    assert(byId.casual && byId.casual.art.includes('/img/servant_casual.webp') && !byId.casual.art.includes('casual_male') && byId.casual.label.startsWith('日常便服 · 女'), 'female casual servant art stays');
+    assert(byId.classic_male && byId.classic_male.art.includes('/img/servant_male.webp') && byId.classic_male.label.startsWith('經典 · 男'), 'classic male servant uses servant_male.webp');
+    assert(byId.casual_male && byId.casual_male.art.includes('/img/servant_casual_male.webp') && byId.casual_male.label.startsWith('日常便服 · 男'), 'casual male servant uses servant_casual_male.webp');
+    assert(!servant.tiles.some(t => t.id === 'festive_male'), 'no male festive tile');
+    await cdp.eval(`document.querySelector('[data-r=servant][data-s=classic_male]').scrollIntoView({ block: 'center' })`);
+    const rowShot = await cdp.send('Page.captureScreenshot', { format: 'png', clip: await cdp.eval(`(() => { const e = document.querySelector('[data-r=servant]').closest('.card').getBoundingClientRect(); return { x: 0, y: Math.max(0, e.top), width: 375, height: Math.min(520, e.height), scale: 1 }; })()`) });
+    fs.writeFileSync('/opt/cursor/artifacts/servant-picker-375.png', Buffer.from(rowShot.data, 'base64'));
+    const yBefore = await cdp.eval(`window.scrollY`);
+    await cdp.eval(`document.querySelector('[data-r=servant][data-s=classic_male]').click()`);
+    await cdp.eval(`new Promise(r => { const t = setInterval(() => { if (document.querySelector('.skinprev img')) { clearInterval(t); r(1); } }, 30); setTimeout(() => r(0), 4000); })`);
+    const malePrev = await cdp.eval(`(() => { const img = document.querySelector('.skinprev img'); const rn = document.querySelector('.skinprev .rn'); return { src: img.src, name: rn.textContent, lines: rn.getClientRects().length }; })()`);
+    assert(malePrev.src.includes('/img/servant_male.webp') && malePrev.name === '亞瑟的忠臣' && malePrev.lines === 1, 'male classic preview keeps one role-name line');
+    const maleShot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    fs.writeFileSync('/opt/cursor/artifacts/servant-male-preview-375.png', Buffer.from(maleShot.data, 'base64'));
+    await cdp.eval(`document.querySelector('#sp-x').click()`);
+    const yMale = await cdp.eval(`window.scrollY`);
+    assert(Math.abs(yMale - yBefore) < 2, 'closing the male preview restores scroll');
+    await cdp.eval(`document.querySelector('[data-r=mordred][data-s=festive]').scrollIntoView({ block: 'center' })`);
+    await cdp.eval(`document.querySelector('[data-r=mordred][data-s=festive]').click()`);
+    await cdp.eval(`new Promise(r => { const t = setInterval(() => { if (document.querySelector('.skinprev img')) { clearInterval(t); r(1); } }, 30); setTimeout(() => r(0), 4000); })`);
+    const morPrev = await cdp.eval(`document.querySelector('.skinprev img').src`);
+    assert(morPrev.includes('/img/mordred_festive.webp'), 'Mordred festive preview uses the new full card');
+    const morShot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    fs.writeFileSync('/opt/cursor/artifacts/mordred-festive-preview-375.png', Buffer.from(morShot.data, 'base64'));
+    await cdp.eval(`document.querySelector('#sp-x').click()`);
   } finally {
     try { chrome.kill('SIGKILL'); } catch {}
     try { srv.kill('SIGKILL'); } catch {}

@@ -26,8 +26,23 @@ const needText = (type, need) => type === 'wins' ? `勝 ${need} 場` : type === 
 const cbUnlocked = (k) => { const c = CARDBACKS.find(x => x[0] === k); return !!c && unlockOk(c[2], c[3]); };
 const cardBackOf = () => { const k = (skinSel && skinSel._cardback) || 'cardback'; return cbUnlocked(k) ? k : 'cardback'; };
 const shinyOn = () => !!(skinSel && skinSel._shiny) && mvpTotal() >= 10;
-const OUTFIT_ROLES = ['merlin', 'percival', 'morgana', 'assassin', 'servant'];
-const skinsFor = (role) => SKINS.filter(s => !s.outfit || OUTFIT_ROLES.includes(role));
+const OUTFIT_ROLES = ['merlin', 'percival', 'morgana', 'assassin', 'servant', 'mordred', 'oberon'];
+const SERVANT_MALE = [
+  { id: 'classic_male', n: '經典 · 男', need: 0, art: 'servant_male' },
+  { id: 'casual_male', n: '日常便服 · 男', need: 0, art: 'servant_casual_male' },
+];
+const skinById = (id) => SKINS.find(k => k.id === id) || SERVANT_MALE.find(k => k.id === id);
+const skinsFor = (role) => {
+  const base = SKINS.filter(s => !s.outfit || OUTFIT_ROLES.includes(role));
+  if (role !== 'servant') return base;
+  const out = [];
+  for (const s of base) {
+    out.push(s);
+    if (s.id === 'classic') out.push(SERVANT_MALE[0]);
+    if (s.id === 'casual') out.push(SERVANT_MALE[1]);
+  }
+  return out;
+};
 const ROLE_ORDER = ['merlin', 'percival', 'servant', 'assassin', 'morgana', 'mordred', 'oberon', 'minion'];
 const img = (r) => `/img/${r}.webp`, thumb = (r) => `/img/${r}_t.webp`, thumbCb = (k) => `/img/${k}.webp`;
 const SKINS = [
@@ -99,7 +114,7 @@ function checkAch() { // one-time unlock celebration for 10次MVP
 }
 const refreshStats = () => api('/api/stats').then(s => { myStats = s; checkAch(); return s; }).catch(() => myStats);
 const rolePlayed = (r) => isGM() ? 1e9 : (((myStats.roles || {})[r] || {}).played || 0);
-const skinOf = (role) => { const s = SKINS.find(k => k.id === skinSel[role]); const played = rolePlayed(role); return s && played >= s.need ? s.id : 'classic'; };
+const skinOf = (role) => { const s = skinById(skinSel[role]); const played = rolePlayed(role); return s && played >= s.need ? s.id : 'classic'; };
 function applyUser(u, stats) {
   if (!u) return;
   account = u; pid = u.id; LS.setItem('cc.pid', pid);
@@ -826,6 +841,8 @@ function presetCard(pr) {
   return `<div class="preset"><div class="blue"><b>藍方 ${pr.good.length}</b>${gl.map(v => `<span class="pill">${v}</span>`).join('')}</div><div class="red"><b>紅方 ${pr.evil.length}</b>${el.map(v => `<span class="pill">${v}</span>`).join('')}</div></div>`;
 }
 function skinArt(role, skin = 'classic') {
+  if (role === 'servant' && skin === 'classic_male') return 'servant_male';
+  if (role === 'servant' && skin === 'casual_male') return 'servant_casual_male';
   let art = ROLE_ART[role] || role;
   if (OUTFIT_ROLES.includes(role) && (skin === 'casual' || skin === 'festive')) art = `${role}_${skin}`;
   return art;
@@ -968,8 +985,8 @@ function showRole(first) {
   const ladyMine = (g.ladyLog || []).filter(l => l.side && l.holder === S.meId).map(l => { const p = P(l.target, g.seats); return `<div class="mate">${av(p, 34)}<div class="grow"><b>${esc(p.name)}</b><div class="tiny muted">第 ${l.round + 1} 輪後查驗</div></div><span class="seatpill ${l.side === 'evil' ? 'e' : ''}">${seatNo(l.target)}號 · ${l.side === 'good' ? '好人' : '壞人'}</span></div>`; }).join('');
   const kmap = {}; (me.knows || []).forEach(k => { kmap[k.id] = k.label; });
   const special = !['servant', 'minion'].includes(me.role);
-  let art = ROLE_ART[me.role] || me.role; const sk = skinOf(me.role);
-  if (OUTFIT_ROLES.includes(me.role) && (sk === 'casual' || sk === 'festive')) art = `${me.role}_${sk}`;
+  const sk = skinOf(me.role);
+  const art = skinArt(me.role, sk);
   const cb = cardBackOf();
   openModal(`<div class="reveal ${side} ${special ? 'special' : ''}"><div class="rv-h">你的身份是</div>
     <div class="rv-stage"><div class="rays"></div><canvas class="fxc" id="fxc"></canvas>
@@ -1442,15 +1459,13 @@ function skinsHtml() {
       </button>
     </div><div class="card"><div class="small muted">主要角色有不同服裝（日常便服、節日盛裝）及特效皮膚。玩得越多解鎖越多，揭曉身份時會顯示你所選的皮膚，並保存到帳號。</div></div>` + ROLE_ORDER.map(k => {
     const played = rolePlayed(k); const cur = skinOf(k); const mine = skinsFor(k); const next = mine.find(s => s.need > played);
-    const outfitWait = (k === 'mordred' || k === 'oberon') ? '<div class="tiny muted" style="margin-top:6px">日常便服同節日盛裝嘅原圖未收錄，暫時只有經典。</div>' : (k === 'servant' ? '<div class="tiny muted" style="margin-top:6px">男仕經典同日常便服嘅原圖未收錄。而家嘅經典同日常便服係女仕，圖檔未改。</div>' : '');
     return `<div class="card"><div class="row between"><h3 style="margin:0">${ROLE[k].n}</h3><span class="small muted">已玩 ${played} 場</span></div>
       <div class="skinrow" style="margin-top:10px">${skinsFor(k).map(s => `<div class="skin ${played >= s.need ? '' : 'lock'} ${cur === s.id ? 'sel' : ''}" data-a="skin" data-r="${k}" data-s="${s.id}">${roleFace(k, s.id, true)}<div style="margin-top:4px">${skinLabel(k, s)}${played >= s.need ? '' : ` 🔒${s.need}場`}</div></div>`).join('')}</div>
-      ${outfitWait}
-      ${next ? `<div class="tiny muted" style="margin-top:6px">下一款「${next.n}」：${played}/${next.need} 場</div><div class="bar"><i style="width:${pct(played, next.need)}%"></i></div>` : '<div class="tiny gold" style="margin-top:6px">已解鎖全部皮膚 ✦</div>'}</div>`;
+      ${next ? `<div class="tiny muted" style="margin-top:6px">下一款「${skinLabel(k, next)}」：${played}/${next.need} 場</div><div class="bar"><i style="width:${pct(played, next.need)}%"></i></div>` : '<div class="tiny gold" style="margin-top:6px">已解鎖全部皮膚 ✦</div>'}</div>`;
   }).join('');
 }
 function equipSkin(role, skinId) {
-  const sk = SKINS.find(k => k.id === skinId);
+  const sk = skinById(skinId);
   const played = rolePlayed(role);
   if (!sk || played < sk.need) return Promise.reject(new Error('locked'));
   if (skinOf(role) === skinId) return Promise.resolve(false);
@@ -1467,7 +1482,7 @@ function equipSkin(role, skinId) {
     });
 }
 function openSkinPreview(role, skinId) {
-  const sk = SKINS.find(k => k.id === skinId);
+  const sk = skinById(skinId);
   const meta = ROLE[role] || { n: RN[role] || role, en: '', side: 'good' };
   if (!sk) return;
   const played = rolePlayed(role);

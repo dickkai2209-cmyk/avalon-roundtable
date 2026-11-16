@@ -781,23 +781,24 @@ function knowRing(items, o) {
   }).join('');
   return `<div class="kring"><div class="kcen"><span class="tiny">你係</span><b class="${o.side}">${esc(o.role)}</b><span class="tiny">睇到 ${o.n} 人</span></div>${seats}</div>`;
 }
-function seatInwardStyle(x, y, a, av) {
+function seatInwardStyle(x, y, a, av, seatR, numR) {
+  // Same inward vector for every seat. The pixel distance is (seatR-numR)% of the table,
+  // so the numerals land on one concentric circle. No name or avatar-height offset.
   const inx = -Math.cos(a), iny = -Math.sin(a);
-  // Inner-ring numeral: clear name + pills when it falls downward, clear pendant ears when it rises.
-  let inoff = Math.round(av * 0.62);
-  if (iny > 0.35) inoff = Math.round(av * 0.5 + 46);
-  else if (iny < -0.35) inoff = Math.round(av * 0.72 + 14);
-  return `left:${x}%;top:${y}%;--av:${av}px;--inx:${inx.toFixed(3)};--iny:${iny.toFixed(3)};--inoff:${inoff}px`;
+  return `left:${x}%;top:${y}%;--av:${av}px;--inx:${inx.toFixed(4)};--iny:${iny.toFixed(4)};--seat-r:${seatR};--num-r:${numR}`;
 }
 function roundTable(seats, o = {}) {
   const n = seats.length;
   // Large ring: icon centres sit near the card edge so the middle stays open (5–12 seats).
   const R = n >= 12 ? 39 : n >= 10 ? 40 : 42;
+  // One numeral radius for the whole count, scaled from the icon ring. Not per seat.
+  // Far enough inside the icons that a top-seat name/pill still misses the shared circle.
+  const numR = Math.round(R * 0.38 * 10) / 10;
   const avSize = o.avSize || (n >= 12 ? 46 : n >= 10 ? 52 : 58);
   const st = seats.map((s, i) => {
     const a = (-90 + i * 360 / n) * Math.PI / 180; const x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a);
     const seatNo = (s && s.seat) || (i + 1);
-    const pos = seatInwardStyle(x, y, a, avSize);
+    const pos = seatInwardStyle(x, y, a, avSize, R, numR);
     if (!s || s.empty) {
       return `<div class="st empty click" style="${pos}" data-a="sit" data-seat="${seatNo}"><span class="no">${seatNo}</span><div class="av-empty">+</div><div class="nm">空位</div></div>`;
     }

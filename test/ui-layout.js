@@ -269,6 +269,8 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
       await sleep(60);
       for (const n of [8, 10, 5, 12]) {
         await setCap(n);
+        await cdp.eval(`new Promise(r => { const t = setInterval(() => { if (![...document.querySelectorAll('.rt .st')].some(e => e.style.transform || e.style.transition)) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 2000); })`);
+        await sleep(80);
         const m = await measure();
         assert(m.seats.length === n, tag + ' shows ' + n + ' seats');
         assert(m.border === '0px' && m.bg === 'none' && m.shadow === 'none', tag + '/' + n + ' has no gold centre disc');
@@ -301,6 +303,36 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         const radiusRatio = maxReach / (m.rt.w / 2);
         assert(radiusRatio > 0.72, tag + '/' + n + ' ring uses the card (radius ratio ' + radiusRatio.toFixed(2) + ')');
         assert(minEdge < m.rt.w * 0.22, tag + '/' + n + ' seats sit toward the outer edge (inset ' + minEdge.toFixed(0) + 'px)');
+        const ordered = [...m.seats].sort((a, b) => Number(a.seat) - Number(b.seat));
+        const nc = (s) => ({ x: s.no.l + s.no.w / 2, y: s.no.t + s.no.h / 2 });
+        const dists = ordered.map(s => { const p = nc(s); return Math.hypot(p.x - cx, p.y - cy); });
+        const spread = Math.max(...dists) - Math.min(...dists);
+        assert(spread <= 2.5, tag + '/' + n + ' numerals share one radius (spread ' + spread.toFixed(2) + 'px; ' + dists.map(d => d.toFixed(1)).join(',') + '; rt ' + m.rt.w.toFixed(0) + 'x' + m.rt.h.toFixed(0) + ')');
+        const ang = (s) => { const p = nc(s); return Math.atan2(p.y - cy, p.x - cx); };
+        const norm = (d) => { while (d <= -Math.PI) d += Math.PI * 2; while (d > Math.PI) d -= Math.PI * 2; return d; };
+        const step = Math.PI * 2 / n;
+        for (let i = 0; i < n; i++) {
+          const d = norm(ang(ordered[(i + 1) % n]) - ang(ordered[i]));
+          assert(Math.abs(d - step) < 0.09, tag + '/' + n + ' seat ' + ordered[i].seat + ' angle step ' + d.toFixed(3));
+          assert(!hit(ordered[i].no, ordered[i].icon), tag + '/' + n + ' number ' + ordered[i].seat + ' does not cover its avatar');
+          const nmOver = Math.max(0, m.card.l - ordered[i].nm.l, ordered[i].nm.r - m.card.r, ordered[i].nm.b - m.card.b);
+          assert(nmOver <= 14, tag + '/' + n + ' name ' + ordered[i].seat + ' stays in the card (over ' + nmOver.toFixed(1) + 'px)');
+        }
+        if (n % 2 === 0) {
+          for (let i = 0; i < n / 2; i++) {
+            const a = nc(ordered[i]), b = nc(ordered[i + n / 2]);
+            const mid = Math.hypot((a.x + b.x) / 2 - cx, (a.y + b.y) / 2 - cy);
+            assert(mid <= 2, tag + '/' + n + ' seats ' + ordered[i].seat + '/' + ordered[i + n / 2].seat + ' mirror through centre (' + mid.toFixed(2) + 'px)');
+          }
+        }
+        if (n === 8) {
+          const p = Object.fromEntries(ordered.map(s => [s.seat, nc(s)]));
+          assert(p[1].y < cy - 8 && p[5].y > cy + 8 && Math.abs(p[1].x - cx) < 6 && Math.abs(p[5].x - cx) < 6, tag + ' 1 is top and 5 is bottom');
+          assert(p[3].x > cx + 8 && p[7].x < cx - 8 && Math.abs(p[3].y - cy) < 6 && Math.abs(p[7].y - cy) < 6, tag + ' 3 is right and 7 is left');
+          assert(Math.abs(p[2].y - p[8].y) < 3 && Math.abs((p[2].x + p[8].x) / 2 - cx) < 3, tag + ' 2 and 8 are symmetric');
+          assert(Math.abs(p[4].y - p[6].y) < 3 && Math.abs((p[4].x + p[6].x) / 2 - cx) < 3, tag + ' 4 and 6 are symmetric');
+          assert(Math.abs(dists[0] - dists[2]) <= 2 && Math.abs(dists[0] - dists[4]) <= 2, tag + ' 1, 3 and 5 are the same distance from centre');
+        }
         if (n === 8 && tag === '375') await cdp.shot('lobby-after-375');
         if (n === 8 && tag === '390') await cdp.shot('lobby-after-390');
         if (n === 10 && tag === '390') await cdp.shot('lobby-after-10-390');

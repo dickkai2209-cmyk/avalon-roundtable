@@ -926,9 +926,14 @@ img,canvas,svg,video{max-width:100%}
 /* Anchor is the icon centre. Numeral is a small light-grey inner-ring label, not a bold badge. */
 .rt .st{width:84px;margin-left:-42px;margin-top:calc(var(--av, 58px) / -2);overflow:visible}
 .rt .st .av-empty,.rt .st.empty .av-empty{width:var(--av, 58px);height:var(--av, 58px);font-size:calc(var(--av, 58px) * .48);margin:0 auto}
+.rt{container-type:inline-size}
 .rt .st .no{
   top:calc(var(--av, 58px) / 2);
   font-size:12px;font-weight:500;color:#c5c9d4 !important;
+  transform:translate(-50%,-50%) translate(
+    calc(var(--inx) * (var(--seat-r) - var(--num-r)) * 1cqi),
+    calc(var(--iny) * (var(--seat-r) - var(--num-r)) * 1cqi)
+  );
 }
 .rt .st .nm,.st-meta .nm{max-width:84px}
 

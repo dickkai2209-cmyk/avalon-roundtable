@@ -1,0 +1,217 @@
+// Lake inspection and assassination confirm inside the app, never window.confirm.
+const { spawn } = require('child_process');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const { io } = require('socket.io-client');
+
+const PORT = 3461;
+const CDP = 9483;
+const APP = 'http://127.0.0.1:' + PORT + '/';
+const DATA = '/tmp/actconf-' + Date.now();
+const OUT = '/opt/cursor/artifacts';
+const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); console.log('ok -', m); };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+function get(url) {
+  return new Promise((resolve, reject) => http.get(url, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d)); }).on('error', reject));
+}
+function bot(key, name) {
+  const s = io(APP, { transports: ['websocket'], forceNew: true, query: { diff: '1' } });
+  const c = { s, st: null, name };
+  s.on('state', st => {
+    if (st && st.__d) {
+      if (!c.st || c.st.code !== st.code) return s.emit('resync');
+      const m = { ...c.st };
+      for (const k in st) if (k !== '__d' && k !== '__r' && k !== '__g') m[k] = st[k];
+      (st.__r || []).forEach(k => delete m[k]);
+      if (st.__g) { const g = { ...(m.game || {}) }; for (const k in st.__g) if (k !== '__r') g[k] = st.__g[k]; (st.__g.__r || []).forEach(k => delete g[k]); m.game = g; }
+      st = m;
+    }
+    c.st = st;
+  });
+  c.emit = (ev, d) => new Promise(r => s.emit(ev, d, r));
+  c.act = (type, data) => c.emit('act', { type, data });
+  c.ready = new Promise((res, rej) => s.on('connect', async () => {
+    const h = await c.emit('hello', { guestKey: key, name });
+    if (!h || h.error) rej(new Error(h && h.error || 'hello')); else res(h);
+  }));
+  return c;
+}
+
+(async () => {
+  fs.mkdirSync(DATA, { recursive: true });
+  fs.mkdirSync(OUT, { recursive: true });
+  const srv = spawn(process.execPath, ['server.js'], {
+    cwd: path.join(__dirname, '..'),
+    env: { ...process.env, PORT: String(PORT), DATA_DIR: DATA, DATABASE_URL: '', PURGE_TEST_DATA: '0', GM_EMAIL: '', GM_USER_ID: '' },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  let chrome;
+  const stop = () => { try { chrome && chrome.kill('SIGKILL'); } catch {} try { srv.kill('SIGKILL'); } catch {} };
+  process.on('exit', stop);
+  await new Promise((res, rej) => {
+    const t = setTimeout(() => rej(new Error('server')), 8000);
+    srv.stdout.on('data', d => { if (/on :/.test(String(d))) { clearTimeout(t); res(); } });
+  });
+  const names = ['甲','乙','丙','丁','戊','己','庚','辛'];
+  const people = [];
+  for (let i = 0; i < 8; i++) {
+    const guestKey = 'ac' + i + Date.now().toString(36);
+    const j = await fetch(APP + 'api/auth/guest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guestKey, profile: { name: names[i], avatar: 'fox', bg: '#fff6ea', fx: 'spot', pendant: i === 0 ? 'crown' : 'none' } }) }).then(r => r.json());
+    people.push({ ...j, guestKey, name: names[i] });
+  }
+  const bots = people.map(p => bot(p.guestKey, p.name));
+  await Promise.all(bots.map(b => b.ready));
+  const made = await bots[0].emit('create', {});
+  for (let i = 0; i < 30 && !(bots[0].st && bots[0].st.code); i++) await sleep(40);
+  await bots[0].act('capacity', { n: 8 });
+  const code = made.room;
+  for (let i = 1; i < 8; i++) {
+    await bots[i].emit('join', { code });
+    if (!(await bots[i].act('sit', { seat: i + 1 })).ok) throw new Error('sit');
+  }
+  if (!(await bots[0].act('start')).ok) throw new Error('start');
+  for (let i = 0; i < 40 && !(bots[0].st.game && bots[0].st.game.me); i++) await sleep(40);
+  const gme = () => bots[0].st.game;
+  async function until(pred, label) {
+    for (let i = 0; i < 80; i++) { if (pred()) return; await sleep(40); }
+    throw new Error('timeout ' + label + ' ' + (gme() && gme().phase));
+  }
+  async function mission() {
+    const g = gme();
+    const team = g.seats.slice(0, g.teamSizes[g.round]).map(s => s.id);
+    const leader = bots.find(b => b.st.meId === g.leaderId);
+    if (!(await leader.act('propose', { team })).ok) throw new Error('propose');
+    await until(() => gme().phase === 'vote', 'vote');
+    for (const b of bots) {
+      const r = await b.act('vote', { approve: true });
+      if (!r.ok && !(r.error && /已經/.test(r.error))) throw new Error('vote');
+    }
+    await until(() => gme().phase === 'quest', 'quest');
+    for (const b of bots) {
+      if (!gme().team.includes(b.st.meId)) continue;
+      if (!(await b.act('quest', { success: true })).ok) throw new Error('quest');
+    }
+    await until(() => gme().phase !== 'quest', 'after');
+  }
+  await mission();
+  await mission();
+  await until(() => gme().phase === 'lady', 'lady');
+  const merlin = bots.find(b => b.st.game.me.role === 'merlin');
+  const evilIds = (merlin.st.game.me.knows || []).map(k => k.id);
+  const ladyId = gme().ladyId;
+  const targetId = evilIds.find(id => id !== ladyId);
+  const holder = bots.find(b => b.st.meId === ladyId);
+  const holderPerson = people[bots.indexOf(holder)];
+  const targetSeat = gme().seats.find(s => s.id === targetId);
+
+  chrome = spawn('google-chrome', ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=' + CDP, '--user-data-dir=/tmp/chrome-actconf-' + Date.now(), '--window-size=420,900', APP], { stdio: 'ignore' });
+  let tab;
+  for (let i = 0; i < 40 && !tab; i++) { try { tab = JSON.parse(await get('http://127.0.0.1:' + CDP + '/json/list')).find(t => t.type === 'page'); } catch { await sleep(120); } }
+  const ws = new WebSocket(tab.webSocketDebuggerUrl);
+  let idn = 0; const pending = new Map();
+  ws.addEventListener('message', ev => { const m = JSON.parse(ev.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); } });
+  await new Promise(r => ws.addEventListener('open', r));
+  const send = (method, params = {}) => new Promise((res, rej) => { const i = ++idn; const t = setTimeout(() => rej(new Error(method)), 15000); pending.set(i, v => { clearTimeout(t); res(v); }); ws.send(JSON.stringify({ id: i, method, params })); });
+  const evalj = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 500)); return r.result.value; };
+  await send('Runtime.enable'); await send('Page.enable');
+  await send('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 2, mobile: true });
+  async function asUser(person) {
+    const profile = JSON.stringify({ name: person.name, avatar: 'fox', bg: '#fff6ea', fx: 'spot', pendant: 'none' });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      for (let i = 0; i < 30; i++) { if (await evalj(`!!document.querySelector('[data-a="create"], .rt')`).catch(() => false)) break; await sleep(100); }
+      await evalj(`localStorage.setItem('cc.token', ${JSON.stringify(person.token)}); localStorage.setItem('cc.pid', ${JSON.stringify(person.user.id)}); localStorage.setItem('cc.profile', ${JSON.stringify(profile)}); location.replace(${JSON.stringify(APP + '?ac=' + person.user.id + attempt)})`);
+      for (let i = 0; i < 40; i++) { if (await evalj(`!!document.querySelector('.rt')`).catch(() => false)) return; await sleep(120); }
+    }
+    throw new Error('no table ' + await evalj(`document.body.innerText.replace(/\\s+/g,' ').slice(0,160)`).catch(() => ''));
+  }
+  async function shot(name) { const { data } = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(OUT, name), Buffer.from(data, 'base64')); }
+  const sheetInfo = () => evalj(`(() => {
+    const box = document.querySelector('#actconf');
+    if (!box) return null;
+    const h = box.querySelector('h2');
+    const ok = document.querySelector('#act-ok');
+    const sheet = document.querySelector('.sheet');
+    return {
+      cls: box.className, title: h.textContent, who: box.querySelector('.actconf-meta').innerText.replace(/\\s+/g,' '),
+      cancel: document.querySelector('#act-cancel').textContent, ok: ok.textContent,
+      focus: document.activeElement && document.activeElement.id,
+      h: getComputedStyle(h).color, btn: getComputedStyle(ok).color + ' ' + getComputedStyle(ok).backgroundColor,
+      pad: getComputedStyle(sheet).paddingBottom, img: !!box.querySelector('.av img'), pendant: !!box.querySelector('.pov, .av'),
+      text: box.innerText, confirms: window.__confirms || 0
+    };
+  })()`);
+
+  try {
+    await asUser(holderPerson);
+    await evalj(`window.__confirms = 0; window.confirm = () => { window.__confirms++; return false; }; window.alert = () => { window.__confirms++; };`);
+    await evalj(`document.querySelector('[data-a="sel"][data-id="${targetId}"]').click()`);
+    await sleep(80);
+    await evalj(`document.querySelector('[data-a="lady"]').click()`);
+    for (let i = 0; i < 20 && !(await evalj(`!!document.querySelector('#actconf')`)); i++) await sleep(50);
+    let info = await sheetInfo();
+    assert(info && info.cls.includes('lake'), 'lake sheet opened');
+    assert(info.title === '查驗這位騎士？' && info.ok === '確認查驗' && info.cancel === '取消', 'lady labels');
+    assert(info.who.includes(targetSeat.name) && info.who.includes(targetSeat.seat + '號'), 'shows nickname and seat (' + info.who + ')');
+    assert(info.img, 'shows the public avatar');
+    assert(!/梅林|刺客|忠臣|莫甘娜|派西維爾|爪牙|莫德雷德|奧伯倫/.test(info.text), 'does not reveal a role');
+    assert(info.focus === 'act-cancel', 'focus starts on cancel');
+    assert(info.h === 'rgb(15, 110, 114)', 'teal title (' + info.h + ')');
+    assert(info.btn.includes('rgb(15, 118, 110)'), 'teal confirm button');
+    assert(parseFloat(info.pad) >= 20, 'sheet keeps bottom safe padding');
+    assert(info.confirms === 0, 'no native confirm');
+    await shot('lady-confirm-375.png');
+    await evalj(`document.querySelector('#act-cancel').click()`);
+    await sleep(80);
+    assert(await evalj(`document.querySelector('#modal').classList.contains('hidden')`), 'cancel closes the sheet');
+    assert(gme().phase === 'lady' && !(holder.st.game.ladyLog || []).length, 'cancel does not inspect');
+
+    await evalj(`document.querySelector('[data-a="lady"]').click()`);
+    for (let i = 0; i < 20 && !(await evalj(`!!document.querySelector('#act-ok')`)); i++) await sleep(40);
+    await evalj(`(() => { const b = document.querySelector('#act-ok'); b.click(); b.click(); })()`);
+    for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('.rc.lady-reveal')`).catch(() => false)); i++) await sleep(80);
+    await evalj(`document.querySelector('#flip').click()`);
+    await sleep(200);
+    const color = await evalj(`(() => { const rc = document.querySelector('.rc.evil.lady-reveal'); return getComputedStyle(rc.querySelector('.rn')).color + '|' + getComputedStyle(rc).borderTopColor; })()`);
+    assert(color === 'rgb(255, 255, 255)|rgb(255, 48, 72)', 'the evil lake card is crimson with light text (' + color + ')');
+    assert((holder.st.game.ladyLog || []).filter(l => l.side).length === 1, 'double click inspects once');
+    assert(bots.filter(b => b !== holder).every(b => (b.st.game.ladyLog || []).every(l => l.side == null)), 'others still are not told the side');
+    await shot('lady-evil-result.png');
+
+    await mission();
+    await until(() => gme().phase === 'assassin', 'assassin');
+    const assassin = bots.find(b => b.st.game.me.role === 'assassin');
+    const knownEvil = new Set((assassin.st.game.me.knows || []).map(k => k.id));
+    const victim = gme().seats.find(s => s.id !== assassin.st.meId && !knownEvil.has(s.id));
+    await asUser(people[bots.indexOf(assassin)]);
+    await evalj(`window.__confirms = 0; window.confirm = () => { window.__confirms++; return false; };`);
+    await evalj(`document.querySelector('[data-a="sel"][data-id="${victim.id}"]').click()`);
+    await sleep(80);
+    await evalj(`document.querySelector('[data-a="assassinate"]').click()`);
+    for (let i = 0; i < 20 && !(await evalj(`!!document.querySelector('#actconf')`)); i++) await sleep(50);
+    info = await sheetInfo();
+    assert(info.cls.includes('slay') && info.ok === '確認刺殺', 'assassin sheet');
+    assert(info.who.includes(victim.name) && info.who.includes(victim.seat + '號'), 'assassin sheet names the public seat');
+    assert(!/刺客|忠臣|莫甘娜|派西維爾|爪牙|莫德雷德|奧伯倫/.test(info.who), 'the target line does not name a hidden role');
+    assert(info.h === 'rgb(157, 24, 48)', 'dark red title');
+    assert(info.confirms === 0, 'assassination does not use native confirm');
+    await shot('assassin-confirm-375.png');
+    await evalj(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    await sleep(80);
+    assert(gme().phase === 'assassin' && !gme().winner, 'escape does not assassinate');
+    await evalj(`document.querySelector('[data-a="assassinate"]').click()`);
+    for (let i = 0; i < 20 && !(await evalj(`!!document.querySelector('#actconf')`)); i++) await sleep(40);
+    const before = gme().phase;
+    await bots[0].act('abort');
+    await until(() => !bots[0].st.game, 'aborted');
+    await sleep(200);
+    assert(before === 'assassin', 'abort started from the assassination phase');
+    assert(await evalj(`!document.querySelector('#actconf')`), 'a phase change closes the sheet');
+    assert((assassin.st.game && assassin.st.game.assassinTarget) == null, 'closing does not send the assassination');
+    console.log('ACT CONFIRM TESTS PASSED');
+  } finally {
+    try { ws.close(); } catch {}
+    stop();
+    bots.forEach(b => { try { b.s.close(); } catch {} });
+  }
+})().catch(e => { console.error(e); process.exit(1); });

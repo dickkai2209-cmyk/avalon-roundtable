@@ -26,8 +26,23 @@ const needText = (type, need) => type === 'wins' ? `勝 ${need} 場` : type === 
 const cbUnlocked = (k) => { const c = CARDBACKS.find(x => x[0] === k); return !!c && unlockOk(c[2], c[3]); };
 const cardBackOf = () => { const k = (skinSel && skinSel._cardback) || 'cardback'; return cbUnlocked(k) ? k : 'cardback'; };
 const shinyOn = () => !!(skinSel && skinSel._shiny) && mvpTotal() >= 10;
-const OUTFIT_ROLES = ['merlin', 'percival', 'morgana', 'assassin', 'servant'];
-const skinsFor = (role) => SKINS.filter(s => !s.outfit || OUTFIT_ROLES.includes(role));
+const OUTFIT_ROLES = ['merlin', 'percival', 'morgana', 'assassin', 'servant', 'mordred', 'oberon'];
+const SERVANT_MALE = [
+  { id: 'classic_male', n: '經典 · 男', need: 0, art: 'servant_male' },
+  { id: 'casual_male', n: '日常便服 · 男', need: 0, art: 'servant_casual_male' },
+];
+const skinById = (id) => SKINS.find(k => k.id === id) || SERVANT_MALE.find(k => k.id === id);
+const skinsFor = (role) => {
+  const base = SKINS.filter(s => !s.outfit || OUTFIT_ROLES.includes(role));
+  if (role !== 'servant') return base;
+  const out = [];
+  for (const s of base) {
+    out.push(s);
+    if (s.id === 'classic') out.push(SERVANT_MALE[0]);
+    if (s.id === 'casual') out.push(SERVANT_MALE[1]);
+  }
+  return out;
+};
 const ROLE_ORDER = ['merlin', 'percival', 'servant', 'assassin', 'morgana', 'mordred', 'oberon', 'minion'];
 const img = (r) => `/img/${r}.webp`, thumb = (r) => `/img/${r}_t.webp`, thumbCb = (k) => `/img/${k}.webp`;
 const SKINS = [
@@ -38,6 +53,10 @@ const SKINS = [
   { id: 'gold', n: '鎏金', need: 3 },
   { id: 'blood', n: '血月', need: 6 },
 ];
+function skinLabel(role, skin) {
+  if (role === 'servant' && (skin.id === 'classic' || skin.id === 'casual' || skin.id === 'festive')) return skin.n + ' · 女';
+  return skin.n;
+}
 const ANIMALS = [
   ['fox','狐狸'],['panda','熊貓'],['duck','小鴨'],['squirrel','松鼠'],['hedgehog','刺蝟'],['bunny','兔子'],
   ['bear','棕熊'],['redpanda','小熊貓'],['otter','水獺'],['hamster','倉鼠'],['shiba','柴犬'],['dalmatian','斑點狗'],
@@ -60,8 +79,14 @@ const PENDANTS = [
 ];
 const PD_V = 4;
 const pdSrc = (k, back) => `/img/pd/${k}${back ? '_b' : ''}.webp?v=${PD_V}`;
-const BADGE_LEAD = `<span class="sbadge lead" title="本輪隊長"><svg viewBox="0 0 24 24" width="100%" height="100%"><circle cx="12" cy="12" r="11" fill="#fff4cf" stroke="#e0a412" stroke-width="1.6"/><path d="M8 18.5V5.5" stroke="#9a6b10" stroke-width="1.6" stroke-linecap="round"/><path d="M8.6 6h8.2l-2 3 2 3H8.6z" fill="#f4b623" stroke="#c8880a" stroke-width=".8" stroke-linejoin="round"/><path d="M10.6 8.2l.9.9.9-1.3.9 1.3.9-.9-.4 2h-2.8z" fill="#fff"/></svg></span>`;
-const BADGE_LADY = `<span class="sbadge lady" title="湖中仙女"><svg viewBox="0 0 24 24" width="100%" height="100%"><circle cx="12" cy="12" r="11" fill="#e6f4ff" stroke="#4aa3e8" stroke-width="1.6"/><path d="M12 6c1.6 1.6 1.9 4 0 6.4C10.1 10 10.4 7.6 12 6z" fill="#f59ac4"/><path d="M12 12.4c-1.4-2-3.5-2.8-5.3-2.3.3 2.2 2.4 3.4 5.3 2.3zm0 0c1.4-2 3.5-2.8 5.3-2.3-.3 2.2-2.4 3.4-5.3 2.3z" fill="#f7b6d4"/><path d="M6 15.2c2 1.2 4 1.2 6 0s4-1.2 6 0" fill="none" stroke="#3b93db" stroke-width="1.5" stroke-linecap="round"/><path d="M7.5 18c1.5.8 3 .8 4.5 0s3-.8 4.5 0" fill="none" stroke="#7dbdf0" stroke-width="1.2" stroke-linecap="round"/></svg></span>`;
+const MARK_CROWN = `<span class="mark crown" title="隊長"><span class="halo"></span><i class="glint a"></i><i class="glint b"></i><i class="glint c"></i><svg viewBox="0 0 64 44" width="30" height="20" aria-hidden="true"><path d="M6 36 L12 14 L24 26 L32 6 L40 26 L52 14 L58 36 Z" fill="#f6c445" stroke="#a86b08" stroke-width="2.4" stroke-linejoin="round"/><path d="M8 36 h48 v6 h-48 z" fill="#e8a820" stroke="#a86b08" stroke-width="2"/><circle cx="32" cy="12" r="2.6" fill="#fff8dc"/><circle cx="16" cy="18" r="2.2" fill="#fff8dc"/><circle cx="48" cy="18" r="2.2" fill="#fff8dc"/></svg></span>`;
+const MARK_WREATH = `<span class="mark wreath" title="湖中仙女"><span class="glow"></span><svg viewBox="0 0 78 40" width="54" height="26" aria-hidden="true"><path d="M8 34c8-16 18-24 31-24s23 8 31 24" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/><path d="M8 34c8-16 18-24 31-24s23 8 31 24" fill="none" stroke="#0c7c74" stroke-width="4.2" stroke-linecap="round"/><ellipse cx="16" cy="28" rx="8" ry="4" fill="#b7f3df" stroke="#0c6b5c" stroke-width="1.3" transform="rotate(-32 16 28)"/><ellipse cx="62" cy="28" rx="8" ry="4" fill="#b7f3df" stroke="#0c6b5c" stroke-width="1.3" transform="rotate(32 62 28)"/><ellipse cx="26" cy="16" rx="7" ry="3.3" fill="#7de8c4" stroke="#0c6b5c" stroke-width="1.2" transform="rotate(-52 26 16)"/><ellipse cx="52" cy="16" rx="7" ry="3.3" fill="#7de8c4" stroke="#0c6b5c" stroke-width="1.2" transform="rotate(52 52 16)"/><circle cx="18" cy="22" r="6.2" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle cx="18" cy="22" r="3.1" fill="#ff8fb8"/><circle class="mid" cx="39" cy="8" r="6.6" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle class="mid" cx="39" cy="8" r="3.2" fill="#ff8fb8"/><circle cx="60" cy="22" r="6.2" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle cx="60" cy="22" r="3.1" fill="#ff8fb8"/></svg></span>`;
+const MARK_SWORD = `<span class="mark sword" title="王者之劍"><svg viewBox="0 0 28 64" width="16" height="34" aria-hidden="true"><path d="M14 2 L18 10 L16 38 L14 42 L12 38 L10 10 Z" fill="#f4f7fb" stroke="#7d92aa" stroke-width="1.6" stroke-linejoin="round"/><path d="M5 40 h18" stroke="#e0a820" stroke-width="4" stroke-linecap="round"/><rect x="11" y="42" width="6" height="12" rx="1.5" fill="#c4922a"/><circle cx="14" cy="57" r="3.2" fill="#f0c14a" stroke="#a86b08" stroke-width="1"/></svg></span>`;
+const MARK_RING = `<span class="mark ring" title="隊員"></span>`;
+const MARK_CAST = `<span class="mark cast" title="已投票"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12.5 L10 17.5 L19 7" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+function markLegend() {
+  return `<div class="markleg"><span><i class="crown">${MARK_CROWN}</i>隊長</span><span><i class="wreath">${MARK_WREATH}</i>湖中仙女</span><span><i class="sword">${MARK_SWORD}</i>王者之劍</span><span><i class="ring"></i>隊員</span><span><i class="cast">${MARK_CAST}</i>已投票</span></div>`;
+}
 const PD_BACK = { devil: 1, bat: 1, vampire: 1 };
 const PD_IMG = Object.fromEntries(PENDANTS.map(x => [x[0], 1]));
 const PHASE = { team: '組隊', vote: '投票', sword: '授予王者之劍', quest: '任務', swordflip: '王者之劍', lady: '湖中仙女', assassin: '刺殺梅林', end: '遊戲結束' };
@@ -95,7 +120,7 @@ function checkAch() { // one-time unlock celebration for 10次MVP
 }
 const refreshStats = () => api('/api/stats').then(s => { myStats = s; checkAch(); return s; }).catch(() => myStats);
 const rolePlayed = (r) => isGM() ? 1e9 : (((myStats.roles || {})[r] || {}).played || 0);
-const skinOf = (role) => { const s = SKINS.find(k => k.id === skinSel[role]); const played = rolePlayed(role); return s && played >= s.need ? s.id : 'classic'; };
+const skinOf = (role) => { const s = skinById(skinSel[role]); const played = rolePlayed(role); return s && played >= s.need ? s.id : 'classic'; };
 function applyUser(u, stats) {
   if (!u) return;
   account = u; pid = u.id; LS.setItem('cc.pid', pid);
@@ -142,7 +167,7 @@ socket.on('connect', () => {
       if (!r || !r.room) { S = null; if (view === 'room') go('home'); }
       if (pendingJoin) { const c = pendingJoin; pendingJoin = null; ensureName(() => joinRoom(c)); }
       if (pendingGame) { const gid = pendingGame; pendingGame = null; return go('detail', { gid, from: 'home' }); }
-      if (view === 'skins' || view === 'rules' || view === 'ach') return; // keep selection UI / scroll
+      if (view === 'skins' || view === 'rules' || view === 'ach' || view === 'board') return; // keep selection UI / scroll
       render();
     });
   }).catch(e => toast(e.message || '無法連線至伺服器'));
@@ -212,8 +237,14 @@ socket.on('state', (st) => {
   }
   if (autoRoom && view === 'home' && st.code) { autoRoom = false; view = 'room'; }
   handleEvent(st);
+  if (actConfirm && !actConfirm.busy && !confirmStillValid(actConfirm)) {
+    toast(actConfirm.kind === 'lady' ? '查驗已經失效' : '刺殺已經失效', 'bad');
+    closeModal();
+  }
+  if (abortAsk && !abortAsk.busy && (!st.game || st.game.phase === 'end' || !st.isHost)) closeModal();
   if (view === 'room' || view === 'home') render();
   if (cfgOpen && !st.game && !$('#modal').classList.contains('hidden')) $('#sheet').innerHTML = cfgSheetHtml();
+  syncVoteRemind();
 });
 socket.on('kicked', () => { S = null; toast('你已被房主移出房間'); go('home'); });
 socket.on('dissolved', () => { S = null; toast('房間已解散'); go('home'); });
@@ -224,9 +255,152 @@ const act = (type, data) => emit('act', { type, data });
 let toastT;
 function toast(msg, kind) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (kind ? ' ' + kind : ''); t.classList.remove('hidden'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), kind ? 2800 : 2200); }
 let modalLock = false;
+let actConfirm = null;
+let abortAsk = null;
+let actKeyHandler = null;
 function openModal(html, onMount, lock) { modalLock = !!lock; $('#sheet').innerHTML = html; $('#modal').classList.remove('hidden'); onMount && onMount($('#sheet')); }
 let cfgOpen = false;
-function closeModal() { cfgOpen = false; $('#modal').classList.add('hidden'); $('#sheet').innerHTML = ''; modalLock = false; modalQueueNext(); }
+function closeModal() {
+  cfgOpen = false;
+  if (actKeyHandler) { document.removeEventListener('keydown', actKeyHandler, true); actKeyHandler = null; }
+  actConfirm = null;
+  abortAsk = null;
+  const more = document.querySelector('.top-more');
+  if (more) more.setAttribute('aria-expanded', 'false');
+  $('#modal').classList.add('hidden'); $('#sheet').innerHTML = ''; modalLock = false; modalQueueNext();
+}
+function confirmStillValid(c) {
+  const g = S && S.game; const me = g && g.me;
+  if (!g || !me || !c || g.phase !== c.phase) return false;
+  const target = g.seats.find(s => s && s.id === c.id);
+  if (!target || target.id === S.meId) return false;
+  if (c.kind === 'lady') return g.phase === 'lady' && g.ladyId === S.meId && !(g.ladyUsed || []).includes(target.id);
+  return g.phase === 'assassin' && me.role === 'assassin' && !target.evil;
+}
+function openActConfirm(kind) {
+  const g = S && S.game;
+  const id = [...selected][0];
+  if (!g || !id) return;
+  const draft = { kind, id, phase: g.phase, busy: false };
+  if (!confirmStillValid(draft)) return toast(kind === 'lady' ? '現在不能查驗這位騎士' : '現在不能刺殺這位騎士', 'bad');
+  const target = g.seats.find(s => s.id === id);
+  const seatNo = target.seat || (g.seats.findIndex(s => s.id === id) + 1);
+  const lady = kind === 'lady';
+  actConfirm = draft;
+  openModal(`<div class="actconf ${lady ? 'lake' : 'slay'}" id="actconf" role="dialog" aria-modal="true" aria-labelledby="actconf-title">
+    <h2 id="actconf-title">${lady ? '查驗這位騎士？' : '刺殺這位騎士？'}</h2>
+    <div class="actconf-who">${av(target, 84)}<div class="actconf-meta"><b>${esc(target.name)}</b><span>${seatNo}號</span></div></div>
+    <p class="actconf-note" id="actconf-note">${lady ? '只有你會看到陣營。取消不會查驗。' : '刺中梅林紅方勝，刺錯藍方勝。取消不會刺殺。'}</p>
+    <div class="actconf-btns"><button type="button" class="btn ghost" id="act-cancel">取消</button><button type="button" class="btn ${lady ? '' : 'evil'}" id="act-ok">${lady ? '確認查驗' : '確認刺殺'}</button></div>
+  </div>`, (el) => {
+    const cancel = $('#act-cancel', el);
+    const ok = $('#act-ok', el);
+    const stop = (e) => { if (actConfirm && actConfirm.busy) { e.preventDefault(); return; } e.preventDefault(); closeModal(); };
+    cancel.onclick = () => { if (actConfirm && actConfirm.busy) return; closeModal(); };
+    ok.onclick = async () => {
+      if (!actConfirm || actConfirm.busy || ok.disabled) return;
+      if (!confirmStillValid(actConfirm)) { toast(lady ? '查驗已經失效' : '刺殺已經失效', 'bad'); closeModal(); return; }
+      actConfirm.busy = true; ok.disabled = true; cancel.disabled = true; modalLock = true;
+      const idNow = actConfirm.id;
+      const r = await act(lady ? 'lady' : 'assassinate', { id: idNow });
+      if (r && r.ok) selected = new Set();
+      closeModal();
+    };
+    actKeyHandler = (e) => {
+      if (!$('#actconf')) return;
+      if (e.key === 'Escape') return stop(e);
+      if (e.key !== 'Tab') return;
+      const items = [cancel, ok].filter(b => !b.disabled);
+      if (!items.length) return;
+      e.preventDefault();
+      const i = items.indexOf(document.activeElement);
+      items[(i + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus();
+    };
+    document.addEventListener('keydown', actKeyHandler, true);
+    if (cancel.focus) cancel.focus();
+  });
+}
+function trapSheetKeys(el, onEsc) {
+  if (actKeyHandler) { document.removeEventListener('keydown', actKeyHandler, true); actKeyHandler = null; }
+  actKeyHandler = (e) => {
+    if (!el.isConnected) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onEsc(e); return; }
+    if (e.key !== 'Tab') return;
+    const items = [...el.querySelectorAll('button, a[href], input, [tabindex]')].filter(b => !b.disabled && b.tabIndex !== -1);
+    if (!items.length) return;
+    e.preventDefault();
+    const i = items.indexOf(document.activeElement);
+    const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : (i < 0 || i >= items.length - 1 ? 0 : i + 1);
+    items[next].focus();
+  };
+  document.addEventListener('keydown', actKeyHandler, true);
+}
+function openAbortConfirm() {
+  if (!S || !S.isHost || !S.game || S.game.phase === 'end') return;
+  abortAsk = { busy: false };
+  openModal(`<div class="actconf abort" id="actconf" role="dialog" aria-modal="true" aria-labelledby="abort-title">
+    <h2 id="abort-title">強制結束本局？</h2>
+    <p class="actconf-note">這會立刻中止進行中的對局，不計入記錄、不計分、不派回避卡。取消不會結束。</p>
+    <div class="actconf-btns"><button type="button" class="btn ghost" id="act-cancel">取消</button><button type="button" class="btn evil" id="act-ok">確認結束</button></div>
+  </div>`, (el) => {
+    const cancel = $('#act-cancel', el);
+    const ok = $('#act-ok', el);
+    const dismiss = () => { if (abortAsk && abortAsk.busy) return; closeModal(); };
+    cancel.onclick = (e) => { e.preventDefault(); dismiss(); };
+    ok.onclick = async (e) => {
+      e.preventDefault();
+      if (!abortAsk || abortAsk.busy || ok.disabled) return;
+      if (!S || !S.isHost || !S.game || S.game.phase === 'end') { closeModal(); return; }
+      abortAsk.busy = true; ok.disabled = true; cancel.disabled = true; modalLock = true;
+      const r = await act('abort');
+      closeModal();
+      if (r && r.ok) toast('本局已結束，不計入記錄');
+    };
+    trapSheetKeys(el, dismiss);
+    if (cancel.focus) cancel.focus();
+  });
+}
+function openRoomMenu() {
+  if (!S || !S.code) return;
+  const live = !!(S.game && S.game.phase !== 'end');
+  const inGame = !!S.game;
+  const row = (x, ic, ti, sub, cls = '') => `<button type="button" class="mrow ${cls}" data-x="${x}"><span class="mic" aria-hidden="true">${ic}</span><span class="grow"><b>${ti}</b><span>${sub}</span></span><span class="chev" aria-hidden="true">›</span></button>`;
+  const more = document.querySelector('.top-more');
+  if (more) more.setAttribute('aria-expanded', 'true');
+  openModal(`<div class="room-menu" role="dialog" aria-modal="true" aria-labelledby="room-menu-title">
+    <h2 id="room-menu-title">房間選單</h2><div class="mlist">
+    ${row('rules', '📖', '查看規則', '遊戲流程、角色能力、擴展玩法')}
+    ${row('ref', '🔄', '刷新房間', '畫面唔同步或卡住時，重新連線並向伺服器攞最新狀態')}
+    ${inGame ? row('qr', '▣', '房間二維碼', '出示房間號同二維碼，朋友掃碼入房') : ''}
+    ${inGame ? row('home', '‹', '返回主頁', '回到主頁，座位同房間仍然保留') : ''}
+    ${S.isHost ? row('tr', '👑', '轉讓房主', '交俾另一位玩家，之後你可以離開') : ''}
+    ${S.isHost && live ? row('early', '🏳️', '提前結束', '即時結束本局並公開所有身份，不計勝負', 'warn') : ''}
+    ${S.isHost && live ? row('abort', '⛔', '強制結束本局', '立刻中止，不計入記錄', 'danger') : ''}
+    ${S.isHost && !live ? row('dis', '⛔', '解散房間', '所有玩家會被移出房間', 'danger') : ''}
+    </div><button type="button" class="btn ghost" id="room-menu-close">關閉</button></div>`, (el) => {
+    const bind = (sel, fn) => { const b = el.querySelector(sel); if (b) b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); fn(); }; };
+    bind('[data-x=rules]', () => { closeModal(); go('rules'); });
+    bind('[data-x=ref]', () => { closeModal(); refreshRoom(); });
+    bind('[data-x=qr]', () => { closeModal(); inviteDialog(); });
+    bind('[data-x=home]', () => { closeModal(); go('home'); });
+    bind('[data-x=abort]', () => openAbortConfirm());
+    const ee = el.querySelector('[data-x=early]'); if (ee) ee.onclick = (e) => { e.preventDefault(); e.stopPropagation(); if (confirm('確定提前結束本局？\n所有人身份會公開，今局記錄為「提前結束」，不計勝負、不計分、不派回避卡。')) { closeModal(); act('endearly'); } };
+    const tr = el.querySelector('[data-x=tr]'); if (tr) tr.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const others = (S.seats || []).filter(p => p && !p.empty && p.id !== S.meId);
+      if (!others.length) return toast('還沒有其他已就座的玩家');
+      openModal(`<h2>轉讓房主</h2><div class="small muted center">選擇一位已就座的玩家，房主權限會即時轉移</div><div class="pick">${others.map(p => `<button class="pick-i" data-id="${p.id}">${av(p, 40)}<div><b>${esc(p.name)}</b><div class="tiny muted">${p.seat}號座${p.online ? '' : ' · 離線'}</div></div></button>`).join('')}</div><button class="btn ghost" id="cc">取消</button>`, el3 => {
+        $$('.pick-i', el3).forEach(b => b.onclick = async () => { const p = others.find(o => o.id === b.dataset.id); if (!confirm(`把房主轉讓給 ${p.name}？`)) return; closeModal(); const r = await act('transfer', { id: p.id }); if (r.ok) toast(`已轉讓房主給 ${p.name}`); });
+        $('#cc', el3).onclick = closeModal;
+      });
+    };
+    const dis = el.querySelector('[data-x=dis]'); if (dis) dis.onclick = (e) => { e.preventDefault(); e.stopPropagation(); if (confirm('確定解散房間？所有人將被移出。')) { closeModal(); act('dissolve'); } };
+    $('#room-menu-close', el).onclick = (e) => { e.preventDefault(); closeModal(); };
+    trapSheetKeys(el, () => closeModal());
+    const first = el.querySelector('.mrow');
+    if (first && first.focus) first.focus({ preventScroll: true });
+  });
+}
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && !modalLock) closeModal(); });
 const modalQueue = [];
 function queueModal(fn) { if ($('#modal').classList.contains('hidden')) fn(); else modalQueue.push(fn); }
@@ -756,11 +930,12 @@ function roomHead() {
   if (!left.length && !right) return '';
   return `<div class="rhead compact"><div class="rh-sub">${left.join(' · ')}${(left.length || right) && right ? '<span class="grow"></span>' : ''}${right}</div></div>`;
 }
-function avoidFab() {
+function avoidBtn() {
   if (!S || (S.game && S.game.phase !== 'end')) return '';
   const vc = S.myVetoCards == null ? (account && account.vetoCards) : S.myVetoCards;
   const picked = S.myAvoid && ROLE[S.myAvoid] ? ROLE[S.myAvoid].n : '';
-  return `<button type="button" class="avoid-fab" data-a="avoid" aria-label="迴避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>迴避卡</span><b>${vetoAmt(vc)}</b>${picked ? `<i>${esc(picked)}</i>` : ''}</button>`;
+  const label = '迴避卡' + (picked ? '，已選' + picked : '');
+  return `<button type="button" class="avoid-btn" data-a="avoid" aria-label="${esc(label)}"><img src="/img/veto_t.webp" alt="" width="24" height="32"><b>${vetoAmt(vc)}</b></button>`;
 }
 function openAvoidSheet() {
   const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards);
@@ -821,6 +996,8 @@ function presetCard(pr) {
   return `<div class="preset"><div class="blue"><b>藍方 ${pr.good.length}</b>${gl.map(v => `<span class="pill">${v}</span>`).join('')}</div><div class="red"><b>紅方 ${pr.evil.length}</b>${el.map(v => `<span class="pill">${v}</span>`).join('')}</div></div>`;
 }
 function skinArt(role, skin = 'classic') {
+  if (role === 'servant' && skin === 'classic_male') return 'servant_male';
+  if (role === 'servant' && skin === 'casual_male') return 'servant_casual_male';
   let art = ROLE_ART[role] || role;
   if (OUTFIT_ROLES.includes(role) && (skin === 'casual' || skin === 'festive')) art = `${role}_${skin}`;
   return art;
@@ -884,7 +1061,7 @@ function roundTable(seats, o = {}) {
     const action = o.action || 'sel';
     const extra = o.click && o.click(s, i) ? `data-a="${action}" data-id="${s.id}"` : (o.seatClick ? `data-a="${o.seatClick}" data-id="${s.id}" data-seat="${seatNo}"` : '');
     return `<div class="st ${cls}" style="${pos}" data-sid="${s.id}" ${extra}>
-      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, avSize)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
+      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${o.marks ? o.marks(s, i) : ''}${av(s, avSize)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
   }).join('');
   return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="currentColor"/><circle cx="13.8" cy="10.3" r="1.2" fill="currentColor"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${nums.join('')}${st}</div>`;
 }
@@ -898,6 +1075,41 @@ function trackHtml(g) {
 function knowsHtml(me, list) {
   if (!me.knows.length) return me.role === 'oberon' ? '你不知道同伴是誰，他們也不知道你。' : '你沒有額外資訊，靠推理吧。';
   return me.knows.map(k => `${chip(k.id, list)} <span class="badge ${k.label.includes('壞') ? 'evil' : ''}">${esc(k.label)}</span>`).join('<br>');
+}
+function teamHistoryHtml(g) {
+  const seats = (g.seats || []).slice().sort((a, b) => (a.seat || 0) - (b.seat || 0));
+  const n = seats.length || g.n || 0;
+  const rounds = g.rounds || [];
+  const quests = g.quests || [];
+  const sizes = g.teamSizes || [];
+  const idxs = [];
+  for (let i = 0; i < Math.max(rounds.length, quests.length); i++) {
+    if ((rounds[i] && rounds[i].length) || quests[i]) idxs.push(i);
+  }
+  idxs.reverse();
+  const legend = `<div class="th-leg"><span><i class="mem"></i>隊員</span><span><i class="ld">👑</i>隊長</span><span><i class="yes"></i>同意</span><span><i class="no"></i>反對</span></div>`;
+  if (!idxs.length) return `<h3>組隊記錄</h3>${legend}<div class="th-empty muted small">完成一次組隊投票後會顯示在這裡</div>`;
+  const blocks = idxs.map(ri => {
+    const props = rounds[ri] || [];
+    const q = quests[ri];
+    const two = ri === g.twoFailRound;
+    const known = props.find(p => p.approved) || props[0];
+    const size = sizes[ri] || (known && known.team ? known.team.length : '');
+    const head = q ? (q.success ? '<em class="ok">成功</em>' : `<em class="bad">失敗 · ${q.fails || 0}張失敗</em>`) : '';
+    const rows = props.map((p, k) => {
+      const cells = seats.map((s, i) => {
+        const num = s.seat || (i + 1);
+        const on = (p.team || []).includes(s.id);
+        const leader = p.leader === s.id;
+        const v = p.votes ? p.votes[s.id] : undefined;
+        const tone = v === true ? 'yes' : v === false ? 'no' : '';
+        return `<span class="th-seat ${tone}${on ? ' mem' : ''}${leader ? ' ld' : ''}"><b>${num}</b>${leader ? '<i aria-hidden="true">👑</i>' : ''}</span>`;
+      }).join('');
+      return `<div class="th-row"><span class="th-try">第${k + 1}次</span><span class="th-seats" style="--n:${n}">${cells}</span><span class="th-res ${p.approved ? 'ok' : 'bad'}">${p.approved ? '通過' : '否決'}</span></div>`;
+    }).join('');
+    return `<section class="th-mis"><div class="th-mh"><b>第${ri + 1}個任務</b><span>${size}人${two ? ' · 需2張失敗' : ''}</span>${head}</div>${rows}</section>`;
+  }).join('');
+  return `<h3>組隊記錄</h3>${legend}${blocks}`;
 }
 function voteGrid(seats, rounds, quests, myId) {
   const rows = [];
@@ -915,6 +1127,59 @@ function voteGrid(seats, rounds, quests, myId) {
 }
 
 // ================= events & animations =================
+// One in-app reminder per actionable vote. Not a push notification, and not repeated on every state tick.
+const voteRemindSeen = new Set();
+let voteRemindTimer;
+function voteAction(g, meId, spectating) {
+  if (!g || spectating || !g.me || !meId) return null;
+  const team = (g.team || []).slice().sort().join(',');
+  if (g.phase === 'vote') {
+    if (g.me.voted) return null;
+    const attempt = ((g.rounds && g.rounds[g.round]) || []).length;
+    return { key: g.gid + '|vote|' + g.round + '|' + attempt + '|' + team, text: '輪到你投票', kind: 'vote' };
+  }
+  if (g.phase === 'quest') {
+    if (g.me.questSubmitted || !(g.team || []).includes(meId)) return null;
+    return { key: g.gid + '|quest|' + g.round + '|' + team, text: '請提交任務票', kind: 'quest' };
+  }
+  return null;
+}
+function hideVoteRemind() {
+  clearTimeout(voteRemindTimer);
+  const el = document.querySelector('.vote-remind');
+  if (el) el.remove();
+}
+function showVoteRemind(action) {
+  hideVoteRemind();
+  const el = document.createElement('div');
+  el.className = 'vote-remind';
+  el.dataset.key = action.key;
+  el.dataset.kind = action.kind;
+  el.setAttribute('role', 'status');
+  el.innerHTML = `<button type="button" class="vote-remind-go" data-a="votego"><b>${esc(action.text)}</b><span>點一下去投票</span></button><button type="button" class="vote-remind-x" data-a="voteremind-x" aria-label="關閉提醒">×</button>`;
+  document.body.appendChild(el);
+  voteRemindTimer = setTimeout(hideVoteRemind, 7000);
+}
+function syncVoteRemind() {
+  const action = voteAction(S && S.game, S && S.meId, !!(S && S.spectating));
+  const cur = document.querySelector('.vote-remind');
+  if (!action) { hideVoteRemind(); return; }
+  if (cur && cur.dataset.key === action.key) return;
+  if (voteRemindSeen.has(action.key)) return;
+  voteRemindSeen.add(action.key);
+  showVoteRemind(action);
+}
+window.__voteAction = voteAction;
+function focusVoteControls() {
+  const kind = (document.querySelector('.vote-remind') || {}).dataset && document.querySelector('.vote-remind').dataset.kind;
+  if (view !== 'room') go('room');
+  requestAnimationFrame(() => {
+    const target = document.querySelector(kind === 'quest' ? '.qpick, [data-a="quest"]' : '[data-a="vote"]');
+    if (!target) return;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    target.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+  });
+}
 function handleEvent(st) {
   const key = 'cc.seen.' + st.code; seenEvent = Number(sessionStorage.getItem(key) || 0);
   const ev = st.lastEvent; if (!ev || ev.seq <= seenEvent) return;
@@ -961,10 +1226,9 @@ function showRole(first) {
   const seatNo = (id) => g.seats.findIndex(s => s.id === id) + 1;
   const mates = (me.knows || []).map(k => { const p = P(k.id, g.seats); return `<div class="mate">${av(p, 40)}<div class="grow"><b>${esc(p.name)}</b><div class="tiny muted">${esc(k.label)}</div></div><span class="seatpill ${k.label.includes('壞') ? 'e' : ''}">${seatNo(k.id)}號</span></div>`; }).join('');
   const ladyMine = (g.ladyLog || []).filter(l => l.side && l.holder === S.meId).map(l => { const p = P(l.target, g.seats); return `<div class="mate">${av(p, 34)}<div class="grow"><b>${esc(p.name)}</b><div class="tiny muted">第 ${l.round + 1} 輪後查驗</div></div><span class="seatpill ${l.side === 'evil' ? 'e' : ''}">${seatNo(l.target)}號 · ${l.side === 'good' ? '好人' : '壞人'}</span></div>`; }).join('');
-  const kmap = {}; (me.knows || []).forEach(k => { kmap[k.id] = k.label; });
   const special = !['servant', 'minion'].includes(me.role);
-  let art = ROLE_ART[me.role] || me.role; const sk = skinOf(me.role);
-  if (OUTFIT_ROLES.includes(me.role) && (sk === 'casual' || sk === 'festive')) art = `${me.role}_${sk}`;
+  const sk = skinOf(me.role);
+  const art = skinArt(me.role, sk);
   const cb = cardBackOf();
   openModal(`<div class="reveal ${side} ${special ? 'special' : ''}"><div class="rv-h">你的身份是</div>
     <div class="rv-stage"><div class="rays"></div><canvas class="fxc" id="fxc"></canvas>
@@ -974,7 +1238,6 @@ function showRole(first) {
     <div id="kn" class="hidden">
       <div class="rinfo">${ROLE_INFO[me.role] || r.d || ''}${g.lanceSwitched !== undefined && me.side !== r.side ? '<br><b>注意：蘭斯洛特已互換陣營</b>' : ''}</div>
       ${mates ? `<div class="matepanel"><div class="mp-h">${side === 'evil' ? '可看到的隊友' : '可看到的人物'}</div>${mates}</div>` : ''}
-      <div class="matepanel"><div class="mp-h">你開局睇到嘅人</div>${knowRing(g.seats.map(s => s.id === S.meId ? { me: true, art } : (kmap[s.id] ? { kind: /梅林/.test(kmap[s.id]) ? 'p' : (/壞|同伴|隊友/.test(kmap[s.id]) ? 'e' : 'p'), label: kmap[s.id], name: s.name } : { kind: 'u', name: s.name })), { role: r.n || me.roleName, side, n: Object.keys(kmap).length })}<div class="tiny muted center" style="margin-top:6px">灰色「?」= 你睇唔到佢嘅身份</div></div>
       ${ladyMine ? `<div class="matepanel"><div class="mp-h">🌊 湖中仙女查驗結果</div>${ladyMine}</div>` : ''}
     </div>
     <div class="cover" id="cov">翻開前請確認旁邊沒有人偷看</div>
@@ -1045,22 +1308,50 @@ function showLady(ev) {
   const mine = g && g.ladyLog.slice().reverse().find(l => l.holder === S.meId && l.target === ev.target && l.side);
   if (!mine) return toast(`🌊 ${P(ev.holder, list).name} 用湖中仙女查驗了 ${P(ev.target, list).name}`);
   openModal(`<h2>湖中仙女的啟示</h2><div class="center">${chip(ev.target, list)}</div>
-    <div class="flip" id="flip" style="width:min(56vw,200px)"><div class="in"><div class="face back"><div class="hint">點擊查看陣營</div></div><div class="face front"><div class="rc ${mine.side}"><div class="art" style="background-image:url(${img('lady')})"></div><div class="cap"><div class="rn" style="font-size:20px">${mine.side === 'good' ? '好人陣營' : '壞人陣營'}</div></div></div></div></div></div>
+    <div class="flip" id="flip" style="width:min(56vw,200px)"><div class="in"><div class="face back"><div class="hint">點擊查看陣營</div></div><div class="face front"><div class="rc ${mine.side} lady-reveal"><div class="art" style="background-image:url(${img('lady')})"></div><div class="cap"><div class="rn" style="font-size:20px">${mine.side === 'good' ? '好人陣營' : '壞人陣營'}</div></div></div></div></div></div>
     <p class="center small muted">只有你看到這個結果，你可以選擇說真話或說謊。</p><button class="btn" id="ok">知道了</button>`, (el) => { const f = $('#flip', el); f.onclick = () => f.classList.add('on'); $('#ok', el).onclick = closeModal; }, true);
+}
+function settleParts(r) {
+  const players = (r.players || r.seats || []).filter(p => p && p.id);
+  const sc = r.scores || {};
+  const myId = r.myId || (S && S.meId) || null;
+  const early = r.winner === 'none' || !Object.keys(sc).length;
+  const rows = players.map(p => {
+    const s = sc[p.id] || { total: 0, items: [], rank: players.length };
+    const items = s.items || [];
+    return { p, total: s.total || 0, items, rank: s.rank || 0, side: p.side || (ROLE[p.role] && ROLE[p.role].side) || '' };
+  }).sort((a, b) => (a.rank || 99) - (b.rank || 99) || (b.total - a.total));
+  const mvp = !early && rows.find(x => x.p.id === r.mvp);
+  const me = rows.find(x => x.p.id === myId);
+  return { rows, mvp, me, early, myId };
+}
+function settleBody(r) {
+  const { rows, mvp, me, early, myId } = settleParts(r);
+  const good = r.winner === 'good';
+  const title = r.winner === 'none' ? '提前結束' : good ? '藍方勝利' : '紅方勝利';
+  const you = !me ? '觀戰 · 不計個人分數' : `${me.p.seat || ''}號 · ${(ROLE[me.p.role] || {}).n || ''} · ${me.side === r.winner ? '勝利' : '落敗'}`;
+  const mvpCard = mvp ? `<div class="settle-mvp"><span class="settle-crown" aria-hidden="true"></span>${av(mvp.p, 56)}<div><div class="k">MVP</div><b>${esc(mvp.p.name)}</b><span>${esc((ROLE[mvp.p.role] || {}).n || '')} · ${mvp.total} 分</span></div></div>` : '';
+  const list = early ? '<p class="settle-none">本局不計分，沒有排名。</p>' : `<ol class="settle-list">${rows.map(x => {
+    const role = (ROLE[x.p.role] || {}).n || '';
+    const sum = x.items.reduce((a, it) => a + it[1], 0);
+    return `<li class="settle-row ${x.p.id === r.mvp ? 'is-mvp' : ''}" data-rank="${x.rank}" data-id="${esc(x.p.id)}"><details><summary><span class="rk">${x.rank}</span>${av(x.p, 40)}<span class="who"><b>${esc(x.p.name)}</b>${x.p.id === myId ? '<i class="me">我</i>' : ''}<em class="${x.side}">${esc(role)}</em></span><strong class="pts">${x.total}</strong></summary><ul class="settle-break" data-sum="${sum}" data-total="${x.total}">${x.items.map(([l, v]) => `<li data-label="${esc(l)}" data-pts="${v}"><span>${esc(l)}</span><b>+${v}</b></li>`).join('')}<li class="sum"><span>合計</span><b>${x.total}</b></li></ul></details></li>`;
+  }).join('')}</ol>`;
+  return { title, you, mvpCard, list, cls: r.winner || 'none' };
 }
 function showEnd() {
   const g = S && S.game; if (!g || g.phase !== 'end') return;
-  const goodWin = g.winner === 'good'; refreshStats();
-  const mySeat = g.seats.find(s => s.id === S.meId); const vetoWon = !!(mySeat && g.winner !== 'none' && mySeat.side === g.winner);
-  const sn = (id) => g.seats.findIndex(s => s.id === id) + 1; const mer = g.seats.find(s => s.role === 'merlin'); const tgt = g.assassinTarget && g.seats.find(s => s.id === g.assassinTarget);
-  const atLine = tgt ? `刺殺目標係 ${sn(tgt.id)}號${(ROLE[tgt.role] || {}).n || ''}，梅林係 ${mer ? sn(mer.id) : '?'}號` : '';
-  const qrows = g.quests.map((q, i) => q ? `<div class="qrow"><b>任務${i + 1}</b><span class="qm">${q.team.map(id => `<span class="seatpill ${(g.seats.find(s => s.id === id) || {}).side === 'evil' ? 'e' : ''}">${sn(id)}</span>`).join('')}</span><span class="badge ${q.success ? 'good' : 'evil'}">${q.success ? '成功' : '失敗'}</span></div>` : '').join('');
-  openModal(`<div class="banner ${g.winner}"><div class="big">${g.winner === 'none' ? '🏳️' : goodWin ? '🛡️' : '🗡️'}</div><h2>${g.winner === 'none' ? '提前結束' : goodWin ? '藍方勝利' : '紅方勝利'}</h2><div class="small">${g.winner === 'none' ? '房主提前結束本局 · 不計勝負、不計分、不派回避卡' : esc(g.reason)}</div>${atLine ? `<div class="small" style="margin-top:4px"><b>${atLine}</b></div>` : ''}</div>
-    ${roundTable(g.seats, { cls: s => s.side === 'evil' ? 'evil-tint' : '', label: s => `<span class="lbl ${s.side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>`, marker: s => (s.id === g.assassinTarget ? '🎯' : '') + (s.id === g.mvp ? '🏅' : ''), center: `<b>${goodWin ? '好人勝' : '壞人勝'}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}` })}
-    ${vetoWon ? `<div class="vgain"><div class="vcard"><img src="/img/veto_t.webp" alt="回避卡" width="75" height="100"><i class="spk s1">✦</i><i class="spk s2">✧</i><i class="spk s3">✦</i></div><div><b>+1 回避卡</b><div class="tiny muted">贏咗呢局！回避卡已入袋（上限 10 張）</div></div></div>` : ''}
-    <div class="qrows">${qrows}</div>
-    <div class="btns"><button class="btn" id="sh">📤 分享戰果</button><button class="btn ghost" id="pp">🖼️ 生成海報</button></div>
-    <button class="btn dark" id="ok">查看對局詳情</button>`, (el) => { const rec = liveRecord(g); window.__lastRecord = rec; $('#sh', el).onclick = () => shareSheet(rec); $('#pp', el).onclick = () => saveCard(rec, true); $('#ok', el).onclick = () => { closeModal(); setTimeout(() => { const d = $('#detail'); d && d.scrollIntoView({ behavior: 'smooth' }); }, 100); }; });
+  refreshStats();
+  const rec = liveRecord(g);
+  window.__lastRecord = rec;
+  const body = settleBody(rec);
+  openModal(`<div class="settle ${body.cls}"><div class="settle-scroll"><header class="settle-head ${body.cls}"><h2>${body.title}</h2><p>${esc(g.reason || (g.winner === 'none' ? '不計勝負、不計分' : ''))}</p><div class="settle-you">${esc(body.you)}</div></header>${body.mvpCard}${body.list}</div><div class="settle-foot"><button type="button" class="btn" id="settle-poster">生成海報</button><button type="button" class="btn ghost" id="settle-ok">知道了</button></div></div>`, (el) => {
+    const poster = $('#settle-poster', el);
+    if (g.winner === 'none') poster.disabled = true;
+    poster.onclick = () => saveCard(rec, true);
+    $('#settle-ok', el).onclick = closeModal;
+    const ok = $('#settle-ok', el);
+    if (ok && ok.focus) ok.focus({ preventScroll: true });
+  });
 }
 
 // ================= views =================
@@ -1095,12 +1386,12 @@ function render() {
   if (view !== 'skins') app.dataset.v = view || '';
   if (view === 'room' && !inRoom) view = 'home';
   $('#backBtn').classList.toggle('hidden', view === 'home');
-  const titles = { home: '旺角阿瓦隆', room: inRoom ? null : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就' };
+  const titles = { home: '旺角阿瓦隆', room: inRoom ? null : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就', board: '排行榜' };
   const acts = $('#topRoomActs');
   if (acts) {
     const show = !!(view === 'room' && inRoom);
     acts.classList.toggle('hidden', !show);
-    if (show) acts.innerHTML = `<button type="button" class="rbtn top-inv" data-a="invite">邀請</button><button type="button" class="rbtn top-more" data-a="menu" aria-label="更多">⋯</button>`;
+    if (show) acts.innerHTML = `<button type="button" class="rbtn top-inv" data-a="invite">邀請</button><button type="button" class="rbtn top-more" data-a="menu" aria-label="更多" aria-haspopup="dialog" aria-expanded="${document.querySelector('.room-menu') ? 'true' : 'false'}">⋯</button>`;
     else acts.innerHTML = '';
   }
   const titleEl = $('#topTitle');
@@ -1112,8 +1403,13 @@ function render() {
   if (view !== 'home' && view !== 'room') app._html = null;
   if (view === 'home') setHTML(app, homeHtml());
   else if (view === 'room') {
+    const scroller = document.scrollingElement;
+    const mainEl = document.querySelector('main');
+    const keepScroll = { w: scroller ? scroller.scrollTop : 0, m: mainEl ? mainEl.scrollTop : 0 };
     const before = {}; $$('.rt .st[data-id]').forEach(e => { const r = e.getBoundingClientRect(); before[e.dataset.id] = [r.left, r.top]; });
     setHTML(app, S.game ? gameHtml() : lobbyHtml()); enterIds.clear();
+    if (scroller) scroller.scrollTop = keepScroll.w;
+    if (mainEl) mainEl.scrollTop = keepScroll.m;
     if (!S.game) $$('.rt .st[data-id]').forEach(e => {
       const b = before[e.dataset.id]; if (!b) return; const r = e.getBoundingClientRect(); const dx = b[0] - r.left, dy = b[1] - r.top;
       if (Math.abs(dx) + Math.abs(dy) < 4) return;
@@ -1125,6 +1421,7 @@ function render() {
   else if (view === 'history') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadHistory(); }
   else if (view === 'stats') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadStats(); }
   else if (view === 'ach') { app.innerHTML = '<div class="card center muted">載入中…</div>'; refreshStats().catch(() => {}).then(() => { if (view === 'ach') app.innerHTML = achHtml(); }); }
+  else if (view === 'board') loadBoard();
   else if (view === 'skins') {
     if (app.dataset.v === 'skins' && app.querySelector('.skinrow')) return; // already mounted — never flash/rebuild
     app.dataset.v = 'skins';
@@ -1153,7 +1450,7 @@ function homeHtml() {
     <div class="item" data-a="go" data-v="history"><span class="ic">📜</span><span class="grow">歷史記錄</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="stats"><span class="ic">📊</span><span class="grow">數據統計</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="skins"><span class="ic">🎴</span><span class="grow">角色皮膚</span><span class="chev">›</span></div>
-    <div class="item" data-a="go" data-v="ach"><span class="ic">🏆</span><span class="grow">成就</span><span class="chev">›</span></div>
+    <div class="item" data-a="go" data-v="board"><span class="ic">🏆</span><span class="grow">排行榜</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="rules"><span class="ic">📖</span><span class="grow">規則介紹</span><span class="chev">›</span></div>
     <div class="item" data-a="about"><span class="ic">ℹ️</span><span class="grow">版本</span><span class="muted small">v3.1</span><span class="chev">›</span></div>
   </div>
@@ -1170,6 +1467,33 @@ const ACHS = [
   ['assassin', '暗影之刃', '以刺客身份獲勝', s => ((s.roles || {}).assassin || {}).won >= 1],
   ['allroles', '千面騎士', '玩過 6 種不同角色', s => Object.keys(s.roles || {}).length >= 6],
 ];
+const BOARD_NOTE = '全球所有玩家，唔係只計呢間房。按已完成對局的精確勝率由高至低，最多 100 人。0 場完成唔會上榜。勝率相同時，完成場數較多優先，然後勝場較多，最後用固定身份編號。畫面上的百分比有四捨五入，排序用精確分數。1 勝 / 1 場會顯示 100%。';
+function boardHtml(data) {
+  const rows = (data && data.players) || [];
+  const note = `<p id="lb-note" class="tiny muted lb-note">${BOARD_NOTE}</p>`;
+  if (!rows.length) return `<div class="card"><h3>排行榜</h3>${note}<div class="center muted lb-empty">暫時未有完成對局可以排名</div></div>`;
+  const items = rows.map(p => {
+    const rate = pct(p.won, p.played);
+    const nick = p.name || '未設定暱稱';
+    const label = `第 ${p.rank} 名，${nick}，勝率 ${rate}%，${p.won} 勝 / ${p.played} 場`;
+    return `<li data-rank="${p.rank}" aria-label="${esc(label)}"><span class="lb-rank" aria-hidden="true">${p.rank}</span>${av(p, 44)}<div class="lb-main"><div class="nm">${esc(nick)}</div></div><div class="lb-rec"><b>${rate}%</b><span>${p.won}勝/${p.played}場</span></div></li>`;
+  }).join('');
+  return `<div class="card"><h3>排行榜</h3>${note}<ol class="lb" aria-describedby="lb-note">${items}</ol></div>`;
+}
+let boardReq = 0;
+async function loadBoard() {
+  const req = ++boardReq;
+  const app = $('#app');
+  app.innerHTML = '<div class="card center muted" role="status">載入中…</div>';
+  try {
+    const data = await api('/api/leaderboard');
+    if (view !== 'board' || req !== boardReq) return;
+    app.innerHTML = boardHtml(data);
+  } catch (e) {
+    if (view !== 'board' || req !== boardReq) return;
+    app.innerHTML = '<div class="card center" role="alert"><div class="muted">排行榜載入失敗</div><button type="button" class="btn sm" data-a="reloadboard" style="margin-top:12px">重試</button></div>';
+  }
+}
 function achHtml() {
   const s = isGM() ? { played: 1e9, won: 1e9, mvp: (myStats.mvp || 0), roles: Object.fromEntries(ROLE_ORDER.map(k => [k, { played: 1e9, won: 1e9 }])) } : (myStats || {}); const got = ACHS.filter(a => a[3](s)).length;
   return `<div class="card"><h3>成就 ${got}/${ACHS.length}</h3><div class="bar"><i style="width:${pct(got, ACHS.length)}%"></i></div></div>` +
@@ -1214,10 +1538,10 @@ function lobbyHtml() {
     ${presetCard(S.preset)}
     <div class="xps">${expStatus(s)}</div>
   </div>
-  <div class="bottombar">${s.veto ? `<div class="veto-ic" data-a="vetoinfo" title="回避卡"><img src="/img/veto_t.webp" alt="" width="24" height="32"><b>${vetoAmt(vc)}</b></div>` : `<div class="thumb" data-a="role"></div>`}
+  <div class="bottombar">${avoidBtn()}
     ${host ? `<button class="btn" data-a="start" ${x === n ? '' : 'disabled'}>開始遊戲（${x}/${n}）</button>` :
       S.mySeat ? `<button class="btn ${me && me.ready ? 'ghost' : ''}" data-a="ready">${me && me.ready ? '已準備 ✓' : '準備'}</button>` : `<button class="btn ghost" disabled>觀戰中 · 點空位即可就座</button>`}
-  </div>${avoidFab()}`;
+  </div>`;
 }
 function gameHtml() {
   const g = S.game; const me = g.me; const meId = S.meId;
@@ -1226,8 +1550,7 @@ function gameHtml() {
   const selCount = selected.size;
   if (g.phase === 'team') {
     center = `<b>第 ${g.round + 1} 輪</b>隊長 ${esc(P(g.leaderId).name)}<br>需要 ${need} 人`;
-    panel = isLeader ? `<div class="phase">👑 你是隊長</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>`
-      : `<div class="phase">等待隊長組隊</div><div class="small muted">${chip(g.leaderId)} 正在挑選 ${need} 位隊員，大家可以討論</div>`;
+    panel = isLeader ? `<div class="phase">👑 你是隊長</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>` : '';
   } else if (g.phase === 'vote') {
     center = `<b>投票中</b>${g.voted.length}/${g.n} 已投`;
     panel = `<div class="phase">是否同意此隊伍出任務？</div><div>${g.team.map(id => chip(id)).join('')}</div><div class="small muted" style="margin-top:6px">全員投完後同時公開</div>` +
@@ -1264,23 +1587,39 @@ function gameHtml() {
   }
   const selectable = (s) => (g.phase === 'team' && isLeader) || (g.phase === 'assassin' && me && me.role === 'assassin' && s.id !== meId && !s.evil) || (g.phase === 'lady' && isLady && s.id !== meId && !g.ladyUsed.includes(s.id)) || (g.phase === 'sword' && isLeader && g.team.includes(s.id) && s.id !== meId) || (g.phase === 'swordflip' && g.sword === meId && g.team.includes(s.id) && s.id !== meId);
   const ended = g.phase === 'end';
+  const liveMark = (s) => {
+    if (ended) return '';
+    const front = (s.id === g.leaderId ? MARK_CROWN : '')
+      + (g.ladyId && s.id === g.ladyId ? MARK_WREATH : '')
+      + (g.sword && s.id === g.sword ? MARK_SWORD : '')
+      + (g.phase === 'vote' && (g.voted || []).includes(s.id) ? MARK_CAST : '');
+    return ((g.team || []).includes(s.id) ? MARK_RING : '') + (front ? `<span class="mfront">${front}</span>` : '');
+  };
   const table = roundTable(g.seats, { emote: true,
     click: selectable,
-    cls: s => (selected.has(s.id) ? 'sel' : (g.team.includes(s.id) ? 'team' : '')) + (s.online ? '' : ' off'),
-    badge: s => (s.id === g.leaderId && !ended ? BADGE_LEAD : '') + (s.id === g.ladyId && !ended ? BADGE_LADY : ''),
-    marker: s => [g.team.includes(s.id) ? '🛡️' : '', g.phase === 'vote' && g.voted.includes(s.id) ? '✅' : '', s.id === meId ? '⭐' : '', ended && s.id === g.assassinTarget ? '🗡️' : ''].join(''),
+    cls: s => [
+      selected.has(s.id) ? 'sel' : '',
+      !ended && (g.team || []).includes(s.id) ? 'team' : '',
+      s.online ? '' : 'off',
+      !ended && s.id === g.leaderId ? 'is-lead' : '',
+      !ended && g.ladyId && s.id === g.ladyId ? 'is-lady' : '',
+      !ended && g.sword && s.id === g.sword ? 'is-sword' : '',
+      !ended && g.phase === 'vote' && (g.voted || []).includes(s.id) ? 'is-cast' : '',
+    ].filter(Boolean).join(' '),
+    marks: liveMark,
+    marker: s => ended && s.id === g.assassinTarget ? '🗡️' : '',
     label: s => ended ? `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>` : (s.evil ? '<span class="lbl e">壞人</span>' : ''),
     center,
   });
   return `${!me ? '<div class="specbar">👁 觀戰中</div>' : ''}<div class="card">${trackHtml(g)}</div>
-  <div class="card" style="padding:10px">${table}</div>
-  <div class="card">${panel}</div>
-  ${me ? `<div class="card rolestrip" data-a="role"><div class="th"></div><div class="grow"><div class="serif gold" style="font-weight:700">我的身份卡</div><div class="small muted">點擊翻開查看（請遮住螢幕）</div></div><span class="gold">›</span></div>` : '<div class="specbar">👁 觀戰中 · 唔會看到隱藏身分</div>'}
-  ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : `<div class="card"><h3>組隊 / 投票記錄</h3>${voteGrid(g.seats, g.rounds, g.quests, meId)}${ladyChainHtml(g.ladyLog, g.seats)}</div>`}
-  <div class="btns"><button class="btn dark" data-a="invite">房間二維碼</button><button class="btn dark" data-a="go" data-v="home">返回主頁</button></div>
-  ${S.isHost && !ended ? '<button class="btn dark" data-a="abort" style="color:#ff8b9c">強制結束本局</button>' : ''}
+  <div class="card" style="padding:22px 10px 16px">${table}${ended ? '' : markLegend()}</div>
+  <div class="card thist" id="teamhist">${teamHistoryHtml(g)}</div>
+  ${ladyChainHtml(g.ladyLog, g.seats) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats)}</div>` : ''}
+  ${panel ? `<div class="card">${panel}</div>` : ''}
+  ${me ? '' : '<div class="specbar">👁 觀戰中 · 唔會看到隱藏身分</div>'}
+  ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : ''}
   ${g.settings.veto && me && !ended ? `<button type="button" class="veto-fab ${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'ready' : 'dim'}" data-a="${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'veto' : 'vetoinfo'}" aria-label="回避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>回避卡</span><b>${vetoAmt(me.vetoCards != null ? me.vetoCards : S.myVetoCards)}</b></button>` : ''}
-  ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}${ended ? avoidFab() : ''}`;
+  ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}`;
 }
 function ladyChainHtml(log, seats) {
   if (!log || !log.length) return '';
@@ -1385,8 +1724,8 @@ function detailHtml(r) {
   const seats = r.players; const me = seats.find(s => s.id === r.myId); const sc = r.scores || {};
   const goodWin = r.winner === 'good'; const merlin = seats.find(s => s.role === 'merlin');
   const at = r.assassinTarget && seats.find(s => s.id === r.assassinTarget);
-  const mvpBox = (id, t) => { if (!id || !sc[id]) return ''; const p = P(id, seats); return `<div><div class="t">${t}</div>${av(p, 44)}<div style="font-weight:700;margin-top:4px">${esc(p.name)}</div><div class="small"><span class="badge ${ROLE[p.role].side}">${ROLE[p.role].n}</span> <b class="gold">${sc[id].total} 分</b></div><ul>${sc[id].items.map(([l, v]) => `<li>${esc(l)} <b>+${v}</b></li>`).join('')}</ul></div>`; };
   window.__lastRecord = r;
+  const settled = settleBody(r);
   setTimeout(() => renderCardPreview(r), 30);
   return `<div class="card"><h3>戰果卡</h3><div id="cardprev" class="cardprev"><div class="center muted small">生成中…</div></div>
     <div class="btns"><button class="btn" data-a="savecard">💾 儲存圖片</button><button class="btn ghost" data-a="sharecard">📤 分享</button></div><button class="btn story" data-a="story">📸 分享到 IG 限時動態 / Threads</button></div>
@@ -1395,7 +1734,7 @@ function detailHtml(r) {
       <div style="margin-top:8px;font-size:20px">${r.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join(' ')}</div></div>
     ${me && sc[me.id] ? `<div class="row between" style="margin-top:12px"><div class="row">${av(me, 36)}<div><b>我的表現</b><div class="small muted">${ROLE[me.role].n} · 座位 ${me.seat} · ${ROLE[me.role].side === r.winner ? '<span class="badge ok">勝利</span>' : '<span class="badge evil">落敗</span>'}</div></div></div><div class="center"><div class="code" style="font-size:22px;letter-spacing:1px">${sc[me.id].total} 分</div><div class="tiny muted">第 ${sc[me.id].rank} 名</div></div></div>` : ''}
   </div>
-  <div class="card"><h3>MVP</h3><div class="mvp">${mvpBox(r.mvp, '🏅 MVP')}${mvpBox(r.runnerUp, '🥈 亞軍')}</div><div class="tiny muted" style="margin-top:8px">計分：勝利 +12 · 正確投票 +2 · 完成己方任務 +1 · 人數加成 · 刺中梅林/梅林隱藏 +5</div></div>
+  <div class="card settle-page">${settled.mvpCard}${settled.list}</div>
   <div class="card"><h3>全員身份</h3>${roundTable(seats, { label: s => `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>`, marker: s => (s.id === r.assassinTarget ? '🗡️' : '') + (s.id === r.mvp ? '🏅' : '') + (s.id === r.myId ? '⭐' : ''), center: `<b>${goodWin ? '好人勝' : '壞人勝'}</b>🗡️ 被刺殺　🏅 MVP` })}</div>
   ${reviewHtml(r)}
   ${r.highlights && r.highlights.length ? `<div class="card"><h3>精彩時刻</h3><ul class="hl">${r.highlights.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
@@ -1430,22 +1769,27 @@ async function loadStats() {
 function skinsHtml() {
   const cbk = cardBackOf();
   return `<div class="card"><h3 style="margin:0 0 8px">卡背</h3><div class="skinrow">${CARDBACKS.map(([k, n, ty, need]) => `<div class="skin ${unlockOk(ty, need) ? '' : 'lock'} ${cbk === k ? 'sel' : ''}" data-a="cardback" data-k="${k}"><div class="rc"><div class="art" style="background-image:url(${thumbCb(k)})"></div></div><div style="margin-top:4px">${n}${unlockOk(ty, need) ? '' : `<div class="tiny muted">🔒 ${needText(ty, need)}</div>`}</div></div>`).join('')}</div></div>
-    <div class="card"><div class="toggle"><div class="grow"><b>✨ 閃光卡牌特效</b><div class="muted small">${mvpTotal() >= 10 ? '翻身份卡時有彩虹閃光同星星' : `達成「10次MVP」成就解鎖（${Math.min(myStats.mvp || 0, 10)}/10）`}</div></div><button class="sw ${shinyOn() ? 'on' : ''}" data-a="shiny" ${mvpTotal() >= 10 ? '' : 'disabled'}></button></div></div><div class="card"><div class="small muted">主要角色有不同服裝（日常便服、節日盛裝）及特效皮膚。玩得越多解鎖越多，揭曉身份時會顯示你所選的皮膚，並保存到帳號。</div></div>` + ROLE_ORDER.map(k => {
-    const played = rolePlayed(k); const cur = skinOf(k); const next = SKINS.find(s => s.need > played);
+    <div class="card shiny-card"><div class="toggle"><div class="grow"><b>✨ 閃光卡牌特效</b><div class="muted small" id="shiny-lock">${mvpTotal() >= 10 ? (shinyOn() ? '已裝備。下面係實際效果。' : '已解鎖，可以裝備。') : `預覽中，未裝備。裝備要 10 次真實 MVP（${Math.min(myStats.mvp || 0, 10)}/10），GM 都一樣。預覽唔會解鎖。`}</div></div><button class="sw ${shinyOn() ? 'on' : ''}" data-a="shiny" ${mvpTotal() >= 10 ? '' : 'disabled'} aria-label="裝備閃光卡牌特效"></button></div>
+      <button type="button" class="shiny-stage" data-a="shinyprev" aria-label="預覽閃光卡牌特效，不會裝備">
+        <div class="rcard good holo" id="shiny-sample"><div class="strip"></div><div class="rart" style="background-image:url(${img('merlin')})"></div><div class="rname">梅林</div></div>
+        <div class="shiny-status">預覽中 · 未裝備 · 撳卡再播一次</div>
+      </button>
+    </div><div class="card"><div class="small muted">主要角色有不同服裝（日常便服、節日盛裝）及特效皮膚。玩得越多解鎖越多，揭曉身份時會顯示你所選的皮膚，並保存到帳號。</div></div>` + ROLE_ORDER.map(k => {
+    const played = rolePlayed(k); const cur = skinOf(k); const mine = skinsFor(k); const next = mine.find(s => s.need > played);
     return `<div class="card"><div class="row between"><h3 style="margin:0">${ROLE[k].n}</h3><span class="small muted">已玩 ${played} 場</span></div>
-      <div class="skinrow" style="margin-top:10px">${skinsFor(k).map(s => `<div class="skin ${played >= s.need ? '' : 'lock'} ${cur === s.id ? 'sel' : ''}" data-a="skin" data-r="${k}" data-s="${s.id}">${roleFace(k, s.id, true)}<div style="margin-top:4px">${s.n}${played >= s.need ? '' : ` 🔒${s.need}場`}</div></div>`).join('')}</div>
-      ${next ? `<div class="tiny muted" style="margin-top:6px">下一款「${next.n}」：${played}/${next.need} 場</div><div class="bar"><i style="width:${pct(played, next.need)}%"></i></div>` : '<div class="tiny gold" style="margin-top:6px">已解鎖全部皮膚 ✦</div>'}</div>`;
+      <div class="skinrow" style="margin-top:10px">${skinsFor(k).map(s => `<div class="skin ${played >= s.need ? '' : 'lock'} ${cur === s.id ? 'sel' : ''}" data-a="skin" data-r="${k}" data-s="${s.id}">${roleFace(k, s.id, true)}<div style="margin-top:4px">${skinLabel(k, s)}${played >= s.need ? '' : ` 🔒${s.need}場`}</div></div>`).join('')}</div>
+      ${next ? `<div class="tiny muted" style="margin-top:6px">下一款「${skinLabel(k, next)}」：${played}/${next.need} 場</div><div class="bar"><i style="width:${pct(played, next.need)}%"></i></div>` : '<div class="tiny gold" style="margin-top:6px">已解鎖全部皮膚 ✦</div>'}</div>`;
   }).join('');
 }
 function equipSkin(role, skinId) {
-  const sk = SKINS.find(k => k.id === skinId);
+  const sk = skinById(skinId);
   const played = rolePlayed(role);
   if (!sk || played < sk.need) return Promise.reject(new Error('locked'));
   if (skinOf(role) === skinId) return Promise.resolve(false);
   const prev = { ...skinSel };
   skinSel[role] = skinId;
   $$(`.skin[data-a="skin"][data-r="${role}"]`).forEach(x => x.classList.toggle('sel', x.dataset.s === skinId));
-  const label = `${(ROLE[role] || {}).n || role} · ${sk.n}`;
+  const label = `${(ROLE[role] || {}).n || role} · ${skinLabel(role, sk)}`;
   return saveSkins(prev).then(() => { toast(`已換上：${label}`, 'ok'); return true; })
     .catch((err) => {
       skinSel = prev;
@@ -1455,7 +1799,7 @@ function equipSkin(role, skinId) {
     });
 }
 function openSkinPreview(role, skinId) {
-  const sk = SKINS.find(k => k.id === skinId);
+  const sk = skinById(skinId);
   const meta = ROLE[role] || { n: RN[role] || role, en: '', side: 'good' };
   if (!sk) return;
   const played = rolePlayed(role);
@@ -1476,7 +1820,7 @@ function openSkinPreview(role, skinId) {
         <img class="sp-img sk-${sk.id}" src="${img(skinArt(role, skinId))}" alt="${esc(meta.n)} ${esc(sk.n)}">
         <div class="cap"><div class="rn">${esc(meta.n)}</div>${meta.en ? `<div class="en">${esc(meta.en)}</div>` : ''}</div>
       </div>
-      <div class="sp-sub">${esc(meta.n)} · ${esc(sk.n)}</div>
+      <div class="sp-sub">${esc(meta.n)} · ${esc(skinLabel(role, sk))}</div>
       <button type="button" class="btn" id="sp-eq" ${locked || equipped ? 'disabled' : ''}>${esc(equipped ? '使用中' : (locked ? req : '換上'))}</button>
       <button type="button" class="btn ghost" id="sp-x">關閉</button>
     </div>`;
@@ -1539,7 +1883,7 @@ function rulesBody() {
       const s = DEMO[demoStep];
       return `<div class="card demo"><h3>一輪點行 · 動畫示範</h3><div class="track" style="margin-bottom:6px">${[2, 3, 2, 3, 3].map((sz, i) => `<div class="q ${s.quests[i] === 1 ? 'ok' : s.quests[i] === 0 ? 'bad' : (i === s.round ? 'cur' : '')}">${s.quests[i] === 1 ? '✓' : s.quests[i] === 0 ? '✕' : sz}</div>`).join('')}</div>
         <div class="rej" style="margin-top:6px">否決 ${[1, 2, 3, 4, 5].map(i => `<i class="${i <= s.rejects ? 'on' : ''}">${i}</i>`).join('')}</div>
-        ${roundTable(DEMO_SEATS.slice(0, 5), { cls: x => s.team.includes(x.id) ? 'team' : '', marker: x => (x.id === s.leader ? '<span class="crown">👑</span>' : '') + (s.team.includes(x.id) ? '🛡️' : ''), center: s.center || '' })}
+        ${roundTable(DEMO_SEATS.slice(0, 5), { cls: x => s.team.includes(x.id) ? 'team' : '', marks: x => (s.team.includes(x.id) ? MARK_RING : '') + (x.id === s.leader ? `<span class="mfront">${MARK_CROWN}</span>` : ''), center: s.center || '' })}
         ${s.votes ? `<div class="vcards" id="dv">${DEMO_SEATS.slice(0, 5).map((p, i) => `<div class="vc"><div class="c"><div class="ci"><div class="f b"></div><div class="f ${s.votes[i] ? 'y' : 'n'}">${s.votes[i] ? '✓' : '✕'}</div></div></div><div class="nm">${p.name}</div></div>`).join('')}</div>` : ''}
         ${s.qcards ? `<div class="qcards" id="dq">${s.qcards.map(c => `<div class="vc"><div class="c"><div class="ci"><div class="f b"></div><div class="f ${c ? 'y' : 'n'}">${c ? '🛡️' : '🗡️'}</div></div></div></div>`).join('')}</div>` : ''}
         <div class="cap"><b>${s.t}</b><span class="small">${s.d}</span></div>
@@ -1854,7 +2198,10 @@ async function posterDialog() { return saveCard(window.__lastRecord, true); }
 // ================= actions =================
 function saveSkins(prev) {
   LS.setItem('cc.skins', JSON.stringify(skinSel));
-  return api('/api/me', { method: 'PUT', body: JSON.stringify({ skins: skinSel }) }).catch((err) => {
+  return api('/api/me', { method: 'PUT', body: JSON.stringify({ skins: skinSel }) }).then((r) => {
+    if (r && r.user && r.user.skins) { skinSel = r.user.skins; LS.setItem('cc.skins', JSON.stringify(skinSel)); }
+    return r;
+  }).catch((err) => {
     if (prev) { skinSel = prev; LS.setItem('cc.skins', JSON.stringify(skinSel)); }
     throw err;
   });
@@ -1872,12 +2219,32 @@ document.addEventListener('click', async (e) => {
     case 'emote': return toggleEmotes(el);
     case 'avoid': return openAvoidSheet();
     case 'vetoinfo': { const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards); return openModal(`<div class="vuse"><img src="/img/veto.webp" alt="回避卡" width="150" height="200"></div><div class="center name">${isGM() ? '∞' : vetoAmt(vc) + ' / 10'}</div><p class="small muted center">${isGM() ? 'GM 回避卡為無限（∞），使用時唔會扣減，但仍要喺投票階段且身為隊員，每局只可以用一次。' : '每贏一局 +1 張（上限 10 張），永久保存在帳號。房間開啟「回避卡」時，投票階段身為隊員可用一張退出隊伍，本次組隊作廢且不計否決。'}</p><button type="button" class="btn" id="ok">知道了</button>`, el2 => $('#ok', el2).onclick = closeModal); }
+    case 'shinyprev': {
+      const y = window.scrollY;
+      const card = document.querySelector('#shiny-sample');
+      if (!card) return;
+      card.classList.remove('holo');
+      void card.offsetWidth;
+      card.classList.add('holo');
+      const status = document.querySelector('.shiny-status');
+      if (status) status.textContent = mvpTotal() >= 10 ? (shinyOn() ? '已裝備 · 再播預覽' : '預覽中 · 未裝備') : `預覽中 · 未裝備 · ${Math.min(myStats.mvp || 0, 10)}/10 MVP`;
+      window.scrollTo(0, y);
+      return;
+    }
     case 'shiny': {
       if (mvpTotal() < 10) return toast('達成「10次MVP」即可解鎖');
       const prev = { ...skinSel }; const on = !skinSel._shiny;
       skinSel._shiny = on; el.classList.toggle('on', on);
-      saveSkins(prev).then(() => toast(on ? '已開啟：閃光卡牌特效' : '已關閉：閃光卡牌特效', 'ok'))
-        .catch(() => { el.classList.toggle('on', !!skinSel._shiny); toast('儲存失敗，已恢復原先選擇', 'bad'); });
+      saveSkins(prev).then((r) => {
+        const saved = r && r.user && r.user.skins;
+        if (saved && !!saved._shiny !== on) {
+          skinSel = saved;
+          LS.setItem('cc.skins', JSON.stringify(skinSel));
+          el.classList.toggle('on', !!saved._shiny);
+          return toast('未夠 10 次 MVP，未有裝備', 'bad');
+        }
+        toast(on ? '已開啟：閃光卡牌特效' : '已關閉：閃光卡牌特效', 'ok');
+      }).catch(() => { el.classList.toggle('on', !!skinSel._shiny); toast('儲存失敗，已恢復原先選擇', 'bad'); });
       return;
     }
     case 'cardback': {
@@ -1896,6 +2263,7 @@ document.addEventListener('click', async (e) => {
     case 'join': return ensureName(joinDialog);
     case 'toroom': return go('room');
     case 'go': return go(el.dataset.v);
+    case 'reloadboard': return loadBoard();
     case 'invite': return inviteDialog();
     case 'role': return showRole(false);
     case 'tg': return act('settings', { [el.dataset.k]: !S.settings[el.dataset.k] });
@@ -1930,35 +2298,13 @@ document.addEventListener('click', async (e) => {
           $('#ok', el2).onclick = closeModal;
         });
     }
-    case 'menu': { const live = S.game && S.game.phase !== 'end'; const row = (x, ic, ti, sub, cls = '') => `<button class="mrow ${cls}" data-x="${x}"><span class="mic">${ic}</span><span class="grow"><b>${ti}</b><span>${sub}</span></span><span class="chev">›</span></button>`;
-      return openModal(`<h2>房間選單</h2><div class="mlist">
-      ${row('rules', '📖', '查看規則', '遊戲流程、角色能力、擴展玩法')}
-      ${row('ref', '🔄', '刷新房間', '畫面唔同步或卡住時，重新連線並向伺服器攞最新狀態')}
-      ${S.isHost ? row('tr', '👑', '轉讓房主', '交俾另一位玩家，之後你可以離開') : ''}
-      ${S.isHost && live ? row('early', '🏳️', '提前結束', '即時結束本局並公開所有身份，不計勝負', 'warn') : ''}
-      ${S.isHost && !live ? row('dis', '⛔', '解散房間', '所有玩家會被移出房間', 'danger') : ''}
-      </div><button class="btn ghost" id="ok">關閉</button>`, el2 => {
-        el2.querySelector('[data-x=rules]').onclick = () => { closeModal(); go('rules'); };
-        el2.querySelector('[data-x=ref]').onclick = () => { closeModal(); refreshRoom(); };
-        const ee = el2.querySelector('[data-x=early]'); if (ee) ee.onclick = () => { if (confirm('確定提前結束本局？\n所有人身份會公開，今局記錄為「提前結束」，不計勝負、不計分、不派回避卡。')) { closeModal(); act('endearly'); } };
-        const tr = el2.querySelector('[data-x=tr]'); if (tr) tr.onclick = () => {
-          const others = (S.seats || []).filter(p => p && !p.empty && p.id !== S.meId);
-          if (!others.length) return toast('還沒有其他已就座的玩家');
-          openModal(`<h2>轉讓房主</h2><div class="small muted center">選擇一位已就座的玩家，房主權限會即時轉移</div><div class="pick">${others.map(p => `<button class="pick-i" data-id="${p.id}">${av(p, 40)}<div><b>${esc(p.name)}</b><div class="tiny muted">${p.seat}號座${p.online ? '' : ' · 離線'}</div></div></button>`).join('')}</div><button class="btn ghost" id="cc">取消</button>`, el3 => {
-            $$('.pick-i', el3).forEach(b => b.onclick = async () => { const p = others.find(o => o.id === b.dataset.id); if (!confirm(`把房主轉讓給 ${p.name}？`)) return; closeModal(); const r = await act('transfer', { id: p.id }); if (r.ok) toast(`已轉讓房主給 ${p.name}`); });
-            $('#cc', el3).onclick = closeModal;
-          });
-        };
-        const dis = el2.querySelector('[data-x=dis]'); if (dis) dis.onclick = () => { if (confirm('確定解散房間？所有人將被移出。')) { closeModal(); act('dissolve'); } };
-        $('#ok', el2).onclick = closeModal;
-      });
-    }
+    case 'menu': return openRoomMenu();
     case 'leave': { const r = await emit('leave'); S = null; if (r.stillSeated) toast('遊戲進行中，你的座位會保留'); return go('home'); }
     case 'veto': if (confirm('使用回避卡退出本支隊伍？本輪否決不增加，且你本輪不能再被選入。')) return act('veto'); return;
     case 'sword': { const id=[...selected][0]; if (id) { const r=await act('sword',{id}); if(r.ok) selected=new Set(); } return; }
     case 'swordflip': { const id=[...selected][0]; if (id && confirm('翻轉 '+P(id).name+' 的任務卡？')) { const r=await act('swordflip',{id}); if(r.ok) selected=new Set(); } return; }
     case 'swordskip': return act('swordflip', { skip: true });
-    case 'abort': if (confirm('確定強制結束本局？（不會計入記錄）')) act('abort'); return;
+    case 'abort': return openAbortConfirm();
     case 'lobby': return act('lobby');
     case 'sel': {
       const id = el.dataset.id; const g = S.game;
@@ -1967,10 +2313,12 @@ document.addEventListener('click', async (e) => {
       return render();
     }
     case 'propose': { const r = await act('propose', { team: [...selected] }); if (r.ok) selected = new Set(); return; }
-    case 'vote': return act('vote', { approve: el.dataset.v === '1' });
-    case 'quest': return act('quest', { success: el.dataset.v === '1' });
-    case 'lady': { const id = [...selected][0]; if (id && confirm(`用湖中仙女查驗 ${P(id).name}？`)) { const r = await act('lady', { id }); if (r.ok) selected = new Set(); } return; }
-    case 'assassinate': { const id = [...selected][0]; if (id && confirm(`確定刺殺 ${P(id).name}？`)) { const r = await act('assassinate', { id }); if (r.ok) selected = new Set(); } return; }
+    case 'vote': hideVoteRemind(); return act('vote', { approve: el.dataset.v === '1' });
+    case 'quest': hideVoteRemind(); return act('quest', { success: el.dataset.v === '1' });
+    case 'votego': return focusVoteControls();
+    case 'voteremind-x': return hideVoteRemind();
+    case 'lady': return openActConfirm('lady');
+    case 'assassinate': return openActConfirm('assassinate');
     case 'detail': return go('detail', { gid: el.dataset.g, from: 'history' });
     case 'poster': return posterDialog();
     case 'story': return storySheet(window.__lastRecord);

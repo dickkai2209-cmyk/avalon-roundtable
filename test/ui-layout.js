@@ -267,9 +267,51 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         barBottom: bar.bottom + scrollY, gap: doc.scrollHeight - (bar.bottom + scrollY),
         top: !!document.querySelector('.top-room-acts:not(.hidden)'),
         rhead: (document.querySelector('.rhead') || {}).className || '',
-        avoidFab: !!document.querySelector('.avoid-fab')
+        avoidBtns: document.querySelectorAll('[data-a="avoid"]').length,
+        avoidFixed: getComputedStyle(document.querySelector('[data-a="avoid"]') || document.body).position === 'fixed' && !!document.querySelector('[data-a="avoid"]'),
+        avoidInBar: !!document.querySelector('.bottombar > .avoid-btn')
       };
     })()`);
+
+    async function assertBarPinned(tag) {
+      const r = await cdp.eval(`(() => {
+        const bar = document.querySelector('.bottombar');
+        const card = document.querySelector('.cfgcard');
+        const modal = document.querySelector('.modal');
+        const box = (el) => { const b = el.getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, w: b.width }; };
+        const before = box(bar);
+        window.scrollTo(0, 280);
+        const mid = box(bar);
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        const end = box(bar);
+        const cardEnd = card.getBoundingClientRect().bottom;
+        const doc = document.documentElement;
+        const out = {
+          pos: getComputedStyle(bar).position,
+          pad: getComputedStyle(bar).paddingBottom,
+          before, mid, end,
+          ih: innerHeight, iw: innerWidth,
+          cardEnd, sw: doc.scrollWidth, cw: doc.clientWidth,
+          modalZ: parseFloat(getComputedStyle(modal).zIndex) || 0,
+          barZ: parseFloat(getComputedStyle(bar).zIndex) || 0,
+          avoid: document.querySelectorAll('.bottombar > .avoid-btn').length,
+          pill: !!document.querySelector('.avoid-fab')
+        };
+        window.scrollTo(0, 0);
+        return out;
+      })()`);
+      const near = (a, b, n) => Math.abs(a - b) <= n;
+      assert(r.pos === 'fixed', tag + ' action bar is fixed (' + r.pos + ')');
+      assert(near(r.mid.t, r.before.t, 2) && near(r.end.t, r.before.t, 2), tag + ' action bar stays put while scrolling');
+      assert(near(r.before.b, r.ih, 2) && near(r.mid.b, r.ih, 2) && near(r.end.b, r.ih, 2), tag + ' action bar sits on the viewport bottom');
+      assert(near(r.mid.l, r.before.l, 2) && near(r.end.w, r.before.w, 2), tag + ' action bar width stays stable');
+      assert(r.before.l >= -1 && r.before.l + r.before.w <= r.iw + 1 && r.sw <= r.cw + 1, tag + ' action bar does not overflow horizontally');
+      assert(r.cardEnd <= r.end.t + 1, tag + ' last lobby card clears the fixed bar (' + r.cardEnd.toFixed(0) + '/' + r.end.t.toFixed(0) + ')');
+      assert(r.modalZ > r.barZ, tag + ' sheets stay above the action bar');
+      assert(r.avoid === 1 && !r.pill, tag + ' compact avoid button stays in the bar');
+      assert(parseFloat(r.pad) >= 10, tag + ' action bar keeps bottom padding (' + r.pad + ')');
+      if (tag === 'desktop') assert(r.before.w <= 521 && near(r.before.l, (r.iw - r.before.w) / 2, 2), tag + ' action bar stays in the centred column');
+    }
 
     for (const [w, h, tag] of [[375, 812, '375'], [390, 844, '390']]) {
       await setSize(w, h);
@@ -288,8 +330,8 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         assert(bCol !== sCol, 'occupied digit and /n are different colours');
         assert(m.emo.shadow === 'none' && !/255, 224|255, 201|ffe066|ffc928/i.test(m.emo.bg + m.emo.shadow), tag + ' emoji button is flat pale, not yellow glow');
         assert(m.sw <= m.cw + 1, tag + '/' + n + ' no horizontal overflow (' + m.sw + '/' + m.cw + ')');
-        if (m.avoidFab) assert(m.gap > 60 && m.gap < 110, tag + '/' + n + ' room leaves the avoid-card button clear (' + m.gap.toFixed(1) + 'px)');
-        else assert(m.gap < 36, tag + '/' + n + ' room gap below the action bar is small (' + m.gap.toFixed(1) + 'px)');
+        assert(m.avoidBtns === 1 && m.avoidInBar && !m.avoidFixed, tag + '/' + n + ' has one compact avoid button in the bottom bar');
+        if (n === 8) await assertBarPinned(tag);
         assert(m.top && /compact/.test(m.rhead), 'sticky invite/menu and compact header stay');
         const cx = m.rt.l + m.rt.w / 2, cy = m.rt.t + m.rt.h / 2;
         let minEdge = Infinity, maxReach = 0;
@@ -456,6 +498,9 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
     assert((await cdp.eval(`document.querySelector('.rt .st[data-seat="8"] .nm').textContent`)) === '乙座', 'second player avatar arrived on seat 8');
     assert((await cdp.eval(`document.querySelector('.rt .st[data-seat="3"] .nm').textContent`)) === '空位', 'seat 3 is empty again');
     bot.close();
+    await setSize(1280, 800);
+    await sleep(80);
+    await assertBarPinned('desktop');
     console.log('ALL UI LAYOUT CHECKS PASSED');
   } finally {
     chrome.kill('SIGKILL');

@@ -677,7 +677,7 @@ function homeHtml() {
     <div class="item" data-a="go" data-v="rules"><span class="ic">📖</span><span class="grow">規則介紹</span><span class="chev">›</span></div>
     <div class="item" data-a="about"><span class="ic">ℹ️</span><span class="grow">版本</span><span class="muted small">v3.1</span><span class="chev">›</span></div>
   </div>
-  <div class="footer"><span class="credit">旺角阿瓦隆 · by Amigosparty · v3.1</span><br><span class="credit2">Design by Teddy Design Limited</span></div>`;
+  <div class="footer"><span class="credit">旺角阿瓦隆 · by Amigosparty · v3.1</span><br><span class="credit2">Design by Teddy Design Limited</span><br><span class="credit2"><a href="/privacy" target="_blank" rel="noopener">私隱政策</a> · <a href="/terms" target="_blank" rel="noopener">使用條款</a></span></div>`;
 }
 const ACHS = [
   ['first', '初入圓桌', '完成第 1 場遊戲', s => s.played >= 1],

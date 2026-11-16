@@ -600,6 +600,7 @@ app.use((req, res, next) => { // Server-Timing: app processing time (excludes ne
 });
 app.use(require('compression')());
 app.use(express.json({ limit: '2mb' }));
+app.get(['/privacy', '/terms'], (req, res) => res.set('Cache-Control', 'public, max-age=600').sendFile(path.join(__dirname, 'public', req.path.slice(1) + '.html')));
 app.get('/healthz', (req, res) => res.set('Cache-Control', 'no-store').send('ok'));
 app.get('/vendor/socket.io.min.js', (req, res) => res.set('Cache-Control', 'public, max-age=604800').sendFile(path.join(__dirname, 'node_modules/socket.io-client/dist/socket.io.min.js')));
 app.use(express.static(path.join(__dirname, 'public'), {

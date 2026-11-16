@@ -175,7 +175,9 @@ function av(p, size = 36) {
 }
 const chip = (id, list) => { const p = P(id, list); return `<span class="chip">${av(p, 22)}${esc(p.name)}</span>`; };
 const fmtTime = (t) => { const d = new Date(t); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-const inviteUrl = (code) => `${location.origin}/r/${code}`;
+let PUBLIC_ORIGIN = /^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(location.hostname) ? 'https://avalon-roundtable-10t9.onrender.com' : location.origin;
+fetch('/api/config').then(r => r.json()).then(c => { if (c.publicUrl && PUBLIC_ORIGIN !== location.origin) PUBLIC_ORIGIN = c.publicUrl; }).catch(() => {});
+const inviteUrl = (code) => `${PUBLIC_ORIGIN}/r/${code}`;
 const pct = (w, p) => p ? Math.round(w * 100 / p) : 0;
 const playedTotal = () => myStats.played || 0;
 
@@ -856,7 +858,7 @@ async function animateDemo() {
 }
 
 // ================= poster =================
-const replayUrl = (r) => r && r.gid ? `${location.origin}/g/${r.gid}` : location.origin;
+const replayUrl = (r) => r && r.gid ? `${PUBLIC_ORIGIN}/g/${r.gid}` : PUBLIC_ORIGIN;
 const sideOf = (p) => (ROLE[p.role] || {}).side || p.side || 'good';
 const roleN = (k) => (ROLE[k] || {}).n || RN[k] || k;
 async function makePoster(r, personal = true) {
@@ -1115,5 +1117,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
-window.__av = { get S() { return S; }, makePoster, showQuest, closeModal, go, showRole, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
+window.__av = { get S() { return S; }, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

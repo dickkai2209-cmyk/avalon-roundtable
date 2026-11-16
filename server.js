@@ -701,7 +701,7 @@ app.get('/api/game/:gid', async (req, res) => {
 const G_ID = process.env.GOOGLE_CLIENT_ID, G_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const oauthStates = new Map();
 const baseUrl = (req) => process.env.PUBLIC_URL || `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}`;
-app.get('/api/config', (req, res) => res.json({ google: !!(G_ID && G_SECRET) }));
+app.get('/api/config', (req, res) => { const pub = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || ''; res.json({ google: !!(G_ID && G_SECRET), publicUrl: pub && !/localhost|127\.0\.0\.1/.test(pub) ? pub.replace(/\/$/, '') : 'https://avalon-roundtable-10t9.onrender.com' }); });
 app.post('/api/auth/google/start', async (req, res) => {
   if (!G_ID || !G_SECRET) return res.status(503).json({ error: 'Google 登入尚未設定' });
   const u = await db.getUserByToken(bearer(req));

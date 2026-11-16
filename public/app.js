@@ -233,6 +233,7 @@ socket.on('state', (st) => {
   handleEvent(st);
   if (view === 'room' || view === 'home') render();
   if (cfgOpen && !st.game && !$('#modal').classList.contains('hidden')) $('#sheet').innerHTML = cfgSheetHtml();
+  syncVoteRemind();
 });
 socket.on('kicked', () => { S = null; toast('你已被房主移出房間'); go('home'); });
 socket.on('dissolved', () => { S = null; toast('房間已解散'); go('home'); });
@@ -937,6 +938,59 @@ function voteGrid(seats, rounds, quests, myId) {
 }
 
 // ================= events & animations =================
+// One in-app reminder per actionable vote. Not a push notification, and not repeated on every state tick.
+const voteRemindSeen = new Set();
+let voteRemindTimer;
+function voteAction(g, meId, spectating) {
+  if (!g || spectating || !g.me || !meId) return null;
+  const team = (g.team || []).slice().sort().join(',');
+  if (g.phase === 'vote') {
+    if (g.me.voted) return null;
+    const attempt = ((g.rounds && g.rounds[g.round]) || []).length;
+    return { key: g.gid + '|vote|' + g.round + '|' + attempt + '|' + team, text: '輪到你投票', kind: 'vote' };
+  }
+  if (g.phase === 'quest') {
+    if (g.me.questSubmitted || !(g.team || []).includes(meId)) return null;
+    return { key: g.gid + '|quest|' + g.round + '|' + team, text: '請提交任務票', kind: 'quest' };
+  }
+  return null;
+}
+function hideVoteRemind() {
+  clearTimeout(voteRemindTimer);
+  const el = document.querySelector('.vote-remind');
+  if (el) el.remove();
+}
+function showVoteRemind(action) {
+  hideVoteRemind();
+  const el = document.createElement('div');
+  el.className = 'vote-remind';
+  el.dataset.key = action.key;
+  el.dataset.kind = action.kind;
+  el.setAttribute('role', 'status');
+  el.innerHTML = `<button type="button" class="vote-remind-go" data-a="votego"><b>${esc(action.text)}</b><span>點一下去投票</span></button><button type="button" class="vote-remind-x" data-a="voteremind-x" aria-label="關閉提醒">×</button>`;
+  document.body.appendChild(el);
+  voteRemindTimer = setTimeout(hideVoteRemind, 7000);
+}
+function syncVoteRemind() {
+  const action = voteAction(S && S.game, S && S.meId, !!(S && S.spectating));
+  const cur = document.querySelector('.vote-remind');
+  if (!action) { hideVoteRemind(); return; }
+  if (cur && cur.dataset.key === action.key) return;
+  if (voteRemindSeen.has(action.key)) return;
+  voteRemindSeen.add(action.key);
+  showVoteRemind(action);
+}
+window.__voteAction = voteAction;
+function focusVoteControls() {
+  const kind = (document.querySelector('.vote-remind') || {}).dataset && document.querySelector('.vote-remind').dataset.kind;
+  if (view !== 'room') go('room');
+  requestAnimationFrame(() => {
+    const target = document.querySelector(kind === 'quest' ? '.qpick, [data-a="quest"]' : '[data-a="vote"]');
+    if (!target) return;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    target.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+  });
+}
 function handleEvent(st) {
   const key = 'cc.seen.' + st.code; seenEvent = Number(sessionStorage.getItem(key) || 0);
   const ev = st.lastEvent; if (!ev || ev.seq <= seenEvent) return;
@@ -2046,8 +2100,10 @@ document.addEventListener('click', async (e) => {
       return render();
     }
     case 'propose': { const r = await act('propose', { team: [...selected] }); if (r.ok) selected = new Set(); return; }
-    case 'vote': return act('vote', { approve: el.dataset.v === '1' });
-    case 'quest': return act('quest', { success: el.dataset.v === '1' });
+    case 'vote': hideVoteRemind(); return act('vote', { approve: el.dataset.v === '1' });
+    case 'quest': hideVoteRemind(); return act('quest', { success: el.dataset.v === '1' });
+    case 'votego': return focusVoteControls();
+    case 'voteremind-x': return hideVoteRemind();
     case 'lady': { const id = [...selected][0]; if (id && confirm(`用湖中仙女查驗 ${P(id).name}？`)) { const r = await act('lady', { id }); if (r.ok) selected = new Set(); } return; }
     case 'assassinate': { const id = [...selected][0]; if (id && confirm(`確定刺殺 ${P(id).name}？`)) { const r = await act('assassinate', { id }); if (r.ok) selected = new Set(); } return; }
     case 'detail': return go('detail', { gid: el.dataset.g, from: 'history' });

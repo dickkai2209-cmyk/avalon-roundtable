@@ -53,7 +53,9 @@ async function play(cs, strategy, log) {
       const leader = by(g.leaderId); const need = g.teamSizes[g.round];
       // wrong size should fail
       const wrong = await leader.act('propose', { team: [cs[0].st.meId] }); if (need !== 1) assert(wrong.error, 'wrong size rejected');
-      const team = g.seats.slice(0, need).map(s => s.id);
+      const evilIds = cs.filter(c => c.st.game.me.side === 'evil').map(c => c.st.meId);
+      const order = strategy === 'evil' ? evilIds.concat(g.seats.map(s => s.id).filter(id => !evilIds.includes(id))) : g.seats.map(s => s.id);
+      const team = order.slice(0, need);
       // pick a team containing an evil player when strategy evil
       const r = await leader.act('propose', { team }); assert(r.ok, 'propose ' + JSON.stringify(r));
       await until(() => cs.every(c => c.st.game.phase === 'vote'));
@@ -68,6 +70,14 @@ async function play(cs, strategy, log) {
       await Promise.all(members.map(c => { const evil = c.st.game.me.side === 'evil'; return c.act('quest', { success: strategy === 'evil' ? !evil : (evil ? true : false) }); }));
       await until(() => cs.every(c => c.st.game.phase !== 'quest'));
       const q = cs[0].st.game.quests[g.round]; log.push(`R${g.round + 1} quest team=${g.team.length} fails=${q.fails} ${q.success ? 'SUCCESS' : 'FAIL'}`);
+    } else if (g.phase === 'lady') {
+      const holder = by(g.ladyId); const t = g.seats.find(s => s.id !== g.ladyId && !g.ladyUsed.includes(s.id));
+      const bad = await holder.act('lady', { id: g.ladyUsed[0] === g.ladyId ? g.ladyId : g.ladyUsed[0] }); assert(bad.error, 'lady on used blocked');
+      const r = await holder.act('lady', { id: t.id }); assert(r.ok, 'lady ' + JSON.stringify(r));
+      await until(() => cs.every(c => c.st.game.phase !== 'lady'));
+      const mine = holder.st.game.ladyLog.slice(-1)[0]; const other = cs.find(c => c !== holder).st.game.ladyLog.slice(-1)[0];
+      assert(mine.side && (other.side === undefined || cs.find(c => c !== holder).st.meId === mine.holder), 'lady result private');
+      log.push(`lady: ${mine.holder}->${mine.target} = ${mine.side}`);
     } else if (g.phase === 'assassin') {
       const as = cs.find(c => c.st.game.me.role === 'assassin');
       const nonAs = cs.find(c => c.st.game.me.role !== 'assassin');
@@ -117,5 +127,11 @@ async function play(cs, strategy, log) {
   // 10 players oberon
   { const { cs } = await setup(10, 'e', { percival: true, morgana: true, mordred: true, oberon: true });
     checkKnowledge(cs); const log = []; const g = await play(cs, 'evil', log); assert(g.winner === 'evil', '10p evil'); results.push({ game: '10p oberon', log, reason: g.reason }); cs.forEach(c => c.s.close()); }
+  // 8 players with Lady of the Lake
+  { const { cs } = await setup(8, 'f', { percival: true, morgana: true, mordred: false, oberon: false, lady: true });
+    const log = []; const g = await play(cs, 'good', log); assert(g.winner === 'good' && g.ladyLog.length >= 1, '8p lady');
+    assert(g.scores && g.mvp && g.highlights, 'scores computed');
+    const det = await fetch(`${URL}/api/game/${g.gid}?pid=${cs[0].pid}`).then(r => r.json()); assert(det.rounds && det.myId === cs[0].st.meId && det.mvp, 'detail api');
+    results.push({ game: '8p lady', log, reason: g.reason, mvp: g.mvp, highlights: g.highlights }); cs.forEach(c => c.s.close()); }
   console.log(JSON.stringify(results, null, 1)); console.log('ALL TESTS PASSED'); process.exit(0);
 })().catch(e => { console.error('FAILED', e); process.exit(1); });

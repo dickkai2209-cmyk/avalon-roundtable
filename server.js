@@ -36,8 +36,12 @@ const needTwoFails = (n, round) => n >= 7 && round === 3;
 
 const pubId = (pid) => crypto.createHash('sha256').update(String(pid)).digest('hex').slice(0, 10);
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-const cleanName = (s) => String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 12) || '玩家';
-const cleanAvatar = (s) => String(s || '🙂').slice(0, 4);
+const cleanName = (s) => Array.from(String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim()).slice(0, 10).join('') || '騎士';
+const cleanAvatar = (s) => { s = String(s || ''); if (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(s) && s.length <= 16000) return s; return Array.from(s).slice(0, 3).join('') || '🦊'; };
+const cleanBg = (s) => /^#[0-9a-fA-F]{6}$/.test(String(s)) ? s : '#f3d9a4';
+const FX = ['none', 'spot', 'gold', 'spark'];
+const cleanFx = (s) => FX.includes(s) ? s : 'spot';
+const pubPlayer = (p) => ({ id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx });
 
 // ---------- rooms ----------
 const rooms = new Map();           // code -> room
@@ -52,7 +56,7 @@ function makeRoom(host) {
   const room = {
     code, hostPid: host.pid, createdAt: Date.now(), touched: Date.now(),
     players: [], // {pid, id, name, avatar}
-    settings: { percival: true, morgana: true, mordred: false, oberon: false },
+    settings: { percival: true, morgana: true, mordred: false, oberon: false, lady: false },
     game: null, eventSeq: 0,
   };
   rooms.set(code, room);
@@ -82,11 +86,13 @@ function startGame(room) {
   if (n < 5 || n > 10) return '需要 5 至 10 位玩家';
   const err = validateSettings(n, room.settings); if (err) return err;
   const roles = buildRoles(n, room.settings);
-  const seats = room.players.map((p, i) => ({ pid: p.pid, id: p.id, name: p.name, avatar: p.avatar, role: roles[i] }));
+  const seats = room.players.map((p, i) => ({ pid: p.pid, id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, role: roles[i] }));
+  const leader = crypto.randomInt(n);
   room.game = {
     gid: crypto.randomUUID(), startedAt: Date.now(), n, seats,
     settings: { ...room.settings },
-    round: 0, leader: crypto.randomInt(n), rejects: 0,
+    round: 0, leader, rejects: 0,
+    lady: room.settings.lady ? (leader - 1 + n) % n : -1, ladyUsed: room.settings.lady ? [seats[(leader - 1 + n) % n].id] : [], ladyLog: [],
     phase: 'team', team: [], votes: {}, questVotes: {},
     quests: [null, null, null, null, null], // {success, fails, team}
     rounds: [[], [], [], [], []], // proposals per round
@@ -101,11 +107,13 @@ function endGame(room, winner, reason) {
   const g = room.game;
   g.phase = 'end'; g.winner = winner; g.reason = reason; g.endedAt = Date.now();
   room.lastEvent = { seq: ++room.eventSeq, type: 'end', winner, reason };
+  const { scores, mvp, runnerUp, highlights } = scoreGame(g);
+  g.scores = scores; g.mvp = mvp; g.runnerUp = runnerUp; g.highlights = highlights;
   const rec = {
-    gid: g.gid, room: room.code, startedAt: g.startedAt, endedAt: g.endedAt, n: g.n, winner, reason,
-    players: g.seats.map(s => ({ id: s.id, name: s.name, avatar: s.avatar, role: s.role })),
-    quests: g.quests.map(q => q ? { success: q.success, fails: q.fails } : null),
-    assassinTarget: g.assassinTarget,
+    gid: g.gid, room: room.code, startedAt: g.startedAt, endedAt: g.endedAt, n: g.n, winner, reason, settings: g.settings,
+    players: g.seats.map((s, i) => ({ id: s.id, name: s.name, avatar: s.avatar.startsWith('data:') ? null : s.avatar, bg: s.bg, role: s.role, seat: i + 1 })),
+    quests: g.quests.map(q => q ? { success: q.success, fails: q.fails, team: q.team } : null),
+    rounds: g.rounds, ladyLog: g.ladyLog, assassinTarget: g.assassinTarget, scores, mvp, runnerUp, highlights,
     pids: g.seats.map(s => s.pid),
   };
   db.games.push(rec);
@@ -115,8 +123,52 @@ function endGame(room, winner, reason) {
     const r = st.roles[s.role] || (st.roles[s.role] = { played: 0, won: 0 });
     const won = ROLE_SIDE[s.role] === winner;
     st.played++; r.played++; if (won) { st.won++; r.won++; }
+    if (s.id === mvp) st.mvp = (st.mvp || 0) + 1;
   }
   saveDb();
+}
+
+function scoreGame(g) {
+  const side = {}; const role = {}; g.seats.forEach(s => { side[s.id] = ROLE_SIDE[s.role]; role[s.id] = s.role; });
+  const scores = {};
+  for (const s of g.seats) {
+    const items = []; const my = side[s.id]; const won = my === g.winner;
+    if (won) items.push(['勝利', 12]);
+    let correct = 0;
+    for (const props of g.rounds) for (const p of props) {
+      if (!(s.id in p.votes)) continue;
+      const evilOn = p.team.some(id => side[id] === 'evil');
+      const good = my === 'good' ? (p.votes[s.id] === !evilOn) : (p.votes[s.id] === evilOn);
+      if (good) correct++;
+    }
+    if (correct) items.push([`正確投票 ×${correct}`, correct * 2]);
+    let qs = 0; for (const q of g.quests) if (q && q.team.includes(s.id) && (q.success ? 'good' : 'evil') === my) qs++;
+    if (qs) items.push([`完成任務 ×${qs}`, qs]);
+    if (won && g.n > 5) items.push([`${g.n} 人局加成`, g.n - 5]);
+    if (g.assassinTarget) {
+      if (s.role === 'assassin' && role[g.assassinTarget] === 'merlin') items.push(['一擊刺中梅林', 5]);
+      if (s.role === 'merlin' && role[g.assassinTarget] !== 'merlin') items.push(['梅林成功隱藏', 5]);
+    }
+    if (g.ladyLog.some(l => l.holder === s.id && side[l.target] !== my)) items.push(['湖中仙女驗出敵人', 1]);
+    scores[s.id] = { total: items.reduce((a, x) => a + x[1], 0), items };
+  }
+  const order = g.seats.map(s => s.id).sort((a, b) => (scores[b].total - scores[a].total) || ((side[b] === g.winner) - (side[a] === g.winner)));
+  order.forEach((id, i) => scores[id].rank = i + 1);
+  const hl = [];
+  const mordred = g.seats.find(s => s.role === 'mordred');
+  if (mordred && g.quests.some(q => q && q.team.includes(mordred.id))) hl.push(`莫德雷德 ${mordred.name} 成功混入任務隊伍`);
+  const merlin = g.seats.find(s => s.role === 'merlin');
+  if (g.assassinTarget) hl.push(role[g.assassinTarget] === 'merlin' ? `刺客一擊即中，梅林 ${merlin.name} 倒下` : `梅林 ${merlin.name} 完美隱藏到最後`);
+  const allProps = g.rounds.flat();
+  const maxRej = Math.max(0, ...g.rounds.map(r => r.filter(p => !p.approved).length));
+  if (maxRej >= 3) hl.push(`同一輪連續被否決 ${maxRej} 次，圓桌氣氛緊張`);
+  const unanimous = allProps.filter(p => p.yes === g.n).length; if (unanimous) hl.push(`${unanimous} 次全票通過的隊伍`);
+  const qres = g.quests.filter(Boolean);
+  if (qres.length === 3 && qres.every(q => q.success)) hl.push('三連勝！好人任務零失誤');
+  if (qres.length === 3 && qres.every(q => !q.success)) hl.push('三連敗！壞人全面滲透');
+  const oberon = g.seats.find(s => s.role === 'oberon'); if (oberon) hl.push(`奧伯倫 ${oberon.name} 孤軍作戰`);
+  const big = qres.find(q => q.fails >= 2); if (big) hl.push(`有任務出現 ${big.fails} 張失敗卡`);
+  return { scores, mvp: order[0], runnerUp: order[1], highlights: hl };
 }
 
 function knowledgeFor(g, seat) {
@@ -137,7 +189,7 @@ function act(room, pid, type, data) {
     case 'settings': {
       if (!isHost) return '只有房主可以修改';
       if (g && g.phase !== 'end') return '遊戲進行中';
-      for (const k of ['percival', 'morgana', 'mordred', 'oberon']) if (k in data) room.settings[k] = !!data[k];
+      for (const k of ['percival', 'morgana', 'mordred', 'oberon', 'lady']) if (k in data) room.settings[k] = !!data[k];
       return null;
     }
     case 'kick': {
@@ -153,6 +205,14 @@ function act(room, pid, type, data) {
       if (g && g.phase !== 'end') return '遊戲進行中';
       const i = room.players.findIndex(x => x.id === data.id); const j = i + (data.dir < 0 ? -1 : 1);
       if (i < 0 || j < 0 || j >= room.players.length) return null;
+      [room.players[i], room.players[j]] = [room.players[j], room.players[i]];
+      return null;
+    }
+    case 'swap': {
+      if (!isHost) return '只有房主可以調位';
+      if (g && g.phase !== 'end') return '遊戲進行中';
+      const i = room.players.findIndex(x => x.id === data.a), j = room.players.findIndex(x => x.id === data.b);
+      if (i < 0 || j < 0) return '無效玩家';
       [room.players[i], room.players[j]] = [room.players[j], room.players[i]];
       return null;
     }
@@ -225,9 +285,22 @@ function act(room, pid, type, data) {
         const evilWins = g.quests.filter(q => q && !q.success).length;
         if (evilWins >= 3) endGame(room, 'evil', '三個任務失敗，壞人勝利');
         else if (goodWins >= 3) { g.phase = 'assassin'; }
+        else if (g.lady >= 0 && g.round >= 1 && g.round <= 3) { g.phase = 'lady'; }
         else { g.round++; g.phase = 'team'; }
         if (g.phase === 'end') room.lastEvent = { ...room.lastEvent, ...qev, then: 'end' };
       }
+      return null;
+    }
+    case 'lady': {
+      if (g.phase !== 'lady') return '現在不是湖中仙女階段';
+      if (seatIdx !== g.lady) return '只有湖中仙女持有者可以查驗';
+      const ti = g.seats.findIndex(s => s.id === data.id); const t = g.seats[ti];
+      if (!t || t.pid === pid) return '無效目標';
+      if (g.ladyUsed.includes(t.id)) return '此玩家已持有過湖中仙女，不能被查驗';
+      g.ladyLog.push({ round: g.round, holder: seat.id, target: t.id, side: ROLE_SIDE[t.role] });
+      g.ladyUsed.push(t.id); g.lady = ti;
+      room.lastEvent = { seq: ++room.eventSeq, type: 'lady', holder: seat.id, target: t.id };
+      g.round++; g.phase = 'team';
       return null;
     }
     case 'assassinate': {
@@ -252,7 +325,7 @@ function viewFor(room, pid) {
   const v = {
     code: room.code, hostId: pubId(room.hostPid), meId: me ? me.id : null, isHost: room.hostPid === pid,
     settings: room.settings, lastEvent: room.lastEvent || null,
-    players: room.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar, online: online.has(p.pid) })),
+    players: room.players.map(p => ({ ...pubPlayer(p), online: online.has(p.pid) })),
     teamSizes: TEAM_SIZES[room.players.length] || null, evilCount: EVIL_COUNT[room.players.length] || null,
     game: null,
   };
@@ -264,13 +337,16 @@ function viewFor(room, pid) {
     v.game = {
       gid: g.gid, n: g.n, phase: g.phase, round: g.round, leaderId: g.seats[g.leader].id, rejects: g.rejects,
       teamSizes: TEAM_SIZES[g.n], twoFailRound: g.n >= 7 ? 3 : -1, settings: g.settings,
-      seats: g.seats.map(s => ({ id: s.id, name: s.name, avatar: s.avatar, online: online.has(s.pid),
+      seats: g.seats.map(s => ({ id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, online: online.has(s.pid),
         role: ended ? s.role : undefined,
         evil: (revealEvil && ROLE_SIDE[s.role] === 'evil' && s.role !== 'oberon') ? true : undefined,
         assassin: revealEvil && s.role === 'assassin' ? true : undefined })),
       team: g.team, voted: Object.keys(g.votes), questDone: Object.keys(g.questVotes).length,
       quests: g.quests.map(q => q ? { success: q.success, fails: q.fails, team: q.team } : null),
       rounds: g.rounds, winner: g.winner, reason: g.reason, assassinTarget: g.assassinTarget,
+      ladyId: g.lady >= 0 ? g.seats[g.lady].id : null, ladyUsed: g.ladyUsed,
+      ladyLog: g.ladyLog.map(l => ({ round: l.round, holder: l.holder, target: l.target, side: (ended || (seat && l.holder === seat.id)) ? l.side : undefined })),
+      scores: ended ? g.scores : undefined, mvp: ended ? g.mvp : undefined, runnerUp: ended ? g.runnerUp : undefined, highlights: ended ? g.highlights : undefined,
       me: seat ? { role: seat.role, side: ROLE_SIDE[seat.role], roleName: ROLE_NAME[seat.role], knows: knowledgeFor(g, seat),
         voted: seat.id in g.votes, myVote: g.votes[seat.id], questSubmitted: seat.id in g.questVotes } : null,
     };
@@ -288,7 +364,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' }, pingInterval: 20000, pingTimeout: 25000 });
 
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '5m' }));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '10m' }));
 app.get('/healthz', (req, res) => res.json({ ok: true, rooms: rooms.size }));
 app.get('/api/qr', async (req, res) => {
   try {
@@ -304,8 +380,16 @@ app.get('/api/history', (req, res) => {
   });
   res.json(list);
 });
+app.get('/api/game/:gid', (req, res) => {
+  const g = db.games.find(x => x.gid === req.params.gid); if (!g) return res.status(404).json({ error: 'not found' });
+  const { pids, ...rest } = g; const idx = pids.indexOf(String(req.query.pid || ''));
+  res.json({ ...rest, myId: idx >= 0 ? rest.players[idx].id : null });
+});
 app.get('/api/stats', (req, res) => res.json(db.stats[String(req.query.pid || '')] || { played: 0, won: 0, roles: {} }));
 app.get(['/r/:code', '/room/:code'], (req, res) => res.redirect('/?room=' + encodeURIComponent(req.params.code.toUpperCase())));
+
+function applyProfile(p, d) { p.name = d.name; p.avatar = d.avatar; p.bg = d.bg; p.fx = d.fx; }
+function newPlayer(pid, d) { const p = { pid, id: pubId(pid) }; applyProfile(p, d); return p; }
 
 function leaveCurrent(socket, pid, removeFromLobby) {
   const code = pidRoom.get(pid); if (!code) return;
@@ -321,22 +405,22 @@ function leaveCurrent(socket, pid, removeFromLobby) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('hello', ({ pid, name, avatar } = {}, cb = () => {}) => {
+  socket.on('hello', ({ pid, name, avatar, bg, fx } = {}, cb = () => {}) => {
     if (typeof pid !== 'string' || pid.length < 8 || pid.length > 64) return cb({ error: 'bad pid' });
-    socket.data.pid = pid; socket.data.name = cleanName(name); socket.data.avatar = cleanAvatar(avatar);
+    socket.data.pid = pid; Object.assign(socket.data, { name: cleanName(name), avatar: cleanAvatar(avatar), bg: cleanBg(bg), fx: cleanFx(fx) });
     const code = pidRoom.get(pid); const room = code && rooms.get(code);
     if (room) {
       const p = findPlayer(room, pid);
-      if (p && (!room.game || room.game.phase === 'end')) { p.name = socket.data.name; p.avatar = socket.data.avatar; }
+      if (p && (!room.game || room.game.phase === 'end')) applyProfile(p, socket.data);
       socket.join(code); socket.data.room = code; broadcast(room);
       return cb({ room: code });
     }
     cb({ room: null });
   });
-  socket.on('profile', ({ name, avatar } = {}) => {
-    socket.data.name = cleanName(name); socket.data.avatar = cleanAvatar(avatar);
+  socket.on('profile', ({ name, avatar, bg, fx } = {}) => {
+    Object.assign(socket.data, { name: cleanName(name), avatar: cleanAvatar(avatar), bg: cleanBg(bg), fx: cleanFx(fx) });
     const room = socket.data.room && rooms.get(socket.data.room);
-    if (room && (!room.game || room.game.phase === 'end')) { const p = findPlayer(room, socket.data.pid); if (p) { p.name = socket.data.name; p.avatar = socket.data.avatar; broadcast(room); } }
+    if (room && (!room.game || room.game.phase === 'end')) { const p = findPlayer(room, socket.data.pid); if (p) { applyProfile(p, socket.data); broadcast(room); } }
   });
   socket.on('create', (_, cb = () => {}) => {
     const pid = socket.data.pid; if (!pid) return cb({ error: '請先設定暱稱' });
@@ -344,7 +428,7 @@ io.on('connection', (socket) => {
     if (cur && cur.game && cur.game.phase !== 'end') return cb({ error: '你正在另一局遊戲中' });
     leaveCurrent(socket, pid, true);
     const room = makeRoom({ pid });
-    room.players.push({ pid, id: pubId(pid), name: socket.data.name, avatar: socket.data.avatar });
+    room.players.push(newPlayer(pid, socket.data));
     pidRoom.set(pid, room.code); socket.join(room.code); socket.data.room = room.code;
     broadcast(room); cb({ room: room.code });
   });
@@ -358,7 +442,7 @@ io.on('connection', (socket) => {
       const cur = pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
       if (cur && cur !== room && cur.game && cur.game.phase !== 'end') return cb({ error: '你正在另一局遊戲中' });
       if (cur !== room) leaveCurrent(socket, pid, true);
-      room.players.push({ pid, id: pubId(pid), name: socket.data.name, avatar: socket.data.avatar });
+      room.players.push(newPlayer(pid, socket.data));
       pidRoom.set(pid, code);
     }
     socket.join(code); socket.data.room = code; broadcast(room); cb({ room: code });

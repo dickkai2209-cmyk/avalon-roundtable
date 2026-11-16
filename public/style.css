@@ -786,10 +786,9 @@ img,canvas,svg,video{max-width:100%}
 .veto-fab b{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#2f6be0;color:#fff;font-size:11px;line-height:18px;text-align:center}
 .veto-fab.ready{border-color:#2f6be0;box-shadow:0 0 0 2px rgba(47,107,224,.25),0 6px 18px rgba(20,30,60,.16)}
 .veto-fab.dim{opacity:.55}
-.avoid-fab{position:fixed;left:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:16;display:flex;align-items:center;gap:6px;padding:6px 10px 6px 6px;border-radius:14px;background:#fff;border:1.5px solid #cfd4e2;color:#1d2333;font-size:12px;font-weight:700;box-shadow:0 6px 18px rgba(20,30,60,.16);cursor:pointer}
-.avoid-fab img{display:block;border-radius:3px}
-.avoid-fab b{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#2f6be0;color:#fff;font-size:11px;line-height:18px;text-align:center}
-.avoid-fab i{font-style:normal;font-weight:700;color:#2f6be0}
+.bottombar .avoid-btn{position:relative;flex-shrink:0;width:48px;height:64px;padding:0;border-radius:8px;border:1.5px solid #c9d9ff;background:#eef3ff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.bottombar .avoid-btn img{display:block;width:24px;height:32px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.bottombar .avoid-btn b{position:absolute;right:-6px;top:-6px;min-width:20px;height:20px;padding:0 4px;border-radius:10px;background:#2f6be0;color:#fff;font-size:12px;line-height:20px;text-align:center}
 .avoid-sheet h2{margin-bottom:6px}
 .avoid-inv{text-align:center;font-size:14px;font-weight:700;color:#1d2333}
 .avoid-inv b{color:#2f6be0;font-size:18px}
@@ -803,7 +802,7 @@ img,canvas,svg,video{max-width:100%}
 .avoid-tile .rc .cap{padding:28px 4px 6px}
 .avoid-tile .rc .cap .rn{font-size:13px}
 .avoid-tile.sel{border-color:#2f6be0;box-shadow:0 0 0 2px rgba(47,107,224,.28)}
-@media (max-width: 360px){.veto-fab span,.avoid-fab span,.myrole-fab>span:last-child{display:none}}
+@media (max-width: 360px){.veto-fab span,.myrole-fab>span:last-child{display:none}}
 
 /* 覆盤重點 — vertical event cards, no horizontal swipe */
 .rev{display:flex;flex-direction:column;gap:10px}
@@ -968,7 +967,7 @@ img,canvas,svg,video{max-width:100%}
 
 /* Home/room: drop the old 96px fixed-bar slab. Sticky lobby bar is in flow; fabs opt in below. */
 main{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
-body:has(.myrole-fab) main,body:has(.veto-fab) main,body:has(.avoid-fab) main{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+body:has(.myrole-fab) main,body:has(.veto-fab) main{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
 
 /* Picker preview is painted on the avatar wrapper (position:relative), never the header row. */
 .pe-av .av-wrap.fx-spot::before,.pe-av .av-wrap.fx-gold::before,.pe-av .av-wrap.fx-spark::before,

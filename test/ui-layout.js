@@ -267,7 +267,9 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         barBottom: bar.bottom + scrollY, gap: doc.scrollHeight - (bar.bottom + scrollY),
         top: !!document.querySelector('.top-room-acts:not(.hidden)'),
         rhead: (document.querySelector('.rhead') || {}).className || '',
-        avoidFab: !!document.querySelector('.avoid-fab')
+        avoidBtns: document.querySelectorAll('[data-a="avoid"]').length,
+        avoidFixed: getComputedStyle(document.querySelector('[data-a="avoid"]') || document.body).position === 'fixed' && !!document.querySelector('[data-a="avoid"]'),
+        avoidInBar: !!document.querySelector('.bottombar > .avoid-btn')
       };
     })()`);
 
@@ -288,8 +290,8 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         assert(bCol !== sCol, 'occupied digit and /n are different colours');
         assert(m.emo.shadow === 'none' && !/255, 224|255, 201|ffe066|ffc928/i.test(m.emo.bg + m.emo.shadow), tag + ' emoji button is flat pale, not yellow glow');
         assert(m.sw <= m.cw + 1, tag + '/' + n + ' no horizontal overflow (' + m.sw + '/' + m.cw + ')');
-        if (m.avoidFab) assert(m.gap > 60 && m.gap < 110, tag + '/' + n + ' room leaves the avoid-card button clear (' + m.gap.toFixed(1) + 'px)');
-        else assert(m.gap < 36, tag + '/' + n + ' room gap below the action bar is small (' + m.gap.toFixed(1) + 'px)');
+        assert(m.gap < 36, tag + '/' + n + ' room gap below the action bar is small (' + m.gap.toFixed(1) + 'px)');
+        assert(m.avoidBtns === 1 && m.avoidInBar && !m.avoidFixed, tag + '/' + n + ' has one compact avoid button in the bottom bar');
         assert(m.top && /compact/.test(m.rhead), 'sticky invite/menu and compact header stay');
         const cx = m.rt.l + m.rt.w / 2, cy = m.rt.t + m.rt.h / 2;
         let minEdge = Infinity, maxReach = 0;

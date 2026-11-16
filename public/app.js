@@ -756,11 +756,12 @@ function roomHead() {
   if (!left.length && !right) return '';
   return `<div class="rhead compact"><div class="rh-sub">${left.join(' · ')}${(left.length || right) && right ? '<span class="grow"></span>' : ''}${right}</div></div>`;
 }
-function avoidFab() {
+function avoidBtn() {
   if (!S || (S.game && S.game.phase !== 'end')) return '';
   const vc = S.myVetoCards == null ? (account && account.vetoCards) : S.myVetoCards;
   const picked = S.myAvoid && ROLE[S.myAvoid] ? ROLE[S.myAvoid].n : '';
-  return `<button type="button" class="avoid-fab" data-a="avoid" aria-label="迴避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>迴避卡</span><b>${vetoAmt(vc)}</b>${picked ? `<i>${esc(picked)}</i>` : ''}</button>`;
+  const label = '迴避卡' + (picked ? '，已選' + picked : '');
+  return `<button type="button" class="avoid-btn" data-a="avoid" aria-label="${esc(label)}"><img src="/img/veto_t.webp" alt="" width="24" height="32"><b>${vetoAmt(vc)}</b></button>`;
 }
 function openAvoidSheet() {
   const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards);
@@ -1214,10 +1215,10 @@ function lobbyHtml() {
     ${presetCard(S.preset)}
     <div class="xps">${expStatus(s)}</div>
   </div>
-  <div class="bottombar">${s.veto ? `<div class="veto-ic" data-a="vetoinfo" title="回避卡"><img src="/img/veto_t.webp" alt="" width="24" height="32"><b>${vetoAmt(vc)}</b></div>` : `<div class="thumb" data-a="role"></div>`}
+  <div class="bottombar">${avoidBtn()}
     ${host ? `<button class="btn" data-a="start" ${x === n ? '' : 'disabled'}>開始遊戲（${x}/${n}）</button>` :
       S.mySeat ? `<button class="btn ${me && me.ready ? 'ghost' : ''}" data-a="ready">${me && me.ready ? '已準備 ✓' : '準備'}</button>` : `<button class="btn ghost" disabled>觀戰中 · 點空位即可就座</button>`}
-  </div>${avoidFab()}`;
+  </div>`;
 }
 function gameHtml() {
   const g = S.game; const me = g.me; const meId = S.meId;
@@ -1280,7 +1281,7 @@ function gameHtml() {
   <div class="btns"><button class="btn dark" data-a="invite">房間二維碼</button><button class="btn dark" data-a="go" data-v="home">返回主頁</button></div>
   ${S.isHost && !ended ? '<button class="btn dark" data-a="abort" style="color:#ff8b9c">強制結束本局</button>' : ''}
   ${g.settings.veto && me && !ended ? `<button type="button" class="veto-fab ${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'ready' : 'dim'}" data-a="${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'veto' : 'vetoinfo'}" aria-label="回避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>回避卡</span><b>${vetoAmt(me.vetoCards != null ? me.vetoCards : S.myVetoCards)}</b></button>` : ''}
-  ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}${ended ? avoidFab() : ''}`;
+  ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}`;
 }
 function ladyChainHtml(log, seats) {
   if (!log || !log.length) return '';

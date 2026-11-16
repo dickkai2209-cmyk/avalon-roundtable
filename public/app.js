@@ -1436,8 +1436,7 @@ function gameHtml() {
   const selCount = selected.size;
   if (g.phase === 'team') {
     center = `<b>第 ${g.round + 1} 輪</b>隊長 ${esc(P(g.leaderId).name)}<br>需要 ${need} 人`;
-    panel = isLeader ? `<div class="phase">👑 你是隊長</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>`
-      : `<div class="phase">等待隊長組隊</div><div class="small muted">${chip(g.leaderId)} 正在挑選 ${need} 位隊員，大家可以討論</div>`;
+    panel = isLeader ? `<div class="phase">👑 你是隊長</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>` : '';
   } else if (g.phase === 'vote') {
     center = `<b>投票中</b>${g.voted.length}/${g.n} 已投`;
     panel = `<div class="phase">是否同意此隊伍出任務？</div><div>${g.team.map(id => chip(id)).join('')}</div><div class="small muted" style="margin-top:6px">全員投完後同時公開</div>` +
@@ -1502,8 +1501,8 @@ function gameHtml() {
   <div class="card" style="padding:22px 10px 16px">${table}${ended ? '' : markLegend()}</div>
   <div class="card thist" id="teamhist">${teamHistoryHtml(g)}</div>
   ${ladyChainHtml(g.ladyLog, g.seats) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats)}</div>` : ''}
-  <div class="card">${panel}</div>
-  ${me ? `<div class="card rolestrip" data-a="role"><div class="th"></div><div class="grow"><div class="serif gold" style="font-weight:700">我的身份卡</div><div class="small muted">點擊翻開查看（請遮住螢幕）</div></div><span class="gold">›</span></div>` : '<div class="specbar">👁 觀戰中 · 唔會看到隱藏身分</div>'}
+  ${panel ? `<div class="card">${panel}</div>` : ''}
+  ${me ? '' : '<div class="specbar">👁 觀戰中 · 唔會看到隱藏身分</div>'}
   ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : ''}
   <div class="btns"><button class="btn dark" data-a="invite">房間二維碼</button><button class="btn dark" data-a="go" data-v="home">返回主頁</button></div>
   ${S.isHost && !ended ? '<button class="btn dark" data-a="abort" style="color:#ff8b9c">強制結束本局</button>' : ''}

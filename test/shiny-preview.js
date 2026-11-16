@@ -108,6 +108,16 @@ async function putSkins(token, skins) {
     fs.writeFileSync('/opt/cursor/artifacts/shiny-preview-375.png', Buffer.from(shot.data, 'base64'));
     const mordred = await cdp.eval(`(() => { const h = [...document.querySelectorAll('h3')].find(x => x.textContent.includes('莫德雷德')); if (!h) return { missing: true, heads: [...document.querySelectorAll('h3')].map(x => x.textContent) }; const card = h.closest('.card'); return { tiles: [...card.querySelectorAll('[data-a=skin]')].map(s => s.dataset.s), note: card.innerText }; })()`);
     assert(mordred.tiles && !mordred.tiles.includes('casual') && !mordred.tiles.includes('festive') && /原圖未收錄/.test(mordred.note || ''), 'Mordred does not invent casual or festive tiles');
+    const servant = await cdp.eval(`(() => {
+      const h = [...document.querySelectorAll('h3')].find(x => x.textContent.includes('亞瑟的忠臣'));
+      const card = h.closest('.card');
+      const tiles = [...card.querySelectorAll('[data-a=skin]')].map(s => ({ id: s.dataset.s, label: s.childNodes[s.childNodes.length-1].textContent.trim(), name: s.querySelector('.rn').textContent, art: getComputedStyle(s.querySelector('.art')).backgroundImage }));
+      return { tiles, note: card.innerText.includes('男仕') };
+    })()`);
+    const byId = Object.fromEntries(servant.tiles.map(t => [t.id, t]));
+    assert(byId.classic && byId.classic.art.includes('/img/servant.webp') && byId.classic.label.startsWith('經典 · 女') && byId.classic.name === '亞瑟的忠臣', 'female classic servant art and role name stay');
+    assert(byId.casual && byId.casual.art.includes('/img/servant_casual.webp') && byId.casual.label.startsWith('日常便服 · 女'), 'female casual servant art stays');
+    assert(!byId.classic_male && !servant.tiles.some(t => /男/.test(t.id)) && servant.note, 'no invented male servant tile');
   } finally {
     try { chrome.kill('SIGKILL'); } catch {}
     try { srv.kill('SIGKILL'); } catch {}

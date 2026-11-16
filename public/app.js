@@ -38,6 +38,10 @@ const SKINS = [
   { id: 'gold', n: '鎏金', need: 3 },
   { id: 'blood', n: '血月', need: 6 },
 ];
+function skinLabel(role, skin) {
+  if (role === 'servant' && (skin.id === 'classic' || skin.id === 'casual' || skin.id === 'festive')) return skin.n + ' · 女';
+  return skin.n;
+}
 const ANIMALS = [
   ['fox','狐狸'],['panda','熊貓'],['duck','小鴨'],['squirrel','松鼠'],['hedgehog','刺蝟'],['bunny','兔子'],
   ['bear','棕熊'],['redpanda','小熊貓'],['otter','水獺'],['hamster','倉鼠'],['shiba','柴犬'],['dalmatian','斑點狗'],
@@ -1438,9 +1442,9 @@ function skinsHtml() {
       </button>
     </div><div class="card"><div class="small muted">主要角色有不同服裝（日常便服、節日盛裝）及特效皮膚。玩得越多解鎖越多，揭曉身份時會顯示你所選的皮膚，並保存到帳號。</div></div>` + ROLE_ORDER.map(k => {
     const played = rolePlayed(k); const cur = skinOf(k); const mine = skinsFor(k); const next = mine.find(s => s.need > played);
-    const outfitWait = (k === 'mordred' || k === 'oberon') ? '<div class="tiny muted" style="margin-top:6px">日常便服同節日盛裝嘅原圖未收錄，暫時只有經典。</div>' : '';
+    const outfitWait = (k === 'mordred' || k === 'oberon') ? '<div class="tiny muted" style="margin-top:6px">日常便服同節日盛裝嘅原圖未收錄，暫時只有經典。</div>' : (k === 'servant' ? '<div class="tiny muted" style="margin-top:6px">男仕經典同日常便服嘅原圖未收錄。而家嘅經典同日常便服係女仕，圖檔未改。</div>' : '');
     return `<div class="card"><div class="row between"><h3 style="margin:0">${ROLE[k].n}</h3><span class="small muted">已玩 ${played} 場</span></div>
-      <div class="skinrow" style="margin-top:10px">${skinsFor(k).map(s => `<div class="skin ${played >= s.need ? '' : 'lock'} ${cur === s.id ? 'sel' : ''}" data-a="skin" data-r="${k}" data-s="${s.id}">${roleFace(k, s.id, true)}<div style="margin-top:4px">${s.n}${played >= s.need ? '' : ` 🔒${s.need}場`}</div></div>`).join('')}</div>
+      <div class="skinrow" style="margin-top:10px">${skinsFor(k).map(s => `<div class="skin ${played >= s.need ? '' : 'lock'} ${cur === s.id ? 'sel' : ''}" data-a="skin" data-r="${k}" data-s="${s.id}">${roleFace(k, s.id, true)}<div style="margin-top:4px">${skinLabel(k, s)}${played >= s.need ? '' : ` 🔒${s.need}場`}</div></div>`).join('')}</div>
       ${outfitWait}
       ${next ? `<div class="tiny muted" style="margin-top:6px">下一款「${next.n}」：${played}/${next.need} 場</div><div class="bar"><i style="width:${pct(played, next.need)}%"></i></div>` : '<div class="tiny gold" style="margin-top:6px">已解鎖全部皮膚 ✦</div>'}</div>`;
   }).join('');
@@ -1453,7 +1457,7 @@ function equipSkin(role, skinId) {
   const prev = { ...skinSel };
   skinSel[role] = skinId;
   $$(`.skin[data-a="skin"][data-r="${role}"]`).forEach(x => x.classList.toggle('sel', x.dataset.s === skinId));
-  const label = `${(ROLE[role] || {}).n || role} · ${sk.n}`;
+  const label = `${(ROLE[role] || {}).n || role} · ${skinLabel(role, sk)}`;
   return saveSkins(prev).then(() => { toast(`已換上：${label}`, 'ok'); return true; })
     .catch((err) => {
       skinSel = prev;
@@ -1484,7 +1488,7 @@ function openSkinPreview(role, skinId) {
         <img class="sp-img sk-${sk.id}" src="${img(skinArt(role, skinId))}" alt="${esc(meta.n)} ${esc(sk.n)}">
         <div class="cap"><div class="rn">${esc(meta.n)}</div>${meta.en ? `<div class="en">${esc(meta.en)}</div>` : ''}</div>
       </div>
-      <div class="sp-sub">${esc(meta.n)} · ${esc(sk.n)}</div>
+      <div class="sp-sub">${esc(meta.n)} · ${esc(skinLabel(role, sk))}</div>
       <button type="button" class="btn" id="sp-eq" ${locked || equipped ? 'disabled' : ''}>${esc(equipped ? '使用中' : (locked ? req : '換上'))}</button>
       <button type="button" class="btn ghost" id="sp-x">關閉</button>
     </div>`;

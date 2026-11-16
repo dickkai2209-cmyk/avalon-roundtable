@@ -1,0 +1,281 @@
+// Post-game ranks use the server scores. Saving the same game twice does not award MVP again.
+const { spawn, execFileSync } = require('child_process');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const { io } = require('socket.io-client');
+
+const PORT = 3463;
+const CDP = 9487;
+const APP = 'http://127.0.0.1:' + PORT + '/';
+const DATA = '/tmp/settle-' + Date.now();
+const OUT = '/opt/cursor/artifacts';
+const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); console.log('ok -', m); };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+function get(url) {
+  return new Promise((resolve, reject) => http.get(url, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d)); }).on('error', reject));
+}
+function bot(key, name) {
+  const s = io(APP, { transports: ['websocket'], forceNew: true, query: { diff: '1' } });
+  const c = { s, st: null, name };
+  s.on('state', st => {
+    if (st && st.__d) {
+      if (!c.st || c.st.code !== st.code) return s.emit('resync');
+      const m = { ...c.st };
+      for (const k in st) if (k !== '__d' && k !== '__r' && k !== '__g') m[k] = st[k];
+      (st.__r || []).forEach(k => delete m[k]);
+      if (st.__g) { const g = { ...(m.game || {}) }; for (const k in st.__g) if (k !== '__r') g[k] = st.__g[k]; (st.__g.__r || []).forEach(k => delete g[k]); m.game = g; }
+      st = m;
+    }
+    c.st = st;
+  });
+  c.emit = (ev, d) => new Promise(r => s.emit(ev, d, r));
+  c.act = (type, data) => c.emit('act', { type, data });
+  c.ready = new Promise((res, rej) => s.on('connect', async () => {
+    const h = await c.emit('hello', { guestKey: key, name });
+    if (!h || h.error) rej(new Error(h && h.error || 'hello')); else res(h);
+  }));
+  return c;
+}
+
+(async () => {
+  fs.mkdirSync(DATA, { recursive: true });
+  fs.mkdirSync(OUT, { recursive: true });
+  const srv = spawn(process.execPath, ['server.js'], {
+    cwd: path.join(__dirname, '..'),
+    env: { ...process.env, PORT: String(PORT), DATA_DIR: DATA, DATABASE_URL: '', PURGE_TEST_DATA: '0', GM_EMAIL: '', GM_USER_ID: '' },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  let chrome;
+  const stop = () => { try { chrome && chrome.kill('SIGKILL'); } catch {} try { srv.kill('SIGKILL'); } catch {} };
+  process.on('exit', stop);
+  await new Promise((res, rej) => {
+    const t = setTimeout(() => rej(new Error('server')), 8000);
+    srv.stdout.on('data', d => { if (/on :/.test(String(d))) { clearTimeout(t); res(); } });
+  });
+  const names = ['示範局'].concat(Array.from({ length: 9 }, (_, i) => '示範' + (i + 2)));
+  const people = [];
+  for (let i = 0; i < 10; i++) {
+    const guestKey = 'st' + i + Date.now().toString(36);
+    const j = await fetch(APP + 'api/auth/guest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guestKey, profile: { name: names[i], avatar: 'fox', bg: '#fff', fx: 'spot', pendant: i === 0 ? 'crown' : 'none' } }) }).then(r => r.json());
+    people.push({ ...j, guestKey, name: names[i] });
+  }
+  const bots = people.map(p => bot(p.guestKey, p.name));
+  await Promise.all(bots.map(b => b.ready));
+  const made = await bots[0].emit('create', {});
+  for (let i = 0; i < 30 && !(bots[0].st && bots[0].st.code); i++) await sleep(40);
+  await bots[0].act('capacity', { n: 10 });
+  const code = made.room;
+  for (let i = 1; i < 10; i++) {
+    await bots[i].emit('join', { code });
+    if (!(await bots[i].act('sit', { seat: i + 1 })).ok) throw new Error('sit');
+  }
+  if (!(await bots[0].act('start')).ok) throw new Error('start');
+  for (let i = 0; i < 40 && !(bots[0].st.game && bots[0].st.game.me); i++) await sleep(40);
+  const gme = () => bots[0].st.game;
+  async function until(pred, label) {
+    for (let i = 0; i < 80; i++) { if (pred()) return; await sleep(40); }
+    throw new Error('timeout ' + label + ' ' + (gme() && gme().phase));
+  }
+  async function mission() {
+    const g = gme();
+    const team = g.seats.slice(0, g.teamSizes[g.round]).map(s => s.id);
+    const leader = bots.find(b => b.st.meId === g.leaderId);
+    if (!(await leader.act('propose', { team })).ok) throw new Error('propose');
+    await until(() => gme().phase === 'vote', 'vote');
+    for (const b of bots) {
+      const r = await b.act('vote', { approve: true });
+      if (!r.ok && !(r.error && /已經/.test(r.error))) throw new Error('vote');
+    }
+    await until(() => gme().phase === 'quest', 'quest');
+    for (const b of bots) {
+      if (!(gme().team || []).includes(b.st.meId)) continue;
+      if (!(await b.act('quest', { success: true })).ok) throw new Error('quest');
+    }
+    await until(() => gme().phase !== 'quest', 'after');
+  }
+  await mission();
+  await mission();
+  if (gme().phase === 'lady') {
+    const holder = bots.find(b => b.st.meId === gme().ladyId);
+    const target = gme().seats.find(s => s.id !== gme().ladyId);
+    if (!(await holder.act('lady', { id: target.id })).ok) throw new Error('lady');
+    await until(() => gme().phase === 'team', 'after lady');
+  }
+  await mission();
+  await until(() => gme().phase === 'assassin', 'assassin');
+  const merlin = bots.find(b => b.st.game.me.role === 'merlin');
+  const assassin = bots.find(b => b.st.game.me.role === 'assassin');
+  const viewer = bots.find(b => b !== assassin);
+
+  chrome = spawn('google-chrome', ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=' + CDP, '--user-data-dir=/tmp/chrome-settle-' + Date.now(), '--window-size=420,900', APP], { stdio: 'ignore' });
+  let tab;
+  for (let i = 0; i < 40 && !tab; i++) { try { tab = JSON.parse(await get('http://127.0.0.1:' + CDP + '/json/list')).find(t => t.type === 'page'); } catch { await sleep(120); } }
+  const ws = new WebSocket(tab.webSocketDebuggerUrl);
+  let idn = 0; const pending = new Map();
+  ws.addEventListener('message', ev => { const m = JSON.parse(ev.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); } });
+  await new Promise(r => ws.addEventListener('open', r));
+  const send = (method, params = {}) => new Promise((res, rej) => { const i = ++idn; const t = setTimeout(() => rej(new Error(method)), 20000); pending.set(i, v => { clearTimeout(t); res(v); }); ws.send(JSON.stringify({ id: i, method, params })); });
+  const evalj = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 500)); return r.result.value; };
+  await send('Runtime.enable'); await send('Page.enable');
+  await send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: OUT }).catch(() => {});
+  async function setSize(w, h) { await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true }); }
+  async function asUser(person) {
+    const profile = JSON.stringify({ name: person.name, avatar: 'fox', bg: '#fff', fx: 'spot', pendant: 'none' });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      for (let i = 0; i < 30; i++) { if (await evalj(`!!document.querySelector('[data-a="create"], .rt')`).catch(() => false)) break; await sleep(80); }
+      await evalj(`localStorage.setItem('cc.token', ${JSON.stringify(person.token)}); localStorage.setItem('cc.pid', ${JSON.stringify(person.user.id)}); localStorage.setItem('cc.profile', ${JSON.stringify(profile)}); location.replace(${JSON.stringify(APP + '?s=' + person.user.id + attempt)})`);
+      for (let i = 0; i < 40; i++) { if (await evalj(`!!document.querySelector('.rt')`).catch(() => false)) return; await sleep(120); }
+    }
+    throw new Error('no table');
+  }
+  async function shot(name) { const { data } = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(OUT, name), Buffer.from(data, 'base64')); }
+
+  try {
+    await setSize(375, 812);
+    await asUser(people[bots.indexOf(viewer)]);
+    if (!(await assassin.act('assassinate', { id: merlin.st.meId })).ok) throw new Error('kill');
+    await until(() => gme().phase === 'end' && gme().mvp, 'ended');
+    for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('.settle')`).catch(() => false)); i++) await sleep(100);
+    const board = await fetch(APP + 'api/leaderboard').then(r => r.json());
+    assert(board && Array.isArray(board.players) && board.players.every(p => p.played != null && p.won != null && p.items == null && p.scores == null), 'home board is still wins and games, not this match\'s score lines');
+    const info = await evalj(`(() => {
+      const box = document.querySelector('#modal .settle');
+      const rows = [...box.querySelectorAll('.settle-row')];
+      const breaks = rows.map(row => {
+        const ul = row.querySelector('.settle-break');
+        const lines = [...ul.querySelectorAll('li:not(.sum)')].map(li => (li.dataset.label || '') + ' +' + (li.dataset.pts || ''));
+        return { id: row.dataset.id, rank: row.dataset.rank, sum: ul.dataset.sum, total: ul.dataset.total, pts: row.querySelector('.pts').textContent, lines };
+      });
+      return {
+        n: rows.length,
+        cls: box.className,
+        title: box.querySelector('h2').textContent,
+        reason: box.querySelector('.settle-head p').textContent,
+        you: box.querySelector('.settle-you').textContent,
+        mvp: box.querySelector('.settle-mvp') ? box.querySelector('.settle-mvp').innerText.replace(/\\s+/g,' ') : '',
+        me: box.querySelectorAll('.me').length,
+        ranks: breaks.map(x => x.rank).join(','),
+        rows: breaks,
+        cards: box.querySelectorAll('img[src*="q_"]').length,
+        fake: /亞軍|🥈|金牌|稱號/.test(box.innerText),
+        foot: [...box.querySelectorAll('.settle-foot button')].map(b => b.textContent).join('|')
+      };
+    })()`);
+    const serverScores = gme().scores;
+    assert(info.n === 10, 'lists all 10 players');
+    assert(info.ranks === '1,2,3,4,5,6,7,8,9,10', 'ranks are 1 through 10 (' + info.ranks + ')');
+    const norm = (s) => String(s).replace(/\s+/g, '');
+    const mismatch = info.rows.find(row => {
+      const s = serverScores[row.id];
+      if (!s) return true;
+      const summed = s.items.reduce((a, it) => a + it[1], 0);
+      return String(s.rank) !== row.rank || String(s.total) !== row.total || String(summed) !== row.sum || row.pts !== row.total || row.lines.length !== s.items.length || s.items.some((it, i) => row.lines[i] !== it[0] + ' +' + it[1]);
+    });
+    assert(!mismatch, 'every breakdown is the server score and adds up ' + (mismatch ? JSON.stringify({ mismatch, server: serverScores[mismatch.id] }) : ''));
+    assert(info.me === 1, 'only the viewer has 我');
+    assert(info.mvp.includes('MVP') && info.mvp.includes(gme().seats.find(s => s.id === gme().mvp).name), 'MVP summary names the server MVP');
+    assert(info.title === '紅方勝利' && info.cls.includes('evil') && /刺中梅林/.test(info.reason), 'header is the winning side and the real reason (' + info.title + ' / ' + info.reason + ')');
+    assert(/\d+號/.test(info.you) && /勝利|落敗/.test(info.you), 'viewer line has seat, role and result (' + info.you + ')');
+    assert(info.cards === 0, 'settlement does not show quest cards');
+    assert(!info.fake, 'settlement does not invent titles');
+    assert(info.foot === '生成海報|知道了', 'footer buttons stay available');
+    await shot('settle-rank-375.png');
+    await evalj(`(() => {
+      const row = document.querySelector('#modal .settle-row[data-rank="1"]');
+      row.querySelector('summary').click();
+      row.scrollIntoView({ block: 'center' });
+    })()`);
+    await sleep(80);
+    await shot('settle-score-375.png');
+    async function fitAt(w, h) {
+      await setSize(w, h);
+      await sleep(60);
+      return evalj(`(() => {
+        const box = document.querySelector('#modal .settle');
+        const sc = box.querySelector('.settle-scroll');
+        const foot = box.querySelector('.settle-foot');
+        sc.scrollTop = sc.scrollHeight;
+        const last = box.querySelector('.settle-row[data-rank="10"]');
+        const lr = last.getBoundingClientRect();
+        const fr = foot.getBoundingClientRect();
+        const sr = sc.getBoundingClientRect();
+        return {
+          visible: lr.top >= sr.top - 1 && lr.bottom <= Math.min(fr.top, sr.bottom) + 1 && fr.bottom <= window.innerHeight + 1 && fr.top < window.innerHeight,
+          sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth,
+          last: Math.round(lr.top) + '-' + Math.round(lr.bottom), foot: Math.round(fr.top) + '-' + Math.round(fr.bottom)
+        };
+      })()`);
+    }
+    const fit390 = await fitAt(390, 844);
+    assert(fit390.visible, 'rank 10 stays above the footer at 390 ' + JSON.stringify(fit390));
+    assert(fit390.sw <= fit390.cw + 1, '390 does not overflow');
+    await shot('settle-rank10-390.png');
+    const fit375 = await fitAt(375, 812);
+    assert(fit375.visible, 'rank 10 stays above the footer at 375 ' + JSON.stringify(fit375));
+    assert(fit375.sw <= fit375.cw + 1, '375 does not overflow');
+    await shot('settle-rank10-375.png');
+
+    const beforeFiles = new Set(fs.readdirSync(OUT));
+    await evalj(`document.querySelector('#settle-poster').click()`);
+    for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('#dl')`).catch(() => false)); i++) await sleep(100);
+    await evalj(`document.querySelector('#dl').click()`);
+    let poster = null;
+    for (let i = 0; i < 25 && !poster; i++) {
+      poster = fs.readdirSync(OUT).find(f => !beforeFiles.has(f) && f.startsWith('mongkok-avalon-') && f.endsWith('.png'));
+      if (!poster) await sleep(200);
+    }
+    if (!poster) {
+      const b64 = await evalj(`(async () => { const img = document.querySelector('.modal img'); const buf = await fetch(img.src).then(r => r.arrayBuffer()); const bytes = new Uint8Array(buf); let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); })()`);
+      poster = 'mongkok-avalon-' + gme().gid.slice(0, 8) + '.png';
+      fs.writeFileSync(path.join(OUT, poster), Buffer.from(b64, 'base64'));
+    }
+    const bytes = fs.readFileSync(path.join(OUT, poster));
+    assert(bytes.slice(0, 8).toString('hex') === '89504e470d0a1a0a' && bytes.length > 20000, 'poster file is a real png');
+    fs.copyFileSync(path.join(OUT, poster), path.join(OUT, 'settle-poster.png'));
+    console.log('poster', poster, bytes.length);
+
+    await evalj(`document.querySelector('#backBtn') && document.querySelector('#modal').classList.add('hidden')`);
+    await evalj(`(() => { const b = document.querySelector('#backBtn'); if (b && !b.classList.contains('hidden')) b.click(); })()`);
+    for (let i = 0; i < 20 && !(await evalj(`!!document.querySelector('[data-a="go"][data-v="history"]')`).catch(() => false)); i++) {
+      await evalj(`(() => { const b = document.querySelector('#backBtn'); if (b && !b.classList.contains('hidden')) b.click(); })()`);
+      await sleep(80);
+    }
+    await evalj(`document.querySelector('[data-a="go"][data-v="history"]').click()`);
+    for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('.hitem')`)); i++) await sleep(80);
+    await evalj(`document.querySelector('.hitem').click()`);
+    for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('.settle-page .settle-row')`)); i++) await sleep(80);
+    const again = await evalj(`[...document.querySelectorAll('.settle-page .settle-row')].map(r => r.dataset.rank).join(',')`);
+    assert(again === '1,2,3,4,5,6,7,8,9,10', 'reopening the saved game keeps the ranking');
+    await evalj(`(() => {
+      const page = document.querySelector('.settle-page');
+      page.scrollIntoView({ block: 'start' });
+      const row = page.querySelector('.settle-row[data-rank="1"]');
+      if (row && !row.querySelector('details').open) row.querySelector('summary').click();
+    })()`);
+    await sleep(80);
+    await shot('settle-record.png');
+
+    const gid = gme().gid;
+    const mvpBefore = JSON.parse(fs.readFileSync(path.join(DATA, 'db.json'), 'utf8'));
+    const saved = mvpBefore.games.find(g => g.gid === gid);
+    const mvpCount = mvpBefore.stats[saved.mvpPid].mvp;
+    execFileSync(process.execPath, ['-e', `
+      const db = require(${JSON.stringify(path.join(__dirname, '..', 'db.js'))});
+      (async () => {
+        await db.init();
+        const g = await db.getGame(process.env.GID);
+        const before = (await db.getStats(g.mvpPid)).mvp;
+        await db.saveGame(g);
+        const after = (await db.getStats(g.mvpPid)).mvp;
+        if (before !== after) { console.error('dup', before, after); process.exit(2); }
+      })().catch(e => { console.error(e); process.exit(1); });
+    `], { env: { ...process.env, DATA_DIR: DATA, DATABASE_URL: '', GID: gid }, encoding: 'utf8' });
+    assert(mvpCount === 1, 'the saved MVP count is one');
+    console.log('SETTLE TESTS PASSED', info.title, info.mvp);
+  } finally {
+    try { ws.close(); } catch {}
+    stop();
+    bots.forEach(b => { try { b.s.close(); } catch {} });
+  }
+})().catch(e => { console.error(e); process.exit(1); });

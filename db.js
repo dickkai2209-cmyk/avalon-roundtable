@@ -285,12 +285,13 @@ async function deleteSession(raw) {
 const J = (v) => v === undefined ? null : JSON.stringify(v);
 async function saveGame(rec) {
   if (mode === 'pg') {
-    await pool.query(
+    const ins = await pool.query(
       `INSERT INTO games (gid,room,started_at,ended_at,n,winner,reason,settings,players,quests,rounds,lady_log,assassin_target,scores,mvp,runner_up,highlights,pids,review,lady_start,lady_used)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
-       ON CONFLICT (gid) DO NOTHING`,
+       ON CONFLICT (gid) DO NOTHING RETURNING gid`,
       [rec.gid, rec.room, rec.startedAt ? new Date(rec.startedAt) : null, rec.endedAt ? new Date(rec.endedAt) : new Date(), rec.n, rec.winner, rec.reason, J(rec.settings), J(rec.players), J(rec.quests), J(rec.rounds), J(rec.ladyLog), rec.assassinTarget, J(rec.scores), rec.mvp, rec.runnerUp, J(rec.highlights), rec.pids, J(rec.review || null), rec.ladyStartId || null, J(rec.ladyUsed || [])]
     );
+    if (!ins.rowCount) return;
     for (const pid of rec.winner === 'none' ? [] : rec.pids) {
       const st = rec.players[rec.pids.indexOf(pid)];
       if (!st) continue;
@@ -313,6 +314,7 @@ async function saveGame(rec) {
       await pool.query('UPDATE user_stats SET roles=$2 WHERE user_id=$1', [pid, J(roles)]);
     }
   } else {
+    if (mem.games.some(g => g.gid === rec.gid)) return;
     mem.games.push(rec);
     if (mem.games.length > 2000) mem.games.splice(0, mem.games.length - 2000);
     for (const pid of rec.winner === 'none' ? [] : rec.pids) {

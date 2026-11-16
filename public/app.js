@@ -241,6 +241,7 @@ socket.on('state', (st) => {
     toast(actConfirm.kind === 'lady' ? '查驗已經失效' : '刺殺已經失效', 'bad');
     closeModal();
   }
+  if (abortAsk && !abortAsk.busy && (!st.game || st.game.phase === 'end' || !st.isHost)) closeModal();
   if (view === 'room' || view === 'home') render();
   if (cfgOpen && !st.game && !$('#modal').classList.contains('hidden')) $('#sheet').innerHTML = cfgSheetHtml();
   syncVoteRemind();
@@ -255,6 +256,7 @@ let toastT;
 function toast(msg, kind) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (kind ? ' ' + kind : ''); t.classList.remove('hidden'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), kind ? 2800 : 2200); }
 let modalLock = false;
 let actConfirm = null;
+let abortAsk = null;
 let actKeyHandler = null;
 function openModal(html, onMount, lock) { modalLock = !!lock; $('#sheet').innerHTML = html; $('#modal').classList.remove('hidden'); onMount && onMount($('#sheet')); }
 let cfgOpen = false;
@@ -262,6 +264,9 @@ function closeModal() {
   cfgOpen = false;
   if (actKeyHandler) { document.removeEventListener('keydown', actKeyHandler, true); actKeyHandler = null; }
   actConfirm = null;
+  abortAsk = null;
+  const more = document.querySelector('.top-more');
+  if (more) more.setAttribute('aria-expanded', 'false');
   $('#modal').classList.add('hidden'); $('#sheet').innerHTML = ''; modalLock = false; modalQueueNext();
 }
 function confirmStillValid(c) {
@@ -313,6 +318,87 @@ function openActConfirm(kind) {
     };
     document.addEventListener('keydown', actKeyHandler, true);
     if (cancel.focus) cancel.focus();
+  });
+}
+function trapSheetKeys(el, onEsc) {
+  if (actKeyHandler) { document.removeEventListener('keydown', actKeyHandler, true); actKeyHandler = null; }
+  actKeyHandler = (e) => {
+    if (!el.isConnected) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onEsc(e); return; }
+    if (e.key !== 'Tab') return;
+    const items = [...el.querySelectorAll('button, a[href], input, [tabindex]')].filter(b => !b.disabled && b.tabIndex !== -1);
+    if (!items.length) return;
+    e.preventDefault();
+    const i = items.indexOf(document.activeElement);
+    const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : (i < 0 || i >= items.length - 1 ? 0 : i + 1);
+    items[next].focus();
+  };
+  document.addEventListener('keydown', actKeyHandler, true);
+}
+function openAbortConfirm() {
+  if (!S || !S.isHost || !S.game || S.game.phase === 'end') return;
+  abortAsk = { busy: false };
+  openModal(`<div class="actconf abort" id="actconf" role="dialog" aria-modal="true" aria-labelledby="abort-title">
+    <h2 id="abort-title">強制結束本局？</h2>
+    <p class="actconf-note">這會立刻中止進行中的對局，不計入記錄、不計分、不派回避卡。取消不會結束。</p>
+    <div class="actconf-btns"><button type="button" class="btn ghost" id="act-cancel">取消</button><button type="button" class="btn evil" id="act-ok">確認結束</button></div>
+  </div>`, (el) => {
+    const cancel = $('#act-cancel', el);
+    const ok = $('#act-ok', el);
+    const dismiss = () => { if (abortAsk && abortAsk.busy) return; closeModal(); };
+    cancel.onclick = (e) => { e.preventDefault(); dismiss(); };
+    ok.onclick = async (e) => {
+      e.preventDefault();
+      if (!abortAsk || abortAsk.busy || ok.disabled) return;
+      if (!S || !S.isHost || !S.game || S.game.phase === 'end') { closeModal(); return; }
+      abortAsk.busy = true; ok.disabled = true; cancel.disabled = true; modalLock = true;
+      const r = await act('abort');
+      closeModal();
+      if (r && r.ok) toast('本局已結束，不計入記錄');
+    };
+    trapSheetKeys(el, dismiss);
+    if (cancel.focus) cancel.focus();
+  });
+}
+function openRoomMenu() {
+  if (!S || !S.code) return;
+  const live = !!(S.game && S.game.phase !== 'end');
+  const inGame = !!S.game;
+  const row = (x, ic, ti, sub, cls = '') => `<button type="button" class="mrow ${cls}" data-x="${x}"><span class="mic" aria-hidden="true">${ic}</span><span class="grow"><b>${ti}</b><span>${sub}</span></span><span class="chev" aria-hidden="true">›</span></button>`;
+  const more = document.querySelector('.top-more');
+  if (more) more.setAttribute('aria-expanded', 'true');
+  openModal(`<div class="room-menu" role="dialog" aria-modal="true" aria-labelledby="room-menu-title">
+    <h2 id="room-menu-title">房間選單</h2><div class="mlist">
+    ${row('rules', '📖', '查看規則', '遊戲流程、角色能力、擴展玩法')}
+    ${row('ref', '🔄', '刷新房間', '畫面唔同步或卡住時，重新連線並向伺服器攞最新狀態')}
+    ${inGame ? row('qr', '▣', '房間二維碼', '出示房間號同二維碼，朋友掃碼入房') : ''}
+    ${inGame ? row('home', '‹', '返回主頁', '回到主頁，座位同房間仍然保留') : ''}
+    ${S.isHost ? row('tr', '👑', '轉讓房主', '交俾另一位玩家，之後你可以離開') : ''}
+    ${S.isHost && live ? row('early', '🏳️', '提前結束', '即時結束本局並公開所有身份，不計勝負', 'warn') : ''}
+    ${S.isHost && live ? row('abort', '⛔', '強制結束本局', '立刻中止，不計入記錄', 'danger') : ''}
+    ${S.isHost && !live ? row('dis', '⛔', '解散房間', '所有玩家會被移出房間', 'danger') : ''}
+    </div><button type="button" class="btn ghost" id="room-menu-close">關閉</button></div>`, (el) => {
+    const bind = (sel, fn) => { const b = el.querySelector(sel); if (b) b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); fn(); }; };
+    bind('[data-x=rules]', () => { closeModal(); go('rules'); });
+    bind('[data-x=ref]', () => { closeModal(); refreshRoom(); });
+    bind('[data-x=qr]', () => { closeModal(); inviteDialog(); });
+    bind('[data-x=home]', () => { closeModal(); go('home'); });
+    bind('[data-x=abort]', () => openAbortConfirm());
+    const ee = el.querySelector('[data-x=early]'); if (ee) ee.onclick = (e) => { e.preventDefault(); e.stopPropagation(); if (confirm('確定提前結束本局？\n所有人身份會公開，今局記錄為「提前結束」，不計勝負、不計分、不派回避卡。')) { closeModal(); act('endearly'); } };
+    const tr = el.querySelector('[data-x=tr]'); if (tr) tr.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const others = (S.seats || []).filter(p => p && !p.empty && p.id !== S.meId);
+      if (!others.length) return toast('還沒有其他已就座的玩家');
+      openModal(`<h2>轉讓房主</h2><div class="small muted center">選擇一位已就座的玩家，房主權限會即時轉移</div><div class="pick">${others.map(p => `<button class="pick-i" data-id="${p.id}">${av(p, 40)}<div><b>${esc(p.name)}</b><div class="tiny muted">${p.seat}號座${p.online ? '' : ' · 離線'}</div></div></button>`).join('')}</div><button class="btn ghost" id="cc">取消</button>`, el3 => {
+        $$('.pick-i', el3).forEach(b => b.onclick = async () => { const p = others.find(o => o.id === b.dataset.id); if (!confirm(`把房主轉讓給 ${p.name}？`)) return; closeModal(); const r = await act('transfer', { id: p.id }); if (r.ok) toast(`已轉讓房主給 ${p.name}`); });
+        $('#cc', el3).onclick = closeModal;
+      });
+    };
+    const dis = el.querySelector('[data-x=dis]'); if (dis) dis.onclick = (e) => { e.preventDefault(); e.stopPropagation(); if (confirm('確定解散房間？所有人將被移出。')) { closeModal(); act('dissolve'); } };
+    $('#room-menu-close', el).onclick = (e) => { e.preventDefault(); closeModal(); };
+    trapSheetKeys(el, () => closeModal());
+    const first = el.querySelector('.mrow');
+    if (first && first.focus) first.focus({ preventScroll: true });
   });
 }
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && !modalLock) closeModal(); });
@@ -1225,19 +1311,47 @@ function showLady(ev) {
     <div class="flip" id="flip" style="width:min(56vw,200px)"><div class="in"><div class="face back"><div class="hint">點擊查看陣營</div></div><div class="face front"><div class="rc ${mine.side} lady-reveal"><div class="art" style="background-image:url(${img('lady')})"></div><div class="cap"><div class="rn" style="font-size:20px">${mine.side === 'good' ? '好人陣營' : '壞人陣營'}</div></div></div></div></div></div>
     <p class="center small muted">只有你看到這個結果，你可以選擇說真話或說謊。</p><button class="btn" id="ok">知道了</button>`, (el) => { const f = $('#flip', el); f.onclick = () => f.classList.add('on'); $('#ok', el).onclick = closeModal; }, true);
 }
+function settleParts(r) {
+  const players = (r.players || r.seats || []).filter(p => p && p.id);
+  const sc = r.scores || {};
+  const myId = r.myId || (S && S.meId) || null;
+  const early = r.winner === 'none' || !Object.keys(sc).length;
+  const rows = players.map(p => {
+    const s = sc[p.id] || { total: 0, items: [], rank: players.length };
+    const items = s.items || [];
+    return { p, total: s.total || 0, items, rank: s.rank || 0, side: p.side || (ROLE[p.role] && ROLE[p.role].side) || '' };
+  }).sort((a, b) => (a.rank || 99) - (b.rank || 99) || (b.total - a.total));
+  const mvp = !early && rows.find(x => x.p.id === r.mvp);
+  const me = rows.find(x => x.p.id === myId);
+  return { rows, mvp, me, early, myId };
+}
+function settleBody(r) {
+  const { rows, mvp, me, early, myId } = settleParts(r);
+  const good = r.winner === 'good';
+  const title = r.winner === 'none' ? '提前結束' : good ? '藍方勝利' : '紅方勝利';
+  const you = !me ? '觀戰 · 不計個人分數' : `${me.p.seat || ''}號 · ${(ROLE[me.p.role] || {}).n || ''} · ${me.side === r.winner ? '勝利' : '落敗'}`;
+  const mvpCard = mvp ? `<div class="settle-mvp"><span class="settle-crown" aria-hidden="true"></span>${av(mvp.p, 56)}<div><div class="k">MVP</div><b>${esc(mvp.p.name)}</b><span>${esc((ROLE[mvp.p.role] || {}).n || '')} · ${mvp.total} 分</span></div></div>` : '';
+  const list = early ? '<p class="settle-none">本局不計分，沒有排名。</p>' : `<ol class="settle-list">${rows.map(x => {
+    const role = (ROLE[x.p.role] || {}).n || '';
+    const sum = x.items.reduce((a, it) => a + it[1], 0);
+    return `<li class="settle-row ${x.p.id === r.mvp ? 'is-mvp' : ''}" data-rank="${x.rank}" data-id="${esc(x.p.id)}"><details><summary><span class="rk">${x.rank}</span>${av(x.p, 40)}<span class="who"><b>${esc(x.p.name)}</b>${x.p.id === myId ? '<i class="me">我</i>' : ''}<em class="${x.side}">${esc(role)}</em></span><strong class="pts">${x.total}</strong></summary><ul class="settle-break" data-sum="${sum}" data-total="${x.total}">${x.items.map(([l, v]) => `<li data-label="${esc(l)}" data-pts="${v}"><span>${esc(l)}</span><b>+${v}</b></li>`).join('')}<li class="sum"><span>合計</span><b>${x.total}</b></li></ul></details></li>`;
+  }).join('')}</ol>`;
+  return { title, you, mvpCard, list, cls: r.winner || 'none' };
+}
 function showEnd() {
   const g = S && S.game; if (!g || g.phase !== 'end') return;
-  const goodWin = g.winner === 'good'; refreshStats();
-  const mySeat = g.seats.find(s => s.id === S.meId); const vetoWon = !!(mySeat && g.winner !== 'none' && mySeat.side === g.winner);
-  const sn = (id) => g.seats.findIndex(s => s.id === id) + 1; const mer = g.seats.find(s => s.role === 'merlin'); const tgt = g.assassinTarget && g.seats.find(s => s.id === g.assassinTarget);
-  const atLine = tgt ? `刺殺目標係 ${sn(tgt.id)}號${(ROLE[tgt.role] || {}).n || ''}，梅林係 ${mer ? sn(mer.id) : '?'}號` : '';
-  const qrows = g.quests.map((q, i) => q ? `<div class="qrow"><b>任務${i + 1}</b><span class="qm">${q.team.map(id => `<span class="seatpill ${(g.seats.find(s => s.id === id) || {}).side === 'evil' ? 'e' : ''}">${sn(id)}</span>`).join('')}</span><span class="badge ${q.success ? 'good' : 'evil'}">${q.success ? '成功' : '失敗'}</span></div>` : '').join('');
-  openModal(`<div class="banner ${g.winner}"><div class="big">${g.winner === 'none' ? '🏳️' : goodWin ? '🛡️' : '🗡️'}</div><h2>${g.winner === 'none' ? '提前結束' : goodWin ? '藍方勝利' : '紅方勝利'}</h2><div class="small">${g.winner === 'none' ? '房主提前結束本局 · 不計勝負、不計分、不派回避卡' : esc(g.reason)}</div>${atLine ? `<div class="small" style="margin-top:4px"><b>${atLine}</b></div>` : ''}</div>
-    ${roundTable(g.seats, { cls: s => s.side === 'evil' ? 'evil-tint' : '', label: s => `<span class="lbl ${s.side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>`, marker: s => (s.id === g.assassinTarget ? '🎯' : '') + (s.id === g.mvp ? '🏅' : ''), center: `<b>${goodWin ? '好人勝' : '壞人勝'}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}` })}
-    ${vetoWon ? `<div class="vgain"><div class="vcard"><img src="/img/veto_t.webp" alt="回避卡" width="75" height="100"><i class="spk s1">✦</i><i class="spk s2">✧</i><i class="spk s3">✦</i></div><div><b>+1 回避卡</b><div class="tiny muted">贏咗呢局！回避卡已入袋（上限 10 張）</div></div></div>` : ''}
-    <div class="qrows">${qrows}</div>
-    <div class="btns"><button class="btn" id="sh">📤 分享戰果</button><button class="btn ghost" id="pp">🖼️ 生成海報</button></div>
-    <button class="btn dark" id="ok">查看對局詳情</button>`, (el) => { const rec = liveRecord(g); window.__lastRecord = rec; $('#sh', el).onclick = () => shareSheet(rec); $('#pp', el).onclick = () => saveCard(rec, true); $('#ok', el).onclick = () => { closeModal(); setTimeout(() => { const d = $('#detail'); d && d.scrollIntoView({ behavior: 'smooth' }); }, 100); }; });
+  refreshStats();
+  const rec = liveRecord(g);
+  window.__lastRecord = rec;
+  const body = settleBody(rec);
+  openModal(`<div class="settle ${body.cls}"><div class="settle-scroll"><header class="settle-head ${body.cls}"><h2>${body.title}</h2><p>${esc(g.reason || (g.winner === 'none' ? '不計勝負、不計分' : ''))}</p><div class="settle-you">${esc(body.you)}</div></header>${body.mvpCard}${body.list}</div><div class="settle-foot"><button type="button" class="btn" id="settle-poster">生成海報</button><button type="button" class="btn ghost" id="settle-ok">知道了</button></div></div>`, (el) => {
+    const poster = $('#settle-poster', el);
+    if (g.winner === 'none') poster.disabled = true;
+    poster.onclick = () => saveCard(rec, true);
+    $('#settle-ok', el).onclick = closeModal;
+    const ok = $('#settle-ok', el);
+    if (ok && ok.focus) ok.focus({ preventScroll: true });
+  });
 }
 
 // ================= views =================
@@ -1277,7 +1391,7 @@ function render() {
   if (acts) {
     const show = !!(view === 'room' && inRoom);
     acts.classList.toggle('hidden', !show);
-    if (show) acts.innerHTML = `<button type="button" class="rbtn top-inv" data-a="invite">邀請</button><button type="button" class="rbtn top-more" data-a="menu" aria-label="更多">⋯</button>`;
+    if (show) acts.innerHTML = `<button type="button" class="rbtn top-inv" data-a="invite">邀請</button><button type="button" class="rbtn top-more" data-a="menu" aria-label="更多" aria-haspopup="dialog" aria-expanded="${document.querySelector('.room-menu') ? 'true' : 'false'}">⋯</button>`;
     else acts.innerHTML = '';
   }
   const titleEl = $('#topTitle');
@@ -1504,8 +1618,6 @@ function gameHtml() {
   ${panel ? `<div class="card">${panel}</div>` : ''}
   ${me ? '' : '<div class="specbar">👁 觀戰中 · 唔會看到隱藏身分</div>'}
   ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : ''}
-  <div class="btns"><button class="btn dark" data-a="invite">房間二維碼</button><button class="btn dark" data-a="go" data-v="home">返回主頁</button></div>
-  ${S.isHost && !ended ? '<button class="btn dark" data-a="abort" style="color:#ff8b9c">強制結束本局</button>' : ''}
   ${g.settings.veto && me && !ended ? `<button type="button" class="veto-fab ${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'ready' : 'dim'}" data-a="${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'veto' : 'vetoinfo'}" aria-label="回避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>回避卡</span><b>${vetoAmt(me.vetoCards != null ? me.vetoCards : S.myVetoCards)}</b></button>` : ''}
   ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}`;
 }
@@ -1612,8 +1724,8 @@ function detailHtml(r) {
   const seats = r.players; const me = seats.find(s => s.id === r.myId); const sc = r.scores || {};
   const goodWin = r.winner === 'good'; const merlin = seats.find(s => s.role === 'merlin');
   const at = r.assassinTarget && seats.find(s => s.id === r.assassinTarget);
-  const mvpBox = (id, t) => { if (!id || !sc[id]) return ''; const p = P(id, seats); return `<div><div class="t">${t}</div>${av(p, 44)}<div style="font-weight:700;margin-top:4px">${esc(p.name)}</div><div class="small"><span class="badge ${ROLE[p.role].side}">${ROLE[p.role].n}</span> <b class="gold">${sc[id].total} 分</b></div><ul>${sc[id].items.map(([l, v]) => `<li>${esc(l)} <b>+${v}</b></li>`).join('')}</ul></div>`; };
   window.__lastRecord = r;
+  const settled = settleBody(r);
   setTimeout(() => renderCardPreview(r), 30);
   return `<div class="card"><h3>戰果卡</h3><div id="cardprev" class="cardprev"><div class="center muted small">生成中…</div></div>
     <div class="btns"><button class="btn" data-a="savecard">💾 儲存圖片</button><button class="btn ghost" data-a="sharecard">📤 分享</button></div><button class="btn story" data-a="story">📸 分享到 IG 限時動態 / Threads</button></div>
@@ -1622,7 +1734,7 @@ function detailHtml(r) {
       <div style="margin-top:8px;font-size:20px">${r.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join(' ')}</div></div>
     ${me && sc[me.id] ? `<div class="row between" style="margin-top:12px"><div class="row">${av(me, 36)}<div><b>我的表現</b><div class="small muted">${ROLE[me.role].n} · 座位 ${me.seat} · ${ROLE[me.role].side === r.winner ? '<span class="badge ok">勝利</span>' : '<span class="badge evil">落敗</span>'}</div></div></div><div class="center"><div class="code" style="font-size:22px;letter-spacing:1px">${sc[me.id].total} 分</div><div class="tiny muted">第 ${sc[me.id].rank} 名</div></div></div>` : ''}
   </div>
-  <div class="card"><h3>MVP</h3><div class="mvp">${mvpBox(r.mvp, '🏅 MVP')}${mvpBox(r.runnerUp, '🥈 亞軍')}</div><div class="tiny muted" style="margin-top:8px">計分：勝利 +12 · 正確投票 +2 · 完成己方任務 +1 · 人數加成 · 刺中梅林/梅林隱藏 +5</div></div>
+  <div class="card settle-page">${settled.mvpCard}${settled.list}</div>
   <div class="card"><h3>全員身份</h3>${roundTable(seats, { label: s => `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>`, marker: s => (s.id === r.assassinTarget ? '🗡️' : '') + (s.id === r.mvp ? '🏅' : '') + (s.id === r.myId ? '⭐' : ''), center: `<b>${goodWin ? '好人勝' : '壞人勝'}</b>🗡️ 被刺殺　🏅 MVP` })}</div>
   ${reviewHtml(r)}
   ${r.highlights && r.highlights.length ? `<div class="card"><h3>精彩時刻</h3><ul class="hl">${r.highlights.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
@@ -2186,35 +2298,13 @@ document.addEventListener('click', async (e) => {
           $('#ok', el2).onclick = closeModal;
         });
     }
-    case 'menu': { const live = S.game && S.game.phase !== 'end'; const row = (x, ic, ti, sub, cls = '') => `<button class="mrow ${cls}" data-x="${x}"><span class="mic">${ic}</span><span class="grow"><b>${ti}</b><span>${sub}</span></span><span class="chev">›</span></button>`;
-      return openModal(`<h2>房間選單</h2><div class="mlist">
-      ${row('rules', '📖', '查看規則', '遊戲流程、角色能力、擴展玩法')}
-      ${row('ref', '🔄', '刷新房間', '畫面唔同步或卡住時，重新連線並向伺服器攞最新狀態')}
-      ${S.isHost ? row('tr', '👑', '轉讓房主', '交俾另一位玩家，之後你可以離開') : ''}
-      ${S.isHost && live ? row('early', '🏳️', '提前結束', '即時結束本局並公開所有身份，不計勝負', 'warn') : ''}
-      ${S.isHost && !live ? row('dis', '⛔', '解散房間', '所有玩家會被移出房間', 'danger') : ''}
-      </div><button class="btn ghost" id="ok">關閉</button>`, el2 => {
-        el2.querySelector('[data-x=rules]').onclick = () => { closeModal(); go('rules'); };
-        el2.querySelector('[data-x=ref]').onclick = () => { closeModal(); refreshRoom(); };
-        const ee = el2.querySelector('[data-x=early]'); if (ee) ee.onclick = () => { if (confirm('確定提前結束本局？\n所有人身份會公開，今局記錄為「提前結束」，不計勝負、不計分、不派回避卡。')) { closeModal(); act('endearly'); } };
-        const tr = el2.querySelector('[data-x=tr]'); if (tr) tr.onclick = () => {
-          const others = (S.seats || []).filter(p => p && !p.empty && p.id !== S.meId);
-          if (!others.length) return toast('還沒有其他已就座的玩家');
-          openModal(`<h2>轉讓房主</h2><div class="small muted center">選擇一位已就座的玩家，房主權限會即時轉移</div><div class="pick">${others.map(p => `<button class="pick-i" data-id="${p.id}">${av(p, 40)}<div><b>${esc(p.name)}</b><div class="tiny muted">${p.seat}號座${p.online ? '' : ' · 離線'}</div></div></button>`).join('')}</div><button class="btn ghost" id="cc">取消</button>`, el3 => {
-            $$('.pick-i', el3).forEach(b => b.onclick = async () => { const p = others.find(o => o.id === b.dataset.id); if (!confirm(`把房主轉讓給 ${p.name}？`)) return; closeModal(); const r = await act('transfer', { id: p.id }); if (r.ok) toast(`已轉讓房主給 ${p.name}`); });
-            $('#cc', el3).onclick = closeModal;
-          });
-        };
-        const dis = el2.querySelector('[data-x=dis]'); if (dis) dis.onclick = () => { if (confirm('確定解散房間？所有人將被移出。')) { closeModal(); act('dissolve'); } };
-        $('#ok', el2).onclick = closeModal;
-      });
-    }
+    case 'menu': return openRoomMenu();
     case 'leave': { const r = await emit('leave'); S = null; if (r.stillSeated) toast('遊戲進行中，你的座位會保留'); return go('home'); }
     case 'veto': if (confirm('使用回避卡退出本支隊伍？本輪否決不增加，且你本輪不能再被選入。')) return act('veto'); return;
     case 'sword': { const id=[...selected][0]; if (id) { const r=await act('sword',{id}); if(r.ok) selected=new Set(); } return; }
     case 'swordflip': { const id=[...selected][0]; if (id && confirm('翻轉 '+P(id).name+' 的任務卡？')) { const r=await act('swordflip',{id}); if(r.ok) selected=new Set(); } return; }
     case 'swordskip': return act('swordflip', { skip: true });
-    case 'abort': if (confirm('確定強制結束本局？（不會計入記錄）')) act('abort'); return;
+    case 'abort': return openAbortConfirm();
     case 'lobby': return act('lobby');
     case 'sel': {
       const id = el.dataset.id; const g = S.game;

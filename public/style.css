@@ -1184,6 +1184,54 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .actconf.slay .actconf-meta span{color:#ffd0d6}
 .actconf.slay .actconf-note{color:#6b3a42}
 .actconf.slay #act-ok{background:#b4233a;color:#fff}
+.actconf.abort h2{color:#9d1830}
+.actconf.abort .actconf-note{color:#6b3a42;background:#fff5f6;border:1px solid #f3c3cb;border-radius:14px;padding:12px 14px;text-align:left}
+.actconf.abort #act-ok{background:#b4233a;color:#fff}
+.sheet:has(.room-menu){display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;animation:none;max-height:min(92vh,100%);padding:16px 14px 0;background:#fff}
+.room-menu{display:flex;flex-direction:column;min-height:0;max-height:calc(92vh - 16px);overflow:hidden}
+.room-menu h2{flex:none}
+.room-menu .mlist{flex:1 1 auto;overflow-y:auto;min-height:0;-webkit-overflow-scrolling:touch;margin-bottom:8px}
+.room-menu #room-menu-close{flex:none;margin:0 0 calc(12px + env(safe-area-inset-bottom))}
+.room-menu .mrow:focus-visible,.room-menu #room-menu-close:focus-visible,.actconf .btn:focus-visible{outline:3px solid #1d2333;outline-offset:2px}
+
+/* Post-game settlement. Scores come from the server; this is not the home win-rate board. */
+.sheet:has(.settle){display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;height:92vh;max-height:92vh;padding:12px 14px 0;background:#fff}
+.settle{display:flex;flex-direction:column;min-height:0;flex:1 1 auto;height:100%;max-height:100%}
+.settle-scroll{overflow-x:hidden;overflow-y:auto;min-height:0;flex:1 1 auto;-webkit-overflow-scrolling:touch;padding-bottom:12px}
+.settle-head{border-radius:16px;padding:16px 14px 14px;text-align:center;color:#fff}
+.settle-head.good{background:linear-gradient(180deg,#3c7cf0,#1d4eab)}
+.settle-head.evil{background:linear-gradient(180deg,#e23a52,#9d1830)}
+.settle-head.none{background:#eef0f4;color:#1d2333}
+.sheet .settle-head h2{margin:0;color:#fff;font-size:26px;letter-spacing:1px}
+.settle-head.none h2{color:#1d2333}
+.settle-head p{margin:6px 0 0;font-size:14px;line-height:1.45}
+.settle-you{margin-top:8px;font-size:13px;font-weight:800}
+.settle-mvp{display:flex;align-items:center;gap:12px;margin:12px 0;padding:12px;border-radius:16px;background:linear-gradient(180deg,#fff8e8,#fff);border:1px solid #f0d7a2}
+.settle-crown{width:28px;height:18px;flex:none;background:linear-gradient(#ffe08a,#e0a020);clip-path:polygon(0 100%,8% 35%,28% 70%,50% 0,72% 70%,92% 35%,100% 100%);filter:drop-shadow(0 1px 0 #a86b08)}
+.settle-mvp .k{font-size:12px;font-weight:800;letter-spacing:1px;color:#c47a00}
+.settle-mvp b{display:block;font-size:18px;color:#1d2333}
+.settle-mvp span{color:#6b7286;font-size:13px}
+.settle-list{list-style:none;margin:0;padding:0;background:#fff;border:1px solid #e6e9ef;border-radius:14px;overflow:hidden}
+.settle-row{border-bottom:1px solid #e6e9ef}
+.settle-row:last-child{border-bottom:0}
+.settle-row summary{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;list-style:none}
+.settle-row summary::-webkit-details-marker{display:none}
+.settle-row .rk{width:22px;flex:none;text-align:center;font-weight:800;color:#8a909c}
+.settle-row.is-mvp .rk{color:#c47a00}
+.settle-row .who{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}
+.settle-row .who b{font-size:15px;max-width:100%}
+.settle-row .who em{font-style:normal;font-size:12px;font-weight:700}
+.settle-row .who em.good{color:#2f6fe0}
+.settle-row .who em.evil{color:#d23a52}
+.settle-row .me{font-style:normal;font-size:11px;font-weight:800;color:#2f6fe0;background:#e8f0ff;border-radius:7px;padding:0 5px}
+.settle-row .pts{flex:none;font-size:18px;color:#1d2333}
+.settle-break{list-style:none;margin:0;padding:0 12px 8px 40px}
+.settle-break li{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#5d6472;padding:3px 0}
+.settle-break .sum{color:#1d2333;font-weight:800;border-top:1px solid #e6e9ef;margin-top:2px}
+.settle-none{text-align:center;color:#6b7286;margin:16px 0}
+.settle-foot{flex:none;display:flex;gap:10px;padding:10px 0 calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e6e9ef}
+.settle-foot .btn{flex:1;margin:0}
+.settle-page{padding-top:8px}
 .modal:has(.actconf){z-index:80 !important;background:rgba(16,20,32,.62)}
 .sheet:has(.actconf){animation:none;opacity:1;background:#fff;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
 .toast{z-index:90}

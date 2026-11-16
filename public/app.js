@@ -496,7 +496,7 @@ async function animateDemo() {
 
 // ================= poster =================
 async function makePoster(r) {
-  const W = 750, H = 1200; const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+  const rowsN = Math.ceil(r.players.length / 5); const W = 750, H = 760 + rowsN * 250; const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
   const load = (src) => new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
   const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#131f4a'); g.addColorStop(1, '#070b20'); x.fillStyle = g; x.fillRect(0, 0, W, H);
   x.strokeStyle = '#d8b25e'; x.lineWidth = 4; x.strokeRect(20, 20, W - 40, H - 40); x.lineWidth = 1; x.strokeRect(32, 32, W - 64, H - 64);
@@ -511,11 +511,11 @@ async function makePoster(r) {
     const p = ps[i]; const cx = 60 + (i % cols) * cw, cy = 390 + Math.floor(i / cols) * ch; const im = await load(thumb(p.role));
     x.save(); x.beginPath(); x.roundRect ? x.roundRect(cx + 8, cy, cw - 16, cw - 16, 14) : x.rect(cx + 8, cy, cw - 16, cw - 16); x.clip(); if (im) x.drawImage(im, cx + 8, cy, cw - 16, cw - 16); x.restore();
     x.strokeStyle = ROLE[p.role].side === 'good' ? '#7fb0ff' : '#ff7d90'; x.lineWidth = 3; x.strokeRect(cx + 8, cy, cw - 16, cw - 16);
-    x.fillStyle = '#f5ecd8'; x.font = 'bold 20px sans-serif'; x.fillText(String(p.name).slice(0, 6), cx + cw / 2, cy + cw + 14);
+    x.fillStyle = '#f5ecd8'; x.font = 'bold 20px sans-serif'; x.fillText(String(p.name).slice(0, 8), cx + cw / 2, cy + cw + 14);
     x.fillStyle = ROLE[p.role].side === 'good' ? '#9cc0ff' : '#ff9aa8'; x.font = '17px sans-serif'; x.fillText(ROLE[p.role].n.replace('莫德雷德的', '') + (p.id === r.mvp ? ' 🏅' : '') + (p.id === r.assassinTarget ? ' 🗡️' : ''), cx + cw / 2, cy + cw + 40);
   }
-  if (r.mvp) { const m = ps.find(p => p.id === r.mvp); x.fillStyle = '#f3d68f'; x.font = 'bold 30px serif'; x.fillText(`🏅 MVP：${m.name}（${(r.scores[r.mvp] || {}).total || 0} 分）`, W / 2, 960); }
-  x.fillStyle = '#c9cfe6'; x.font = '20px sans-serif'; (r.highlights || []).slice(0, 3).forEach((h, i) => x.fillText('✦ ' + h, W / 2, 1010 + i * 34));
+  if (r.mvp) { const m = ps.find(p => p.id === r.mvp); x.fillStyle = '#f3d68f'; x.font = 'bold 30px serif'; x.fillText(`🏅 MVP：${m.name}（${(r.scores[r.mvp] || {}).total || 0} 分）`, W / 2, 420 + rowsN * 250); }
+  x.fillStyle = '#c9cfe6'; x.font = '20px sans-serif'; (r.highlights || []).slice(0, 3).forEach((h, i) => x.fillText('✦ ' + h, W / 2, 470 + rowsN * 250 + i * 34));
   x.fillStyle = '#97a1c2'; x.font = '18px sans-serif'; x.fillText(`${r.n} 人局 · ${fmtTime(r.endedAt || Date.now())} · ${location.host}`, W / 2, H - 60);
   return c.toDataURL('image/png');
 }

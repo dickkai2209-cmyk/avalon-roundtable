@@ -158,7 +158,7 @@ async function createGuest({ guestKey, name, avatar, bg, fx, pendant, skins }) {
   if (mode === 'pg') {
     await pool.query(
       `INSERT INTO users (id,guest_key,pub_id,name,avatar,bg,fx,pendant,skins) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [u.id, u.guest_key, u.pub_id, u.name, u.avatar, u.bg, u.fx, u.pendant, u.skins]
+      [u.id, u.guest_key, u.pub_id, u.name, u.avatar, u.bg, u.fx, u.pendant, JSON.stringify(u.skins || {})]
     );
   } else { mem.users.push(u); saveJson(); }
   return u;
@@ -171,7 +171,7 @@ async function updateUser(id, fields) {
   if (!Object.keys(sets).length) return getUser(id);
   if (mode === 'pg') {
     const keys = Object.keys(sets);
-    const vals = keys.map(k => k === 'skins' ? sets[k] : sets[k]);
+    const vals = keys.map(k => k === 'skins' ? JSON.stringify(sets[k] || {}) : sets[k]);
     const sql = keys.map((k, i) => `${k}=$${i + 2}`).join(',');
     await pool.query(`UPDATE users SET ${sql}, updated_at=now() WHERE id=$1`, [id, ...vals]);
   } else {
@@ -254,13 +254,14 @@ async function deleteSession(raw) {
   else { mem.sessions = mem.sessions.filter(s => s.token_hash !== h); saveJson(); }
 }
 
+const J = (v) => v === undefined ? null : JSON.stringify(v);
 async function saveGame(rec) {
   if (mode === 'pg') {
     await pool.query(
       `INSERT INTO games (gid,room,started_at,ended_at,n,winner,reason,settings,players,quests,rounds,lady_log,assassin_target,scores,mvp,runner_up,highlights,pids)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT (gid) DO NOTHING`,
-      [rec.gid, rec.room, rec.startedAt, rec.endedAt, rec.n, rec.winner, rec.reason, rec.settings, rec.players, rec.quests, rec.rounds, rec.ladyLog, rec.assassinTarget, rec.scores, rec.mvp, rec.runnerUp, rec.highlights, rec.pids]
+      [rec.gid, rec.room, rec.startedAt ? new Date(rec.startedAt) : null, rec.endedAt ? new Date(rec.endedAt) : new Date(), rec.n, rec.winner, rec.reason, J(rec.settings), J(rec.players), J(rec.quests), J(rec.rounds), J(rec.ladyLog), rec.assassinTarget, J(rec.scores), rec.mvp, rec.runnerUp, J(rec.highlights), rec.pids]
     );
     for (const pid of rec.pids) {
       const st = rec.players[rec.pids.indexOf(pid)];
@@ -273,14 +274,14 @@ async function saveGame(rec) {
            won = user_stats.won + $2,
            mvp = user_stats.mvp + $3,
            roles = user_stats.roles`,
-        [pid, won ? 1 : 0, rec.mvpPid === pid ? 1 : 0, {}]
+        [pid, won ? 1 : 0, rec.mvpPid === pid ? 1 : 0, '{}']
       );
       // update roles jsonb
       const cur = (await pool.query('SELECT roles FROM user_stats WHERE user_id=$1', [pid])).rows[0];
       const roles = cur.roles || {};
       const r = roles[st.role] || { played: 0, won: 0 };
       r.played++; if (won) r.won++; roles[st.role] = r;
-      await pool.query('UPDATE user_stats SET roles=$2 WHERE user_id=$1', [pid, roles]);
+      await pool.query('UPDATE user_stats SET roles=$2 WHERE user_id=$1', [pid, J(roles)]);
     }
   } else {
     mem.games.push(rec);

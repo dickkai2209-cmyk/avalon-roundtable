@@ -965,9 +965,15 @@ img,canvas,svg,video{max-width:100%}
 /* Profile colour row: inset so the first/last circle and the blue ring are fully inside the scroller. */
 .pe-body > .swatches{margin:8px 0 2px}
 
-/* Home/room: drop the old 96px fixed-bar slab. Sticky lobby bar is in flow; fabs opt in below. */
+/* Home keeps a small footer gap. The lobby action row is fixed to the viewport. */
 main{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+body:has(.bottombar) main{padding-bottom:calc(108px + env(safe-area-inset-bottom))}
 body:has(.myrole-fab) main,body:has(.veto-fab) main{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+.bottombar{
+  position:fixed;left:50%;bottom:0;transform:translateX(-50%);
+  width:min(520px,100%);max-width:100%;margin:0;z-index:8;box-sizing:border-box;
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+}
 
 /* Picker preview is painted on the avatar wrapper (position:relative), never the header row. */
 .pe-av .av-wrap.fx-spot::before,.pe-av .av-wrap.fx-gold::before,.pe-av .av-wrap.fx-spark::before,

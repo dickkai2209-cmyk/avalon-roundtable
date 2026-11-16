@@ -7,6 +7,9 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const JSON_FILE = path.join(DATA_DIR, 'db.json');
 const PHOTO_DIR = path.join(DATA_DIR, 'photos');
 const BCRYPT_ROUNDS = 10;
+// never pull the photo BYTEA on ordinary user lookups (it is served separately via /api/avatar)
+const UCOLS = 'id,username,username_norm,password_hash,guest_key,pub_id,name,avatar,bg,fx,pendant,skins,created_at,updated_at,veto_cards,google_sub,email,(photo IS NOT NULL) AS has_photo';
+const UCOLS_U = UCOLS.split(',').map(c => c.startsWith('(') ? '(u.photo IS NOT NULL) AS has_photo' : 'u.' + c).join(',');
 
 let mode = 'json';
 let pool = null;
@@ -20,7 +23,7 @@ async function init() {
   const url = process.env.DATABASE_URL;
   if (url) {
     const { Pool } = require('pg');
-    pool = new Pool({ connectionString: url, ssl: url.includes('localhost') ? false : { rejectUnauthorized: false }, max: 5 });
+    pool = new Pool({ connectionString: url, ssl: url.includes('localhost') ? false : { rejectUnauthorized: false }, max: 8, idleTimeoutMillis: 300000, keepAlive: true });
     const c = await pool.connect();
     try {
       await c.query(`
@@ -68,6 +71,7 @@ async function init() {
           pids TEXT[]
         );
         CREATE INDEX IF NOT EXISTS games_pids_idx ON games USING GIN (pids);
+        CREATE INDEX IF NOT EXISTS games_ended_idx ON games (ended_at DESC);
         ALTER TABLE users ADD COLUMN IF NOT EXISTS pub_id TEXT UNIQUE;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS veto_cards INT NOT NULL DEFAULT 1;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT UNIQUE;
@@ -112,43 +116,52 @@ function saveJson() {
   }, 200);
 }
 
+// Exactly one GM: the account whose verified Google email equals GM_EMAIL, or whose id equals GM_USER_ID.
+// No API or UI can grant this; it is derived only from server env + verified identity.
+function isGM(u) {
+  if (!u) return false;
+  const em = (process.env.GM_EMAIL || '').trim().toLowerCase(), gid = (process.env.GM_USER_ID || '').trim();
+  return !!((gid && u.id === gid) || (em && u.google_sub && (u.email || '').toLowerCase() === em));
+}
 function pubUser(u) {
   if (!u) return null;
   return {
+    gm: isGM(u),
     id: u.id, username: u.username || null, guest: !u.username && !u.google_sub,
     google: !!u.google_sub, email: u.email || null,
     vetoCards: u.veto_cards == null ? 1 : u.veto_cards,
     name: u.name, avatar: u.avatar, bg: u.bg, fx: u.fx, pendant: u.pendant,
     skins: typeof u.skins === 'string' ? JSON.parse(u.skins) : (u.skins || {}),
-    hasPhoto: u.avatar === 'photo' || !!(u.photo || (mode === 'json' && fs.existsSync(path.join(PHOTO_DIR, u.id + '.webp')))),
+    hasPhoto: u.avatar === 'photo' || !!(u.has_photo || u.photo || (mode === 'json' && fs.existsSync(path.join(PHOTO_DIR, u.id + '.webp')))),
+    photoUrl: u.avatar === 'photo' ? `/api/avatar/${u.id}?v=${u.updated_at ? new Date(u.updated_at).getTime() : 0}` : null,
   };
 }
 
 async function getUser(id) {
-  if (mode === 'pg') return (await pool.query('SELECT * FROM users WHERE id=$1', [id])).rows[0] || null;
+  if (mode === 'pg') return (await pool.query(`SELECT ${UCOLS} FROM users WHERE id=$1`, [id])).rows[0] || null;
   return mem.users.find(u => u.id === id) || null;
 }
 async function getUserByUsername(name) {
   const n = String(name || '').trim();
   const norm = n.toLowerCase();
-  if (mode === 'pg') return (await pool.query('SELECT * FROM users WHERE username_norm=$1', [norm])).rows[0] || null;
+  if (mode === 'pg') return (await pool.query(`SELECT ${UCOLS} FROM users WHERE username_norm=$1`, [norm])).rows[0] || null;
   return mem.users.find(u => u.username_norm === norm) || null;
 }
 async function getUserByPubId(pub) {
   if (!pub) return null;
-  if (mode === 'pg') return (await pool.query('SELECT * FROM users WHERE pub_id=$1', [pub])).rows[0] || null;
+  if (mode === 'pg') return (await pool.query(`SELECT ${UCOLS} FROM users WHERE pub_id=$1`, [pub])).rows[0] || null;
   return mem.users.find(u => u.pub_id === pub) || null;
 }
 async function getUserByGuestKey(key) {
   if (!key) return null;
-  if (mode === 'pg') return (await pool.query('SELECT * FROM users WHERE guest_key=$1', [key])).rows[0] || null;
+  if (mode === 'pg') return (await pool.query(`SELECT ${UCOLS} FROM users WHERE guest_key=$1`, [key])).rows[0] || null;
   return mem.users.find(u => u.guest_key === key) || null;
 }
 async function getUserByToken(raw) {
   if (!raw) return null;
   const h = hashTok(raw);
   if (mode === 'pg') {
-    const r = await pool.query('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at > now()', [h]);
+    const r = await pool.query(`SELECT ${UCOLS_U} FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at > now()`, [h]);
     return r.rows[0] || null;
   }
   const s = mem.sessions.find(x => x.token_hash === h && new Date(x.expires_at) > new Date());
@@ -196,7 +209,7 @@ async function setPhoto(id, buf) {
   } else {
     fs.mkdirSync(PHOTO_DIR, { recursive: true });
     fs.writeFileSync(path.join(PHOTO_DIR, id + '.webp'), buf);
-    const u = mem.users.find(x => x.id === id); if (u) u.avatar = 'photo'; saveJson();
+    const u = mem.users.find(x => x.id === id); if (u) { u.avatar = 'photo'; u.updated_at = new Date().toISOString(); } saveJson();
   }
 }
 async function getPhoto(id) {
@@ -353,7 +366,7 @@ async function consumeVeto(id) {
   u.veto_cards = c - 1; saveJson(); return u.veto_cards;
 }
 async function getUserByGoogle(sub) {
-  if (mode === 'pg') return (await pool.query('SELECT * FROM users WHERE google_sub=$1', [sub])).rows[0] || null;
+  if (mode === 'pg') return (await pool.query(`SELECT ${UCOLS} FROM users WHERE google_sub=$1`, [sub])).rows[0] || null;
   return mem.users.find(u => u.google_sub === sub) || null;
 }
 async function linkGoogle(id, sub, email) {
@@ -388,7 +401,7 @@ const TEST_KEY_SQL = `(guest_key ~ '^(sim|tf|lb|rs|smk|rvb|uibot)[a-z0-9]+$' AND
 const TEST_KEY_RE = /^(sim|tf|lb|rs|smk|rvb|uibot)[a-z0-9]+$/;
 async function purgeTestData() {
   if (mode === 'pg') {
-    const ids = (await pool.query(`SELECT id FROM users WHERE ${TEST_KEY_SQL}`)).rows.map(r => r.id);
+    const ids = (await pool.query(`SELECT id FROM users WHERE (${TEST_KEY_SQL}) AND email IS NULL AND google_sub IS NULL`)).rows.map(r => r.id).filter(id => id !== (process.env.GM_USER_ID || '').trim());
     if (!ids.length) return { users: 0, games: 0, rooms: 0 };
     const g = await pool.query(`DELETE FROM games WHERE pids <@ $1::text[]`, [ids]);
     let rooms = 0;
@@ -407,7 +420,12 @@ async function purgeTestData() {
   mem.users = mem.users.filter(u => !ids.has(u.id)); mem.sessions = mem.sessions.filter(s => !ids.has(s.user_id || s.userId)); for (const id of ids) delete mem.stats[id];
   saveJson(); return { users: ids.size, games: g0 - mem.games.length, rooms };
 }
-module.exports = { purgeTestData, flush, saveRoom, deleteRoom, loadRooms,
+async function findGMCandidates() {
+  if (mode !== 'pg') return [];
+  return (await pool.query(`SELECT id, username, name, email, google_sub IS NOT NULL AS google, created_at FROM users WHERE email ILIKE '%dickson%' OR username ILIKE '%dickson%' OR name ILIKE '%dickson%' OR email = $1 ORDER BY created_at LIMIT 10`, [(process.env.GM_EMAIL || '').toLowerCase()])).rows;
+}
+module.exports = {
+  isGM, findGMCandidates, purgeTestData, flush, saveRoom, deleteRoom, loadRooms,
   init, mode: () => mode, pubUser,
   getUser, getUserByUsername, getUserByGuestKey, getUserByPubId, getUserByToken,
   createGuest, updateUser, setPhoto, getPhoto,

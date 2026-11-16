@@ -4,9 +4,20 @@ const URL = process.env.URL || 'http://localhost:3000';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function mk(i, tag) {
   const pid = `sim${tag}${i}${Math.random().toString(36).slice(2, 10)}`;
-  const s = io(URL, { transports: ['websocket'], forceNew: true });
+  const DIFF = process.env.DIFF === '1';
+  const s = io(URL, { transports: ['websocket'], forceNew: true, query: DIFF ? { diff: '1' } : {} });
   const c = { i, pid, s, st: null };
-  s.on('state', st => c.st = st);
+  s.on('state', st => {
+    global.__bytes = (global.__bytes || 0) + JSON.stringify(st).length; global.__msgs = (global.__msgs || 0) + 1;
+    if (st && st.__d) { // same merge as the browser client
+      if (!c.st || c.st.code !== st.code) return s.emit('resync');
+      const m = { ...c.st }; for (const k in st) if (k !== '__d' && k !== '__r' && k !== '__g') m[k] = st[k];
+      (st.__r || []).forEach(k => delete m[k]);
+      if (st.__g) { const g = { ...(m.game || {}) }; for (const k in st.__g) if (k !== '__r') g[k] = st.__g[k]; (st.__g.__r || []).forEach(k => delete g[k]); m.game = g; }
+      st = m; c.diffs = (c.diffs || 0) + 1;
+    }
+    c.st = st;
+  });
   c.emit = (ev, d) => new Promise(r => s.emit(ev, d, r));
   c.act = (type, data) => c.emit('act', { type, data });
   c.ready = new Promise(r => s.on('connect', async () => { await c.emit('hello', { pid, name: `玩家${i + 1}`, avatar: '🙂' }); r(); }));
@@ -189,5 +200,5 @@ async function play(cs, strategy, log) {
     assert(bad.status === 401, 'bad pin rejected');
     results.push({ game: 'accounts', username: uname }); }
 
-  console.log(JSON.stringify(results, null, 1)); console.log('ALL TESTS PASSED'); process.exit(0);
+  console.log(JSON.stringify(results, null, 1)); console.log('ALL TESTS PASSED'); if (process.env.MEASURE) console.log('STATE BYTES', global.__bytes, 'MSGS', global.__msgs, 'AVG', Math.round(global.__bytes / global.__msgs)); process.exit(0);
 })().catch(e => { console.error('FAILED', e); process.exit(1); });

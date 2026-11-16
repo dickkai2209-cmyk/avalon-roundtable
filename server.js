@@ -15,9 +15,27 @@ const PORT = process.env.PORT || 3000;
 const pubId = (pid) => crypto.createHash('sha256').update(String(pid)).digest('hex').slice(0, 10);
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const cleanName = (s) => Array.from(String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim()).slice(0, 10).join('') || '騎士';
-const ANIMALS = ['fox','panda','duck','squirrel','hedgehog','bunny','bear','redpanda','otter','hamster','shiba','dalmatian','capybara','penguin','koala','cat'];
+const ANIMALS = ['fox','panda','duck','squirrel','hedgehog','bunny','bear','redpanda','otter','hamster','shiba','dalmatian','capybara','penguin','koala','cat','wolf','lion','piglet','guineapig'];
 const FXS = ['none','spot','gold','spark','petals','fire','lightning'];
-const PENDANTS = ['none','crown','bow','halo','flower','star','sword','moon','wings'];
+const EMOTES = ['1f602','1f62d','1f631','1f914','1f60e','1f621','1f64f','1f44d','1f44f','1f525','2764_fe0f','1f608','1f92b','1f440','1f389'];
+const emoteAt = new Map();
+// cosmetic unlock rules, enforced server-side (GM bypasses all)
+const PD_RULE = { wolf: ['free', 0], pumpkin: ['free', 0], devil: ['free', 0], crown: ['games', 1], bow: ['games', 2], halo: ['games', 3], ghost: ['games', 4], witch: ['games', 5], bat: ['games', 8], vampire: ['games', 12], plume: ['wins', 1], merlinhat: ['wins', 3], lotus: ['wins', 5], excal: ['wins', 10] };
+const CB_RULE = { cardback: ['free', 0], cardback_xmas: ['free', 0], cardback_sakura: ['games', 2], cardback_halloween: ['games', 3], cardback_lny: ['games', 6], cardback_starry: ['wins', 3], cardback_neon: ['wins', 5], cardback_amigos: ['wins', 10] };
+const FX_NEED = { none: 0, spot: 0, gold: 0, spark: 1, petals: 3, fire: 6, lightning: 10 };
+function unlockedBy(rule, st) { if (!rule) return false; const [k, n] = rule; return k === 'free' || (k === 'games' ? st.played : k === 'wins' ? st.won : st.mvp) >= n; }
+async function enforceUnlocks(user, f) {
+  if (db.isGM(user)) return null;
+  const s = await db.getStats(user.id) || {}; const st = { played: s.played || 0, won: s.won || 0, mvp: s.mvp || 0 };
+  if (f.pendant && f.pendant !== 'none' && !unlockedBy(PD_RULE[f.pendant], st)) f.pendant = 'none';
+  if (f.fx && st.played < (FX_NEED[f.fx] || 0)) f.fx = 'spot';
+  if (f.skins) {
+    if (f.skins._cardback && !unlockedBy(CB_RULE[f.skins._cardback], st)) f.skins._cardback = 'cardback';
+    if (f.skins._shiny && st.mvp < 10) f.skins._shiny = false;
+  }
+  return null;
+}
+const PENDANTS = ['none','wolf','pumpkin','devil','crown','bow','halo','ghost','witch','bat','vampire','plume','merlinhat','lotus','excal'];
 const cleanAvatar = (s) => ANIMALS.includes(s) || s === 'photo' ? s : 'fox';
 const cleanBg = (s) => /^#[0-9a-fA-F]{6}$/.test(String(s)) ? s : '#f3d9a4';
 const cleanFx = (s) => FXS.includes(s) ? s : 'spot';
@@ -35,7 +53,7 @@ function newCode() {
 function pubPlayer(p) {
   return {
     id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx, pendant: p.pendant,
-    photoUrl: p.avatar === 'photo' ? `/api/avatar/${p.id}` : `/img/av/${p.avatar || 'fox'}.webp`,
+    photoUrl: p.avatar === 'photo' ? `/api/avatar/${p.id}?v=${p.pv || 0}` : `/img/av/${p.avatar || 'fox'}.webp`,
     ready: !!p.ready, seat: p.seat,
   };
 }
@@ -43,9 +61,9 @@ function seated(room) { return room.seats.map((p, i) => p && { ...p, seat: i + 1
 function findPlayer(room, pid) { return room.seats.find(p => p && p.pid === pid) || null; }
 function findSeat(room, pid) { return room.seats.findIndex(p => p && p.pid === pid); }
 function newPlayer(pid, d, seat) {
-  return { pid, id: pubId(pid), name: d.name || '騎士', avatar: d.avatar || 'fox', bg: d.bg, fx: d.fx, pendant: d.pendant || 'none', ready: false, seat };
+  return { pid, id: pubId(pid), name: d.name || '騎士', avatar: d.avatar || 'fox', bg: d.bg, fx: d.fx, pendant: d.pendant || 'none', pv: d.pv || 0, ready: false, seat };
 }
-function applyProfile(p, d) { p.name = d.name; p.avatar = d.avatar; p.bg = d.bg; p.fx = d.fx; p.pendant = d.pendant || 'none'; }
+function applyProfile(p, d) { p.name = d.name; p.avatar = d.avatar; p.bg = d.bg; p.fx = d.fx; p.pendant = d.pendant || 'none'; p.pv = d.pv || 0; }
 
 function makeRoom(host) {
   const code = newCode();
@@ -101,7 +119,7 @@ function startGame(room) {
   const { roles, error } = buildRoles(n, room.settings);
   if (error) return error;
   const players = seated(room);
-  const seats = players.map((p, i) => ({ pid: p.pid, id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx, pendant: p.pendant, role: roles[i] }));
+  const seats = players.map((p, i) => ({ pid: p.pid, id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx, pendant: p.pendant, pv: p.pv || 0, role: roles[i] }));
   const leader = crypto.randomInt(n);
   const lance = !!(room.settings.lancelot && seats.some(s => s.role === 'lancelot_good'));
   room.game = {
@@ -173,7 +191,7 @@ async function endGame(room, winner, reason) {
   const rec = {
     gid: g.gid, room: room.code, startedAt: g.startedAt, endedAt: g.endedAt, n: g.n, winner, reason,
     settings: g.settings,
-    players: g.seats.map((s, i) => ({ id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, pendant: s.pendant, role: s.role, side: currentSide(s.role, g.lanceSwitched), seat: i + 1 })),
+    players: g.seats.map((s, i) => ({ id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, pendant: s.pendant, pv: s.pv || 0, role: s.role, side: currentSide(s.role, g.lanceSwitched), seat: i + 1 })),
     quests: g.quests.map(q => q ? { success: q.success, fails: q.fails, team: q.team, sword: q.sword, flipped: q.flipped } : null),
     rounds: g.rounds, ladyLog: g.ladyLog, lanceLog: g.lanceLog, assassinTarget: g.assassinTarget,
     scores, mvp, runnerUp, highlights, pids: g.seats.map(s => s.pid), mvpPid, early,
@@ -468,7 +486,7 @@ function viewFor(room, pid) {
       teamSizes: TEAM_SIZES[g.n], twoFailRound: g.n >= 7 ? 3 : -1, settings: g.settings,
       seats: g.seats.map(s => ({
         id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, fx: s.fx, pendant: s.pendant,
-        photoUrl: s.avatar === 'photo' ? `/api/avatar/${s.id}` : `/img/av/${s.avatar || 'fox'}.webp`,
+        photoUrl: s.avatar === 'photo' ? `/api/avatar/${s.id}?v=${s.pv || 0}` : `/img/av/${s.avatar || 'fox'}.webp`,
         online: online.has(s.pid),
         role: ended ? s.role : undefined,
         side: ended ? currentSide(s.role, g.lanceSwitched) : undefined,
@@ -524,6 +542,24 @@ async function restoreRooms() {
   } catch (e) { console.error('restoreRooms', e.message); }
 }
 const bcastPending = new Set();
+// per-socket state diff: first push is full; later pushes carry only changed top-level keys
+// (and changed sub-keys of `game`), marked with __d so the client merges them.
+function stateDiff(s, v) {
+  const prev = s.data.sent; const next = {}; for (const k in v) next[k] = k === 'game' && v.game ? null : JSON.stringify(v[k]);
+  const gNext = {}; if (v.game) for (const k in v.game) gNext[k] = JSON.stringify(v.game[k]);
+  if (!s.handshake.query || s.handshake.query.diff !== '1') { const j = JSON.stringify(v); if (j === s.data.lastJ) return null; s.data.lastJ = j; return v; }
+  if (!prev || prev.code !== v.code) { s.data.sent = { code: v.code, top: next, game: v.game ? gNext : null }; return v; }
+  const out = { __d: 1, code: v.code }; let n = 0;
+  for (const k in v) { if (k === 'game') continue; if (prev.top[k] !== next[k]) { out[k] = v[k]; n++; } }
+  const rm = Object.keys(prev.top).filter(k => !(k in v)); if (rm.length) { out.__r = rm; n++; }
+  if (!v.game) { if (prev.game) { out.game = null; n++; } }
+  else if (!prev.game) { out.game = v.game; n++; }
+  else { const gp = {}; let gn = 0; for (const k in v.game) if (prev.game[k] !== gNext[k]) { gp[k] = v.game[k]; gn++; }
+    const grm = Object.keys(prev.game).filter(k => !(k in v.game)); if (grm.length) { gp.__r = grm; gn++; }
+    if (gn) { out.__g = gp; n++; } }
+  s.data.sent = { code: v.code, top: next, game: v.game ? gNext : null };
+  return n ? out : null;
+}
 function broadcast(room) {
   // coalesce bursts of updates in the same tick into one state push per socket
   if (!rooms.has(room.code) || bcastPending.has(room.code)) return;
@@ -533,9 +569,9 @@ function broadcast(room) {
     if (!rooms.has(room.code)) return;
     room.touched = Date.now(); persistRoom(room);
     for (const s of io.sockets.sockets.values()) if (s.data.room === room.code) {
-      const v = viewFor(room, s.data.pid); const j = JSON.stringify(v);
-      if (s.data.lastState === j) continue; // nothing changed for this player
-      s.data.lastState = j; s.emit('state', v);
+      const v = viewFor(room, s.data.pid);
+      const d = stateDiff(s, v); if (d) s.emit('state', d); // only changed keys after the first full push
+
     }
   });
 }
@@ -556,6 +592,12 @@ function leaveCurrent(socket, pid, removeFromLobby) {
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' }, pingInterval: 20000, pingTimeout: 25000, perMessageDeflate: { threshold: 1024 } });
+app.use((req, res, next) => { // Server-Timing: app processing time (excludes network), visible in devtools / curl
+  if (!req.path.startsWith('/api/') && req.path !== '/healthz') return next();
+  const t0 = process.hrtime.bigint(); const wh = res.writeHead;
+  res.writeHead = function (...a) { try { res.setHeader('Server-Timing', `app;dur=${(Number(process.hrtime.bigint() - t0) / 1e6).toFixed(1)}`); } catch (e) {} return wh.apply(this, a); };
+  next();
+});
 app.use(require('compression')());
 app.use(express.json({ limit: '2mb' }));
 app.get('/healthz', (req, res) => res.set('Cache-Control', 'no-store').send('ok'));
@@ -641,22 +683,11 @@ app.put('/api/me', authUser, async (req, res) => {
       if (!m) return res.status(400).json({ error: '相片格式無效' });
       const buf = Buffer.from(m[2], 'base64');
       if (buf.length > 1_500_000) return res.status(400).json({ error: '相片太大' });
-      const sharpOk = false;
-      // resize with sharp if present, else accept already-resized webp from client
-      let out = buf;
-      try {
-        const { spawnSync } = require('child_process');
-        // use python pillow if available for conversion
-        const fs = require('fs'); const tmp = path.join(require('os').tmpdir(), 'av' + Date.now());
-        fs.writeFileSync(tmp, buf);
-        const py = `from PIL import Image,io;import sys;im=Image.open(${JSON.stringify(tmp)});im=im.convert('RGB');s=min(im.size);im=im.crop(((im.width-s)//2,(im.height-s)//2,(im.width+s)//2,(im.height+s)//2)).resize((256,256));im.save(sys.stdout.buffer,'WEBP',quality=80)`;
-        const r = spawnSync('python3', ['-c', py], { encoding: 'buffer', maxBuffer: 2e6 });
-        if (r.status === 0 && r.stdout && r.stdout.length > 100) out = r.stdout;
-        try { fs.unlinkSync(tmp); } catch (e) {}
-      } catch (e) { /* keep buf */ }
+      const out = buf; // client already centre-crops and resizes to 256x256
       await db.setPhoto(req.user.id, out);
       f.avatar = 'photo';
     }
+    const lockErr = await enforceUnlocks(req.user, f); if (lockErr) return res.status(403).json({ error: lockErr });
     const u = await db.updateUser(req.user.id, f);
     res.json({ user: db.pubUser(u) });
   } catch (e) { console.error(e); res.status(500).json({ error: '儲存失敗' }); }
@@ -678,14 +709,15 @@ app.get('/api/avatar/:id', async (req, res) => {
   const uid = u ? u.id : id;
   const buf = await db.getPhoto(uid);
   if (!buf) return res.status(404).end();
-  res.type('image/webp').set('Cache-Control', 'public, max-age=3600').send(buf);
+  const type = buf[0] === 0xff && buf[1] === 0xd8 ? 'image/jpeg' : buf[0] === 0x89 ? 'image/png' : 'image/webp';
+  res.type(type).set('Cache-Control', req.query.v ? 'public, max-age=31536000, immutable' : 'public, max-age=300').send(buf);
 });
 app.get('/api/history', authUser, async (req, res) => {
   const list = await db.listHistory(req.user.id);
   res.json(list.map(g => {
     const { pids, ...rest } = g; const idx = (pids || []).indexOf(req.user.id);
     const me = rest.players && rest.players[idx];
-    const players = (rest.players || []).map((pl, i) => ({ ...pl, photoUrl: pl.avatar === 'photo' ? `/api/avatar/${(pids||[])[i]}` : `/img/av/${pl.avatar||'fox'}.webp` }));
+    const players = (rest.players || []).map((pl, i) => ({ ...pl, photoUrl: pl.avatar === 'photo' ? `/api/avatar/${(pids||[])[i]}?v=${pl.pv || 0}` : `/img/av/${pl.avatar||'fox'}.webp` }));
     return { ...rest, players, myId: me && me.id, myRole: me && me.role };
   }));
 });
@@ -737,7 +769,7 @@ async function bindSocketUser(socket, token, guestKey, profile) {
   socket.data.pid = u.id;
   vetoCache.set(u.id, u.veto_cards == null ? 1 : u.veto_cards);
   socket.data.name = u.name || cleanName(profile && profile.name);
-  socket.data.avatar = u.avatar;
+  socket.data.avatar = u.avatar; socket.data.pv = u.updated_at ? new Date(u.updated_at).getTime() : 0;
   socket.data.bg = u.bg;
   socket.data.fx = u.fx;
   socket.data.pendant = u.pendant || 'none';
@@ -746,6 +778,7 @@ async function bindSocketUser(socket, token, guestKey, profile) {
 
 io.on('connection', (socket) => {
   socket.on('hello', async ({ token, guestKey, pid: rawPid, name, avatar, bg, fx, pendant } = {}, cb = () => {}) => {
+    socket.data.sent = null;
     const u = await bindSocketUser(socket, token, guestKey || rawPid, { name, avatar, bg, fx, pendant });
     if (!u) return cb({ error: '請先登入或建立訪客' });
     const pid = u.id;
@@ -763,12 +796,13 @@ io.on('connection', (socket) => {
     // prefer server copy; optional live tweaks while socket is connected
     const u = await db.getUser(pid);
     if (u) {
-      socket.data.name = u.name; socket.data.avatar = u.avatar; socket.data.bg = u.bg; socket.data.fx = u.fx; socket.data.pendant = u.pendant;
+      socket.data.name = u.name; socket.data.avatar = u.avatar; socket.data.pv = u.updated_at ? new Date(u.updated_at).getTime() : 0; socket.data.bg = u.bg; socket.data.fx = u.fx; socket.data.pendant = u.pendant;
     }
     const room = socket.data.room && rooms.get(socket.data.room);
     if (room && (!room.game || room.game.phase === 'end')) { const p = findPlayer(room, pid); if (p) { applyProfile(p, socket.data); broadcast(room); } }
   });
   socket.on('create', async (_, cb = () => {}) => {
+    socket.data.sent = null;
     const pid = socket.data.pid; if (!pid) return cb({ error: '請先設定暱稱' });
     const cur = pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
     if (cur && cur.game && cur.game.phase !== 'end') return cb({ error: '你正在另一局遊戲中' });
@@ -778,6 +812,7 @@ io.on('connection', (socket) => {
     broadcast(room); cb({ room: room.code });
   });
   socket.on('join', ({ code } = {}, cb = () => {}) => {
+    socket.data.sent = null;
     const pid = socket.data.pid; if (!pid) return cb({ error: '請先設定暱稱' });
     code = String(code || '').toUpperCase().trim();
     const room = rooms.get(code); if (!room) return cb({ error: `找不到房間 ${code}` });
@@ -790,6 +825,7 @@ io.on('connection', (socket) => {
     socket.join(code); socket.data.room = code; broadcast(room); cb({ room: code });
   });
   socket.on('leave', (_, cb = () => {}) => {
+    socket.data.sent = null;
     const pid = socket.data.pid; const room = pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
     if (room && room.game && room.game.phase !== 'end') { socket.leave(room.code); socket.data.room = null; return cb({ ok: true, stillSeated: true }); }
     leaveCurrent(socket, pid, true); cb({ ok: true });
@@ -803,6 +839,14 @@ io.on('connection', (socket) => {
     if (err === 'dissolved') return cb({ ok: true, dissolved: true });
     if (err) return cb({ error: err });
     broadcast(room); cb({ ok: true });
+  });
+  socket.on('resync', () => { socket.data.sent = null; const room = socket.data.room && rooms.get(socket.data.room); if (room) broadcast(room); });
+  socket.on('emote', ({ e } = {}) => {
+    const pid = socket.data.pid; const room = socket.data.room && rooms.get(socket.data.room);
+    if (!room || !pid || !EMOTES.includes(e)) return;
+    if (!room.members.has(pid) && !findPlayer(room, pid)) return;
+    const now = Date.now(); if (now - (emoteAt.get(pid) || 0) < 1900) return; emoteAt.set(pid, now);
+    io.to(room.code).emit('emote', { id: pubId(pid), e });
   });
   socket.on('disconnect', () => {
     const room = socket.data.room && rooms.get(socket.data.room);

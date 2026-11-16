@@ -18,12 +18,18 @@ const ROLE = {
   lancelot_good: { n: '蘭斯洛特（正）', en: 'LANCELOT (LOYAL)', side: 'good', d: '你知道邪惡蘭斯洛特是誰。你即使是好人也可以出失敗卡。忠誠牌可能讓你們互換陣營。' },
   lancelot_evil: { n: '蘭斯洛特（邪）', en: 'LANCELOT (EVIL)', side: 'evil', d: '你知道正義蘭斯洛特是誰。忠誠牌可能讓你們互換陣營。' },
 };
-const CARDBACKS = [['cardback', '經典', 0], ['cardback_halloween', '萬聖節', 3], ['cardback_lny', '新春', 6]];
-const cardBackOf = () => { const k = (skinSel && skinSel._cardback) || 'cardback'; const c = CARDBACKS.find(x => x[0] === k); return c && playedTotal() >= c[2] ? k : 'cardback'; };
+// [key, name, unlock type, need]
+const CARDBACKS = [['cardback', '經典', 'free', 0], ['cardback_xmas', '聖誕', 'free', 0], ['cardback_sakura', '櫻花', 'games', 2], ['cardback_halloween', '萬聖節', 'games', 3], ['cardback_lny', '農曆新年', 'games', 6],
+  ['cardback_starry', '星空', 'wins', 3], ['cardback_neon', '旺角霓虹', 'wins', 5], ['cardback_amigos', "Amigos' Party 特別版", 'wins', 10]];
+const unlockOk = (type, need) => type === 'free' || (type === 'games' ? playedTotal() : type === 'wins' ? winsTotal() : mvpTotal()) >= need;
+const needText = (type, need) => type === 'wins' ? `勝 ${need} 場` : type === 'mvp' ? `${need} 次 MVP` : `玩 ${need} 場`;
+const cbUnlocked = (k) => { const c = CARDBACKS.find(x => x[0] === k); return !!c && unlockOk(c[2], c[3]); };
+const cardBackOf = () => { const k = (skinSel && skinSel._cardback) || 'cardback'; return cbUnlocked(k) ? k : 'cardback'; };
+const shinyOn = () => !!(skinSel && skinSel._shiny) && mvpTotal() >= 10;
 const OUTFIT_ROLES = ['merlin', 'percival', 'morgana', 'assassin', 'servant'];
 const skinsFor = (role) => SKINS.filter(s => !s.outfit || OUTFIT_ROLES.includes(role));
 const ROLE_ORDER = ['merlin', 'percival', 'servant', 'assassin', 'morgana', 'mordred', 'oberon', 'minion'];
-const img = (r) => `/img/${r}.webp`, thumb = (r) => `/img/${r}_t.webp`;
+const img = (r) => `/img/${r}.webp`, thumb = (r) => `/img/${r}_t.webp`, thumbCb = (k) => `/img/${k}.webp`;
 const SKINS = [
   { id: 'classic', n: '經典', need: 0 },
   { id: 'casual', n: '日常便服', need: 0, outfit: 1 },
@@ -35,14 +41,22 @@ const SKINS = [
 const ANIMALS = [
   ['fox','狐狸'],['panda','熊貓'],['duck','小鴨'],['squirrel','松鼠'],['hedgehog','刺蝟'],['bunny','兔子'],
   ['bear','棕熊'],['redpanda','小熊貓'],['otter','水獺'],['hamster','倉鼠'],['shiba','柴犬'],['dalmatian','斑點狗'],
-  ['capybara','水豚'],['penguin','企鵝'],['koala','無尾熊'],['cat','貓咪']
+  ['capybara','水豚'],['penguin','企鵝'],['koala','無尾熊'],['cat','貓咪'],['wolf','狼仔'],['lion','獅子'],['piglet','豬仔'],['guineapig','天竺鼠']
 ];
-const EMOJI_MAP = {'🦊':'fox','🐼':'panda','🦆':'duck','🐿️':'squirrel','🦔':'hedgehog','🐰':'bunny','🐻':'bear','🦝':'redpanda','🦦':'otter','🐹':'hamster','🐕':'shiba','🐶':'shiba','🦫':'capybara','🐧':'penguin','🐨':'koala','🐱':'cat'};
+const EMOJI_MAP = {'🦊':'fox','🐼':'panda','🦆':'duck','🐿️':'squirrel','🦔':'hedgehog','🐰':'bunny','🐻':'bear','🦝':'redpanda','🦦':'otter','🐹':'hamster','🐕':'shiba','🐶':'shiba','🦫':'capybara','🐧':'penguin','🐨':'koala','🐱':'cat','🐺':'wolf','🦁':'lion','🐷':'piglet','🐖':'piglet'};
 const BGS = ['#f3d9a4', '#f7c1c8', '#bfe3c9', '#bcd6ff', '#d9c6ff', '#ffe08a', '#c8eef0', '#ffcfa6', '#2b3a6e', '#3a2a1c'];
 const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['spark','星火',1],['petals','花瓣',3],['fire','火焰圈',6],['lightning','閃電',10]];
-const PENDANTS = [['none','無',0],['crown','小王冠',0],['bow','花花蝴蝶結',0],['halo','星星光環',0],['star','星星',3],['sword','短劍',3],['moon','新月',6],['wings','雙翼',10]];
-const PD_IMG = { crown: 1, bow: 1, halo: 1 };
-const PENDANT_ICON = { none:'', crown:'👑', bow:'🎀', halo:'✨', flower:'🌸', star:'⭐', sword:'⚔️', moon:'🌙', wings:'🕊️' };
+// [key, name, unlock type ('free'|'games'|'wins'), need, special?]
+const PENDANTS = [
+  ['wolf', '滿月狼人', 'free', 0], ['pumpkin', '南瓜燈先知', 'free', 0], ['devil', '搗蛋小惡魔', 'free', 0],
+  ['crown', '小王冠', 'games', 1], ['bow', '花花蝴蝶結', 'games', 2], ['halo', '星星光環', 'games', 3],
+  ['ghost', '床單幽靈', 'games', 4], ['witch', '月夜女巫', 'games', 5], ['bat', '孤影蝙蝠', 'games', 8, 1], ['vampire', '午夜血族', 'games', 12, 1],
+  ['plume', '圓桌騎士羽飾', 'wins', 1], ['merlinhat', '梅林法師帽', 'wins', 3, 1], ['lotus', '湖中仙女蓮花', 'wins', 5, 1], ['excal', '王者之劍徽章', 'wins', 10, 1],
+];
+const BADGE_LEAD = `<span class="sbadge lead" title="本輪隊長"><svg viewBox="0 0 24 24" width="100%" height="100%"><circle cx="12" cy="12" r="11" fill="#fff4cf" stroke="#e0a412" stroke-width="1.6"/><path d="M8 18.5V5.5" stroke="#9a6b10" stroke-width="1.6" stroke-linecap="round"/><path d="M8.6 6h8.2l-2 3 2 3H8.6z" fill="#f4b623" stroke="#c8880a" stroke-width=".8" stroke-linejoin="round"/><path d="M10.6 8.2l.9.9.9-1.3.9 1.3.9-.9-.4 2h-2.8z" fill="#fff"/></svg></span>`;
+const BADGE_LADY = `<span class="sbadge lady" title="湖中仙女"><svg viewBox="0 0 24 24" width="100%" height="100%"><circle cx="12" cy="12" r="11" fill="#e6f4ff" stroke="#4aa3e8" stroke-width="1.6"/><path d="M12 6c1.6 1.6 1.9 4 0 6.4C10.1 10 10.4 7.6 12 6z" fill="#f59ac4"/><path d="M12 12.4c-1.4-2-3.5-2.8-5.3-2.3.3 2.2 2.4 3.4 5.3 2.3zm0 0c1.4-2 3.5-2.8 5.3-2.3-.3 2.2-2.4 3.4-5.3 2.3z" fill="#f7b6d4"/><path d="M6 15.2c2 1.2 4 1.2 6 0s4-1.2 6 0" fill="none" stroke="#3b93db" stroke-width="1.5" stroke-linecap="round"/><path d="M7.5 18c1.5.8 3 .8 4.5 0s3-.8 4.5 0" fill="none" stroke="#7dbdf0" stroke-width="1.2" stroke-linecap="round"/></svg></span>`;
+const PD_BACK = { devil: 1, bat: 1, vampire: 1 };
+const PD_IMG = Object.fromEntries(PENDANTS.map(x => [x[0], 1]));
 const PHASE = { team: '組隊', vote: '投票', sword: '授予王者之劍', quest: '任務', swordflip: '王者之劍', lady: '湖中仙女', assassin: '刺殺梅林', end: '遊戲結束' };
 const TEAM_SIZES = { 5: [2, 3, 2, 3, 3], 6: [2, 3, 4, 3, 4], 7: [2, 3, 3, 4, 4], 8: [3, 4, 4, 5, 5], 9: [3, 4, 4, 5, 5], 10: [3, 4, 4, 5, 5], 11: [3, 4, 4, 5, 5], 12: [3, 4, 5, 5, 5] };
 const LOGO = `<img class="logo amigos" src="/img/amigos.webp" alt="Amigos' Party" width="120" height="96" decoding="async">`;
@@ -60,22 +74,31 @@ function migrateAvatar(a) { if (!a) return 'fox'; if (EMOJI_MAP[a]) return EMOJI
 let profile = JSON.parse(LS.getItem('cc.profile') || 'null') || { name: LS.getItem('avalon.name') || '', avatar: 'fox', bg: BGS[Math.floor(Math.random() * 8)], fx: 'spot', pendant: 'none' };
 profile.avatar = migrateAvatar(profile.avatar);
 profile.pendant = profile.pendant || 'none';
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const saveProfile = () => LS.setItem('cc.profile', JSON.stringify(profile));
 let skinSel = JSON.parse(LS.getItem('cc.skins') || '{}');
 let myStats = { played: 0, won: 0, roles: {}, mvp: 0 };
 const authHdr = () => token ? { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
 const api = (url, opt = {}) => fetch(url, { ...opt, headers: { ...authHdr(), ...(opt.headers || {}) } }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || '請求失敗'); return j; });
-const refreshStats = () => api('/api/stats').then(s => { myStats = s; if (s && account) { /* skins may live on account */ } return s; }).catch(() => myStats);
-const skinOf = (role) => { const s = SKINS.find(k => k.id === skinSel[role]); const played = (myStats.roles[role] || {}).played || 0; return s && played >= s.need ? s.id : 'classic'; };
+function checkAch() { // one-time unlock celebration for 10次MVP
+  if (!myStats || (myStats.mvp || 0) < 10 || LS.getItem('cc.ach.mvp10')) return; LS.setItem('cc.ach.mvp10', '1');
+  queueModal(() => openModal(`<div class="achpop"><div class="ap-glow"></div><div class="ap-medal">🌈</div><div class="ap-t">成就解鎖</div><h2>10次MVP</h2><div class="small muted center">獎勵：<b>閃光卡牌特效</b> ✨<br>可以喺「角色皮膚」開關</div>
+    <div class="holo-demo rcard good holo"><div class="rart" style="background-image:url(${img(cardBackOf())})"></div></div><button class="btn" id="ok">太好了！</button></div>`, el => { $('#ok', el).onclick = closeModal; }));
+}
+const refreshStats = () => api('/api/stats').then(s => { myStats = s; checkAch(); return s; }).catch(() => myStats);
+const rolePlayed = (r) => isGM() ? 1e9 : (((myStats.roles || {})[r] || {}).played || 0);
+const skinOf = (role) => { const s = SKINS.find(k => k.id === skinSel[role]); const played = rolePlayed(role); return s && played >= s.need ? s.id : 'classic'; };
 function applyUser(u, stats) {
   if (!u) return;
   account = u; pid = u.id; LS.setItem('cc.pid', pid);
-  profile = { name: u.name || profile.name, avatar: u.avatar || profile.avatar, bg: u.bg || profile.bg, fx: u.fx || profile.fx, pendant: u.pendant || 'none' };
+  profile = { id: u.id, name: u.name || profile.name, avatar: u.avatar || profile.avatar, photoUrl: u.photoUrl || null, bg: u.bg || profile.bg, fx: u.fx || profile.fx, pendant: u.pendant || 'none' };
   if (u.skins) skinSel = { ...skinSel, ...u.skins };
-  if (stats) myStats = stats;
+  if (stats) { myStats = stats; setTimeout(checkAch, 600); }
   saveProfile(); LS.setItem('cc.skins', JSON.stringify(skinSel));
 }
-async function ensureSession() {
+let sessionOk = null; // resolved once per page load; create/join no longer re-fetch /api/me every time
+function ensureSession() { if (account && token && sessionOk) return sessionOk; sessionOk = ensureSession0().catch(e => { sessionOk = null; throw e; }); return sessionOk; }
+async function ensureSession0() {
   try {
     if (token) { const r = await api('/api/me'); applyUser(r.user, r.stats); return r.user; }
   } catch (e) { token = ''; LS.removeItem('cc.token'); }
@@ -99,11 +122,13 @@ let pendingJoin = new URLSearchParams(location.search).get('room');
 if (pendingJoin) history.replaceState(null, '', '/');
 let autoRoom = true;
 
-const socket = io({ transports: ['websocket', 'polling'] });
+ensureSession().then(() => { if (view === 'home') render(); }).catch(() => {}); // start auth in parallel with the socket handshake
+const socket = io({ transports: ['websocket', 'polling'], query: { diff: '1' } });
+const helloProfile = () => ({ name: profile.name, avatar: profile.avatar, bg: profile.bg, fx: profile.fx, pendant: profile.pendant });
 socket.on('connect', () => {
   $('#conn').classList.add('on');
   ensureSession().then(() => {
-    socket.emit('hello', { token, guestKey: LS.getItem('cc.pid'), ...profile }, (r) => {
+    socket.emit('hello', { token, guestKey: LS.getItem('cc.pid'), ...helloProfile() }, (r) => {
       if (r && r.user) applyUser(r.user);
       if (!r || !r.room) { S = null; if (view === 'room') go('home'); }
       if (pendingJoin) { const c = pendingJoin; pendingJoin = null; ensureName(() => joinRoom(c)); }
@@ -120,7 +145,39 @@ function refreshRoom() {
   socket.once('state', () => toast('已同步最新房間狀態 ✓'));
   socket.disconnect(); setTimeout(() => socket.connect(), 250);
 }
+// ---- emotes ----
+const EMOTES = ['1f602','1f62d','1f631','1f914','1f60e','1f621','1f64f','1f44d','1f44f','1f525','2764_fe0f','1f608','1f92b','1f440','1f389'];
+const emoChar = (c) => String.fromCodePoint(...c.split('_').map(h => parseInt(h, 16)));
+const emoImg = (c, sz) => `<img src="https://fonts.gstatic.com/s/e/notoemoji/latest/${c}/512.webp" alt="${emoChar(c)}" width="${sz}" height="${sz}" loading="lazy" decoding="async" onerror="this.replaceWith(document.createTextNode(this.alt))">`;
+let emoLast = 0;
+function closeEmotes() { const p = document.getElementById('emopop'); if (p) p.remove(); document.removeEventListener('pointerdown', emoOutside, true); }
+function emoOutside(e) { const p = document.getElementById('emopop'); if (p && !p.contains(e.target) && !e.target.closest('.emote-btn')) closeEmotes(); }
+function toggleEmotes(btn) {
+  if (document.getElementById('emopop')) return closeEmotes();
+  const r = btn.getBoundingClientRect(); const pop = document.createElement('div'); pop.id = 'emopop'; pop.className = 'emopop';
+  pop.innerHTML = EMOTES.map(c => `<button data-e="${c}">${emoImg(c, 34)}</button>`).join('');
+  pop.style.top = (r.bottom + 8) + 'px'; pop.style.right = Math.max(8, innerWidth - r.right) + 'px';
+  document.body.appendChild(pop);
+  pop.onclick = (e) => { const b = e.target.closest('[data-e]'); if (!b) return; const now = Date.now();
+    if (now - emoLast < 2000) return toast('慢少少，2 秒後再發'); emoLast = now; socket.emit('emote', { e: b.dataset.e }); closeEmotes(); };
+  setTimeout(() => document.addEventListener('pointerdown', emoOutside, true), 0);
+}
+socket.on('emote', ({ id, e } = {}) => {
+  if (!EMOTES.includes(e)) return;
+  const st = Array.from(document.querySelectorAll('.rt .st[data-sid]')).find(x => x.dataset.sid === id && x.offsetParent); if (!st) return;
+  const a = (st.querySelector('.av') || st).getBoundingClientRect();
+  const el = document.createElement('div'); el.className = 'emofly'; el.innerHTML = emoImg(e, 52);
+  el.style.left = (a.left + a.width / 2 - 26) + 'px'; el.style.top = (a.top - 50) + 'px';
+  document.body.appendChild(el); setTimeout(() => el.remove(), 2600);
+});
 socket.on('state', (st) => {
+  if (st && st.__d) { // merge a diff into the current state
+    if (!S || S.code !== st.code) return socket.emit('resync');
+    const m = { ...S }; for (const k in st) if (k !== '__d' && k !== '__r' && k !== '__g') m[k] = st[k];
+    (st.__r || []).forEach(k => delete m[k]);
+    if (st.__g) { const g = { ...(m.game || {}) }; for (const k in st.__g) if (k !== '__r') g[k] = st.__g[k]; (st.__g.__r || []).forEach(k => delete g[k]); m.game = g; }
+    st = m;
+  }
   const prev = S;
   const occ = (st.seats || []).filter(s => !s.empty);
   if (prev && prev.code === st.code && !st.game) {
@@ -159,19 +216,19 @@ const people = () => (S && S.game ? S.game.seats : (S ? (S.seats || []).filter(s
 const P = (id, list) => (list || people()).find(x => x && x.id === id) || { name: '?', avatar: 'fox', bg: '#555' };
 function photoSrc(p) {
   if (!p) return '/img/av/fox.webp';
-  if (p.photoUrl) return p.photoUrl;
+  if (p._photo && p.avatar === 'photo') return p._photo;
+  if (p.photoUrl && (p.avatar === 'photo' || !p.avatar)) return p.photoUrl;
   if (p.avatar === 'photo' || (p.avatar && String(p.avatar).startsWith('data:'))) return p.avatar.startsWith('data:') ? p.avatar : '/api/avatar/' + (p.id || '');
   const key = migrateAvatar(p.avatar);
   return key === 'photo' ? (p.photoUrl || '') : `/img/av/${key}.webp`;
 }
 function pendantHtml(p) {
-  const k = (p && p.pendant) || 'none'; if (k === 'none') return '';
-  if (PD_IMG[k]) return `<img class="pimg ${k}" src="/img/pd/${k}.webp" alt="">`;
-  if (k === 'wings') return `<span class="pendant wings">✨<span></span>✨</span>`;
-  return `<span class="pendant ${k}">${PENDANT_ICON[k] || ''}</span>`;
+  const k = (p && p.pendant) || 'none'; if (!PD_IMG[k]) return '';
+  return `<img class="pov" src="/img/pd/${k}.webp" alt="" loading="lazy" decoding="async">`;
 }
+const pendantBack = (p) => { const k = (p && p.pendant) || 'none'; return PD_BACK[k] ? `<img class="pov back" src="/img/pd/${k}_b.webp" alt="" loading="lazy" decoding="async">` : ''; };
 function av(p, size = 36) {
-  return `<span class="av-wrap"><span class="av s${size}" style="width:${size}px;height:${size}px;background:${esc((p && p.bg) || '#f3d9a4')}"><img src="${esc(photoSrc(p))}" alt="" width="${size}" height="${size}" decoding="async"></span>${pendantHtml(p)}</span>`;
+  return `<span class="av-wrap">${pendantBack(p)}<span class="av s${size}" style="width:${size}px;height:${size}px;background:${esc((p && p.bg) || '#f3d9a4')}"><img src="${esc(photoSrc(p))}" alt="" width="${size}" height="${size}" decoding="async"></span>${pendantHtml(p)}</span>`;
 }
 const chip = (id, list) => { const p = P(id, list); return `<span class="chip">${av(p, 22)}${esc(p.name)}</span>`; };
 const fmtTime = (t) => { const d = new Date(t); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -179,11 +236,23 @@ let PUBLIC_ORIGIN = /^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(location.hostna
 fetch('/api/config').then(r => r.json()).then(c => { if (c.publicUrl && PUBLIC_ORIGIN !== location.origin) PUBLIC_ORIGIN = c.publicUrl; }).catch(() => {});
 const inviteUrl = (code) => `${PUBLIC_ORIGIN}/r/${code}`;
 const pct = (w, p) => p ? Math.round(w * 100 / p) : 0;
-const playedTotal = () => myStats.played || 0;
+const isGM = () => !!(account && account.gm);
+const playedTotal = () => isGM() ? 1e9 : (myStats.played || 0);
+const winsTotal = () => isGM() ? 1e9 : (myStats.won || 0);
+const mvpTotal = () => isGM() ? 1e9 : (myStats.mvp || 0);
 
 // ================= profile =================
 function fxUnlocked(k) { const item = FXS.find(x => x[0] === k); return playedTotal() >= (item ? item[2] : 0); }
-function pdUnlocked(k) { const item = PENDANTS.find(x => x[0] === k); return playedTotal() >= (item ? item[2] : 0); }
+function pdUnlocked(k) { if (k === 'none') return true; const it = PENDANTS.find(x => x[0] === k); if (!it) return false; return unlockOk(it[2], it[3]); }
+const pdNeed = (it) => it[2] === 'wins' ? `勝 ${it[3]} 場解鎖` : `玩 ${it[3]} 場解鎖`;
+function pdCell(k, n, sel, locked, sp, sub) {
+  return `<button class="pdc ${sel ? 'sel' : ''} ${locked ? 'off' : ''}" data-pd="${k}">${sp ? '<span class="sp">✨</span>' : ''}${sel ? '<span class="ck">✓</span>' : ''}<div class="pdv">${k === 'none' ? '<span class="pdx">不佩戴</span>' : `${PD_BACK[k] ? `<img class="pov back" src="/img/pd/${k}_b.webp" alt="">` : ''}<span class="pdcirc"></span><img class="pov" src="/img/pd/${k}.webp" alt="">`}${locked ? '<span class="lk">🔒</span>' : ''}</div><b>${n}</b>${sub ? `<i>${sub}</i>` : ''}</button>`;
+}
+function pdPickerHtml(d) {
+  const have = PENDANTS.filter(x => pdUnlocked(x[0])), lack = PENDANTS.filter(x => !pdUnlocked(x[0]));
+  return `<div class="pdgrid">${pdCell('none', '不佩戴', !d.pendant || d.pendant === 'none')}${have.map(x => pdCell(x[0], x[1], d.pendant === x[0], false, x[4])).join('')}</div>
+    ${lack.length ? `<div class="pdh">還未拿到</div><div class="pdgrid">${lack.map(x => pdCell(x[0], x[1], false, true, x[4], pdNeed(x))).join('')}</div>` : ''}`;
+}
 function previewHtml(d) {
   return `<div class="preview-stage ${d.fx && d.fx !== 'none' ? 'enter fx-' + d.fx : ''}">${av(d, 56)}<div class="nm gold" style="position:absolute;bottom:10px">${esc(d.name || '騎士')}</div></div>`;
 }
@@ -201,7 +270,7 @@ function editProfile(after, startTab) {
         ${sub==='animal' ? `<div class="agrid">${ANIMALS.map(([k,n]) => `<button data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div></button>`).join('')}</div>
           <div class="small muted" style="margin-top:12px">背景顏色</div><div class="swatches">${BGS.map(c => `<button data-c="${c}" class="${c===d.bg?'sel':''}" style="background:${c}"></button>`).join('')}</div>`
         : `<div class="center" style="margin-top:12px"><label class="btn ghost" style="display:inline-block;width:auto;padding:10px 20px">選擇相片<input id="file" type="file" accept="image/*" hidden></label><div class="small muted" style="margin-top:6px">相片會壓縮保存到你的帳號，歷史記錄也看得到</div></div>`}
-      ` : tab==='pendant' ? `<div class="agrid">${PENDANTS.map(([k,n,need]) => `<button data-pd="${k}" class="${d.pendant===k?'sel':''} ${pdUnlocked(k)?'':'off'}"><div class="cell" style="background:${d.bg}">${k==='none'?'—':(PD_IMG[k]?`<img src="/img/pd/${k}.webp" alt="" style="width:80%;height:80%;object-fit:contain">`:PENDANT_ICON[k])}</div><div class="lb">${n}${pdUnlocked(k)?'':` 🔒${need}場`}</div></button>`).join('')}</div>`
+      ` : tab==='pendant' ? pdPickerHtml(d)
       : `<div class="agrid">${FXS.map(([k,n,need]) => `<button data-fx="${k}" class="${d.fx===k?'sel':''} ${fxUnlocked(k)?'':'off'}"><div class="cell" style="background:#1a2550">${k==='none'?'—':({spot:'💡',gold:'✨',spark:'🌟',petals:'🌸',fire:'🔥',lightning:'⚡'}[k]||'')}</div><div class="lb">${n}${fxUnlocked(k)?'':` 🔒${need}場`}</div></button>`).join('')}</div><div class="small muted center" style="margin-top:8px">選擇後可在上方預覽，入座時所有人會看見</div>`}
       <button class="btn" id="ok">儲存到帳號</button>`;
     const nm = $('#nm', el); if (nm) nm.oninput = () => d.name = nm.value;
@@ -214,13 +283,14 @@ function editProfile(after, startTab) {
     $$('[data-e]', el).forEach(b => b.onclick = () => { d.avatar = b.dataset.e; d._forceSub='animal'; draw(el); });
     $$('[data-c]', el).forEach(b => b.onclick = () => { d.bg = b.dataset.c; draw(el); });
     $$('[data-fx]', el).forEach(b => b.onclick = () => { if (!fxUnlocked(b.dataset.fx)) return toast('再玩多幾場即可解鎖此外觀'); d.fx = b.dataset.fx; draw(el); });
-    $$('[data-pd]', el).forEach(b => b.onclick = () => { if (!pdUnlocked(b.dataset.pd)) return toast('再玩多幾場即可解鎖此掛件'); d.pendant = b.dataset.pd; draw(el); });
-    const f = $('#file', el); if (f) f.onchange = () => { const file = f.files[0]; if (!file) return; const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => {
-      const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); const s = Math.min(im.width, im.height);
-      x.drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, 256, 256); d.avatar = 'photo'; d._photo = c.toDataURL('image/jpeg', 0.8); d._forceSub='photo'; draw(el);
-      // show preview using data url
-      profile._tmp = d._photo;
-    }; im.src = r.result; }; r.readAsDataURL(file); };
+    $$('[data-pd]', el).forEach(b => b.onclick = () => { const it = PENDANTS.find(x => x[0] === b.dataset.pd); if (!pdUnlocked(b.dataset.pd)) return toast(`「${it[1]}」：${pdNeed(it)}`); d.pendant = b.dataset.pd; draw(el); });
+    const f = $('#file', el); if (f) f.onchange = () => { const file = f.files[0]; if (!file) return;
+      const u = URL.createObjectURL(file); const im = new Image();
+      im.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); const s = Math.min(im.naturalWidth, im.naturalHeight);
+        x.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, 0, 0, 256, 256); URL.revokeObjectURL(u); im.src = '';
+        d.avatar = 'photo'; d._photo = c.toDataURL('image/jpeg', 0.82); d._forceSub = 'photo'; c.width = c.height = 0; draw(el); };
+      im.onerror = () => { URL.revokeObjectURL(u); toast('讀唔到呢張相，請揀另一張'); };
+      im.src = u; };
     if (d._photo && (d.avatar==='photo')) { const img = el.querySelector('.preview-stage img'); if (img) img.src = d._photo; }
     $('#ok', el).onclick = async () => {
       const n = Array.from((d.name || '').trim()).slice(0, 10).join(''); if (!n) return toast('請輸入暱稱');
@@ -228,7 +298,7 @@ function editProfile(after, startTab) {
       try {
         await ensureSession();
         const body = { name: n, bg: d.bg, fx: d.fx, pendant: d.pendant, skins: skinSel };
-        if (d._photo) body.photo = d._photo;
+        if (d._photo && d.avatar === 'photo') body.photo = d._photo;
         else body.avatar = migrateAvatar(d.avatar) === 'photo' ? undefined : migrateAvatar(d.avatar);
         const r = await api('/api/me', { method: 'PUT', body: JSON.stringify(body) });
         applyUser(r.user); socket.emit('profile', {}); closeModal(); render(); after && after(); toast('已永久保存');
@@ -300,7 +370,7 @@ async function googleLogin() {
     if (r.url) location.href = r.url;
   } catch (e) { toast(e.message || 'Google 登入失敗'); }
 }
-async function doLogout() { try { await api('/api/auth/logout', { method:'POST' }); } catch(e){} token=''; LS.removeItem('cc.token'); account=null; await ensureSession(); socket.emit('hello', { token, guestKey: LS.getItem('cc.pid'), ...profile }, ()=>{}); render(); toast('已登出，現為訪客'); }
+async function doLogout() { try { await api('/api/auth/logout', { method:'POST' }); } catch(e){} token=''; LS.removeItem('cc.token'); account=null; await ensureSession(); socket.emit('hello', { token, guestKey: LS.getItem('cc.pid'), ...helloProfile() }, ()=>{}); render(); toast('已登出，現為訪客'); }
 
 // ================= components =================
 function roomHead() {
@@ -309,7 +379,7 @@ function roomHead() {
   return `<div class="rhead">
     <div class="rh-row"><button class="rpill" data-a="copycode">房間 <b>${S.code}</b> <span class="cpy">⧉</span></button><span class="grow"></span>
       <button class="rbtn" data-a="invite">邀請</button><button class="rbtn" data-a="menu" aria-label="更多">•••</button></div>
-    <div class="rh-sub">等待開局 · 就座 ${x}/${n} · 準備 ${r}/${x}<span class="grow"></span>${S.mySeat ? `${S.mySeat}號座` : '未就座'}${S.isHost ? ' · 👑 房主' : ''}</div>
+    <div class="rh-sub">等待開局 · 就座 ${x}/${n} · 準備 ${r}/${x}<span class="grow"></span>${S.mySeat ? `${S.mySeat}號座` : '未就座'}${S.isHost ? ' · 房主' : ''}</div>
   </div>`;
 }
 function presetCard(pr) {
@@ -354,10 +424,10 @@ function roundTable(seats, o = {}) {
     const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '') + (enterIds.has(s.id) ? ` enter fx-${s.fx || 'spot'}` : '');
     const action = o.action || 'sel';
     const extra = o.click && o.click(s, i) ? `data-a="${action}" data-id="${s.id}"` : (o.seatClick ? `data-a="${o.seatClick}" data-id="${s.id}" data-seat="${seatNo}"` : '');
-    return `<div class="st ${cls}" style="left:${x}%;top:${y}%" ${extra}>
-      <span class="no">${seatNo}</span><div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, 44)}${o.label ? o.label(s, i) : ''}<div class="nm">${esc(s.name)}</div></div>`;
+    return `<div class="st ${cls}" style="left:${x}%;top:${y}%" data-sid="${s.id}" ${extra}>
+      <span class="no">${seatNo}</span><div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, 44)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="nm">${esc(s.name)}</div>${o.sub ? o.sub(s, i) : ''}</div>`;
   }).join('');
-  return `<div class="rt"><div class="table"><div class="ctr">${o.center || ''}</div></div>${st}</div>`;
+  return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="#7a5200" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="#7a5200"/><circle cx="13.8" cy="10.3" r="1.2" fill="#7a5200"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="#7a5200" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="#7a5200" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${st}</div>`;
 }
 function trackHtml(g) {
   return `<div class="track">${g.teamSizes.map((sz, i) => {
@@ -401,7 +471,7 @@ function handleEvent(st) {
     if (ev.lance) queueModal(() => showLance(ev.lance));
   }
   else if (ev.type === 'lady') queueModal(() => showLady(ev));
-  else if (ev.type === 'veto') queueModal(() => openModal(`<h2>回避卡</h2><p class="center">${esc(ev.name||'一位騎士')} 使用回避卡退出隊伍，本輪否決不增加，隊長需重新組隊。</p><button class="btn" id="ok">知道了</button>`, el => $('#ok',el).onclick=closeModal));
+  else if (ev.type === 'veto') queueModal(() => openModal(`<div class="vuse"><img src="/img/veto.webp" alt="回避卡" width="150" height="200"></div><h2>${esc(ev.name||'一位騎士')} 使用咗回避卡</h2><p class="center small muted">已退出隊伍，本輪否決不增加，隊長需重新組隊。</p><button class="btn" id="ok">知道了</button>`, el => $('#ok',el).onclick=closeModal));
   else if (ev.type === 'end') { if (ev.prev) queueModal(() => showVote(ev.prev)); queueModal(showEnd); }
   else if (ev.type === 'abort') toast('房主已結束本局');
   else if (ev.type === 'earlyassassin') queueModal(() => openModal(`<div class="center"><div class="big">🗡️</div><h2 class="result-evil">提前刺殺！</h2><p>${esc(ev.name || '刺客')} 發動提前刺殺，紅方已亮明身份（奧伯倫除外）。<br>刺客正在選擇目標：刺中梅林紅方勝，刺錯藍方勝。</p></div><button class="btn" id="ok">知道了</button>`, el => $('#ok', el).onclick = closeModal));
@@ -440,7 +510,7 @@ function showRole(first) {
   openModal(`<div class="reveal ${side} ${special ? 'special' : ''}"><div class="rv-h">你的身份是</div>
     <div class="rv-stage"><div class="rays"></div><canvas class="fxc" id="fxc"></canvas>
     <div class="flip" id="flip"><div class="in"><div class="face back" style="background-image:url(${img(cb)})"><div class="hint">👉 點擊卡片翻開</div></div>
-      <div class="face front"><div class="rcard ${side}"><div class="strip"></div><div class="rart" style="background-image:url(${img(art)})"></div>
+      <div class="face front"><div class="rcard ${side} ${shinyOn() ? 'holo' : ''}"><div class="strip"></div><div class="rart" style="background-image:url(${img(art)})"></div>
         <div class="rname">${r.n || me.roleName}</div><span class="teampill ${side}">${side === 'good' ? '藍方' : '紅方'}</span></div></div></div></div></div>
     <div id="kn" class="hidden">
       <div class="rinfo">${ROLE_INFO[me.role] || r.d || ''}${g.lanceSwitched !== undefined && me.side !== r.side ? '<br><b>注意：蘭斯洛特已互換陣營</b>' : ''}</div>
@@ -486,12 +556,18 @@ function showVote(ev) {
     await sleep(450); const t = $('#tl', el); t && t.classList.add('on');
   });
 }
+function qBurst(host, ok) { // gold sparkles (success) / red embers (fail); transform+opacity only
+  const n = 10; let h = '';
+  for (let i = 0; i < n; i++) { const a = (i / n) * 6.283 + Math.random() * .5, d = 34 + Math.random() * 26;
+    h += `<i style="--x:${Math.round(Math.cos(a) * d)}px;--y:${Math.round(Math.sin(a) * d - (ok ? 0 : 14))}px;animation-delay:${Math.round(Math.random() * 120)}ms"></i>`; }
+  const b = document.createElement('div'); b.className = 'qburst ' + (ok ? 'ok' : 'ng'); b.innerHTML = h; host.appendChild(b); setTimeout(() => b.remove(), 1400);
+}
 function showQuest(ev) {
   const cards = Array(ev.size).fill(true); for (let i = 0; i < ev.fails; i++) cards[i] = false;
   for (let i = cards.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cards[i], cards[j]] = [cards[j], cards[i]]; }
   const sub = ev.fails === 0 ? '全部係成功牌' : `${ev.fails} 張失敗牌${ev.success ? '（本輪需要 2 張失敗先算失敗）' : ''}`;
   openModal(`<div class="qreveal"><div class="qr-h">第 ${ev.round + 1} 個任務 · 結果揭曉</div><div class="qr-sub">牌已打亂，睇唔到係邊個出</div>
-    <div class="qr-cards">${cards.map(c => `<div class="qc"><div class="qci"><div class="f b"><span>?</span></div><div class="f fr ${c ? 'ok' : 'ng'}"><img src="/img/${c ? 'q_success' : 'q_fail'}.webp" alt=""><b>${c ? '成功' : '失敗'}</b></div></div></div>`).join('')}</div>
+    <div class="qr-cards">${cards.map(c => `<div class="qc"><div class="qci"><div class="f b"><span>?</span></div><div class="f fr ${c ? 'ok' : 'ng'}"><img src="/img/${c ? 'q_success' : 'q_fail'}_t.webp" alt="${c ? '成功' : '失敗'}"></div></div></div>`).join('')}</div>
     <div class="qr-res ${ev.success ? 'ok' : 'ng'}" id="tl"><div class="t">${ev.success ? '任務成功' : '任務失敗'}</div><div class="s">${sub}</div></div>
     <button class="btn big" id="ok">繼續</button></div>`, async (el) => {
     $('#ok', el).onclick = closeModal;
@@ -499,7 +575,7 @@ function showQuest(ev) {
     for (let i = 0; i < cs.length; i++) {
       const last = i === cs.length - 1;
       if (last && cs.length > 1) { cs[i].classList.add('tense'); await sleep(1100); cs[i].classList.remove('tense'); }
-      cs[i].classList.add('on'); if (navigator.vibrate && !cards[i]) navigator.vibrate(60);
+      cs[i].classList.add('on'); qBurst(cs[i], cards[i]); if (navigator.vibrate && !cards[i]) navigator.vibrate(60);
       await sleep(last ? 500 : 800);
     }
     const t = $('#tl', el); t && t.classList.add('on');
@@ -516,11 +592,13 @@ function showLady(ev) {
 function showEnd() {
   const g = S && S.game; if (!g || g.phase !== 'end') return;
   const goodWin = g.winner === 'good'; refreshStats();
+  const mySeat = g.seats.find(s => s.id === S.meId); const vetoWon = !!(mySeat && g.winner !== 'none' && mySeat.side === g.winner);
   const sn = (id) => g.seats.findIndex(s => s.id === id) + 1; const mer = g.seats.find(s => s.role === 'merlin'); const tgt = g.assassinTarget && g.seats.find(s => s.id === g.assassinTarget);
   const atLine = tgt ? `刺殺目標係 ${sn(tgt.id)}號${(ROLE[tgt.role] || {}).n || ''}，梅林係 ${mer ? sn(mer.id) : '?'}號` : '';
   const qrows = g.quests.map((q, i) => q ? `<div class="qrow"><b>任務${i + 1}</b><span class="qm">${q.team.map(id => `<span class="seatpill ${(g.seats.find(s => s.id === id) || {}).side === 'evil' ? 'e' : ''}">${sn(id)}</span>`).join('')}</span><span class="badge ${q.success ? 'good' : 'evil'}">${q.success ? '成功' : '失敗'}</span></div>` : '').join('');
   openModal(`<div class="banner ${g.winner}"><div class="big">${g.winner === 'none' ? '🏳️' : goodWin ? '🛡️' : '🗡️'}</div><h2>${g.winner === 'none' ? '提前結束' : goodWin ? '藍方勝利' : '紅方勝利'}</h2><div class="small">${g.winner === 'none' ? '房主提前結束本局 · 不計勝負、不計分、不派回避卡' : esc(g.reason)}</div>${atLine ? `<div class="small" style="margin-top:4px"><b>${atLine}</b></div>` : ''}</div>
-    ${roundTable(g.seats, { cls: s => s.side === 'evil' ? 'evil-tint' : '', label: s => `<span class="lbl ${s.side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>`, marker: s => (s.id === S.hostId ? '👑' : '') + (s.id === g.assassinTarget ? '🎯' : '') + (s.id === g.mvp ? '🏅' : ''), center: `<b>${goodWin ? '好人勝' : '壞人勝'}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}` })}
+    ${roundTable(g.seats, { cls: s => s.side === 'evil' ? 'evil-tint' : '', label: s => `<span class="lbl ${s.side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>`, marker: s => (s.id === g.assassinTarget ? '🎯' : '') + (s.id === g.mvp ? '🏅' : ''), center: `<b>${goodWin ? '好人勝' : '壞人勝'}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}` })}
+    ${vetoWon ? `<div class="vgain"><div class="vcard"><img src="/img/veto_t.webp" alt="回避卡" width="75" height="100"><i class="spk s1">✦</i><i class="spk s2">✧</i><i class="spk s3">✦</i></div><div><b>+1 回避卡</b><div class="tiny muted">贏咗呢局！回避卡已入袋（上限 10 張）</div></div></div>` : ''}
     <div class="qrows">${qrows}</div>
     <div class="btns"><button class="btn" id="sh">📤 分享戰果</button><button class="btn ghost" id="pp">🖼️ 生成海報</button></div>
     <button class="btn dark" id="ok">查看對局詳情</button>`, (el) => { const rec = liveRecord(g); window.__lastRecord = rec; $('#sh', el).onclick = () => shareSheet(rec); $('#pp', el).onclick = () => saveCard(rec, true); $('#ok', el).onclick = () => { closeModal(); setTimeout(() => { const d = $('#detail'); d && d.scrollIntoView({ behavior: 'smooth' }); }, 100); }; });
@@ -580,24 +658,20 @@ function render() {
 function homeHtml() {
   const inRoom = S && S.code;
   const vc = account ? account.vetoCards : null;
-  return `<div class="hero sm">${LOGO}<h1>旺角阿瓦隆</h1><div class="en">MONGKOK AVALON</div></div>
-  <div class="card prof-head">
+  return `  <div class="card prof-head">
     <div class="row" data-a="profile" style="cursor:pointer">${av(profile, 60)}
-      <div class="grow"><div class="name">${profile.name ? esc(profile.name) : '未設定暱稱'}</div><div class="muted small">${myStats.played || 0} 場 · 勝率 ${pct(myStats.won, myStats.played)}%${vc != null ? ` · 🛡️ 回避卡 ${vc}/10` : ''}</div></div></div>
+      <div class="grow"><div class="name">${profile.name ? esc(profile.name) : '未設定暱稱'}${isGM() ? '<span class="gmb" title="Game Master">GM</span>' : ''}</div>${account ? `<div class="muted small">${myStats.played || 0} 場 · 勝率 ${pct(myStats.won, myStats.played)}%</div>` : '<div class="skel" style="width:110px"></div><div class="skel" style="width:80px;margin-top:6px"></div>'}${vc != null ? `<div class="vchip" data-a="vetoinfo"><img src="/img/veto_t.webp" alt="" width="18" height="24">回避卡 <b>${vc}</b>/10</div>` : ''}</div></div>
     <div class="row" style="gap:8px;margin-top:10px"><button class="btn sm ghost" data-a="profile">✎ 編輯檔案</button><button class="btn sm ghost" data-a="ptab" data-t="pendant">🎀 頭像掛件</button></div>
     <div class="acct">${account && (account.username || account.google) ? `<div class="row between"><div class="small">已登入 <b>${esc(account.username || account.email || 'Google 帳號')}</b>${account.google ? ' <span class="badge">Google</span>' : ''}</div><button class="btn sm dark" data-a="logout">登出</button></div>` : `<div class="tiny muted">目前是訪客。註冊或用 Google 登入後，資料永久保存、換機也能找回。</div><div class="btns"><button class="btn sm" data-a="register">註冊帳號</button><button class="btn sm ghost" data-a="login">登入</button></div>`}</div>
   </div>
-  ${inRoom ? `<div class="card"><div class="row between"><div><span class="code">${S.code}</span>${S.isHost ? '<span class="badge">👑 房主</span>' : ''}<div class="muted small">就座 ${S.seated}/${S.capacity} · ${S.game ? (S.game.phase === 'end' ? '已結束' : '遊戲中') : '等待開局'}</div></div><button class="btn sm" data-a="toroom">回到房間</button></div></div>` : ''}
-  <div class="bigcards">
+  ${inRoom ? `<div class="card"><div class="row between"><div><span class="code">${S.code}</span>${S.isHost ? '<span class="badge host">房主</span>' : ''}<div class="muted small">就座 ${S.seated}/${S.capacity} · ${S.game ? (S.game.phase === 'end' ? '已結束' : '遊戲中') : '等待開局'}</div></div><button class="btn sm" data-a="toroom">回到房間</button></div></div>` : ''}
+  ${inRoom ? '' : `<div class="bigcards">
     <div class="bigcard create" data-a="create"><div class="ic">⚔️</div><b>建立房間</b><span>我做房主</span></div>
     <div class="bigcard join" data-a="join"><div class="ic">🛡️</div><b>加入房間</b><span>輸入 4 位房間號</span></div>
-  </div>
+  </div>`}
   <div class="card menu" style="margin-top:14px">
     <div class="item" data-a="go" data-v="history"><span class="ic">📜</span><span class="grow">歷史記錄</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="stats"><span class="ic">📊</span><span class="grow">數據統計</span><span class="chev">›</span></div>
-    <div class="item" data-a="ptab" data-t="avatar"><span class="ic">🦊</span><span class="grow">我的頭像</span><span class="chev">›</span></div>
-    <div class="item" data-a="ptab" data-t="fx"><span class="ic">✨</span><span class="grow">我的入場特效</span><span class="chev">›</span></div>
-    <div class="item" data-a="ptab" data-t="pendant"><span class="ic">🎀</span><span class="grow">頭像掛件</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="skins"><span class="ic">🎴</span><span class="grow">角色皮膚</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="ach"><span class="ic">🏆</span><span class="grow">成就</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="rules"><span class="ic">📖</span><span class="grow">規則介紹</span><span class="chev">›</span></div>
@@ -611,14 +685,15 @@ const ACHS = [
   ['win1', '首勝', '贏得第 1 場', s => s.won >= 1],
   ['win10', '常勝騎士', '累積 10 場勝利', s => s.won >= 10],
   ['mvp', '全場最佳', '獲得一次 MVP', s => (s.mvp || 0) >= 1],
+  ['mvp10', '10次MVP', '累積 10 次 MVP · 獎勵：閃光卡牌特效', s => (s.mvp || 0) >= 10, s => [Math.min(s.mvp || 0, 10), 10]],
   ['merlin', '智者', '以梅林身份獲勝', s => ((s.roles || {}).merlin || {}).won >= 1],
   ['assassin', '暗影之刃', '以刺客身份獲勝', s => ((s.roles || {}).assassin || {}).won >= 1],
   ['allroles', '千面騎士', '玩過 6 種不同角色', s => Object.keys(s.roles || {}).length >= 6],
 ];
 function achHtml() {
-  const s = myStats || {}; const got = ACHS.filter(a => a[3](s)).length;
+  const s = isGM() ? { played: 1e9, won: 1e9, mvp: 1e9, roles: Object.fromEntries(ROLE_ORDER.map(k => [k, { played: 1e9, won: 1e9 }])) } : (myStats || {}); const got = ACHS.filter(a => a[3](s)).length;
   return `<div class="card"><h3>成就 ${got}/${ACHS.length}</h3><div class="bar"><i style="width:${pct(got, ACHS.length)}%"></i></div></div>` +
-    `<div class="card ach">${ACHS.map(([k, n, d, f]) => `<div class="ach-i ${f(s) ? 'on' : ''}"><span class="medal">${f(s) ? '🏅' : '🔒'}</span><div><b>${n}</b><div class="tiny muted">${d}</div></div></div>`).join('')}</div>`;
+    `<div class="card ach">${ACHS.map(([k, n, d, f, prog]) => `<div class="ach-i ${f(s) ? 'on' : ''}"><span class="medal">${f(s) ? (k === 'mvp10' ? '🌈' : '🏅') : '🔒'}</span><div class="grow"><b>${n}</b><div class="tiny muted">${d}</div>${prog && !isGM() ? `<div class="bar sm"><i style="width:${pct(prog(s)[0], prog(s)[1])}%"></i></div><div class="tiny muted">${prog(s)[0]}/${prog(s)[1]}</div>` : ''}</div></div>`).join('')}</div>`;
 }
 function expStatus(s) {
   return [['蘭斯洛特', s.lancelot], ['湖中仙女', s.lady], ['王者之劍', s.excalibur], ['回避卡', s.veto]]
@@ -647,9 +722,10 @@ function lobbyHtml() {
   const vc = S.myVetoCards == null ? (account && account.vetoCards) : S.myVetoCards;
   return `${roomHead()}
   <div class="card" style="padding:10px">${roundTable(S.seats, {
-      seatClick: 'seat',
-      marker: p => (p.isHost || p.id === S.hostId ? '👑' : '') + (p.ready ? '✅' : ''),
-      label: p => p.isHost || p.id === S.hostId ? '<span class="lbl y">房主</span>' : (p.id === S.meId ? '<span class="lbl g">我</span>' : ''),
+      seatClick: 'seat', emote: true,
+      marker: p => (p.ready ? '✅' : ''),
+      cls: p => (p.isHost || p.id === S.hostId ? 'host' : ''),
+      sub: p => (p.isHost || p.id === S.hostId ? '<span class="hostpill">房主</span>' : '') + (p.id === S.meId ? '<span class="mepill">我</span>' : ''),
       center: `<b>${x}/${n} 已就座</b>` })}
     <div class="tiny muted center" style="margin-top:4px">點空位就座 · 點玩家看名片${host ? '或請他離座' : ''}</div></div>
   <div class="card cfgcard" data-a="cfg">
@@ -657,7 +733,7 @@ function lobbyHtml() {
     ${presetCard(S.preset)}
     <div class="xps">${expStatus(s)}</div>
   </div>
-  <div class="bottombar">${s.veto ? `<div class="veto-ic" data-a="vetoinfo" title="回避卡"><span>🛡️</span><b>${vc == null ? '–' : vc}</b></div>` : `<div class="thumb" data-a="role"></div>`}
+  <div class="bottombar">${s.veto ? `<div class="veto-ic" data-a="vetoinfo" title="回避卡"><img src="/img/veto_t.webp" alt="" width="24" height="32"><b>${vc == null ? '–' : vc}</b></div>` : `<div class="thumb" data-a="role"></div>`}
     ${host ? `<button class="btn" data-a="start" ${x === n ? '' : 'disabled'}>開始遊戲（${x}/${n}）</button>` :
       S.mySeat ? `<button class="btn ${me && me.ready ? 'ghost' : ''}" data-a="ready">${me && me.ready ? '已準備 ✓' : '準備'}</button>` : `<button class="btn ghost" disabled>請先點空位就座</button>`}
   </div>`;
@@ -690,7 +766,7 @@ function gameHtml() {
     const onTeam = g.team.includes(meId);
     center = `<b>任務進行中</b>${g.questDone}/${g.team.length} 已出卡`;
     panel = `<div class="phase">任務進行中</div><div>${g.team.map(id => chip(id)).join('')}</div>${g.twoFailRound === g.round ? '<div class="small result-evil" style="margin-top:6px">本輪需 2 張失敗才算任務失敗</div>' : ''}` +
-      (onTeam && !me.questSubmitted ? `<div class="small muted" style="margin-top:6px">秘密選擇你的任務卡：</div><div class="btns"><button class="btn good" data-a="quest" data-v="1">🛡️ 成功</button><button class="btn evil" data-a="quest" data-v="0" ${me.canFail ? '' : 'disabled'}>🗡️ 失敗</button></div>${me.canFail ? '' : '<div class="small muted center" style="margin-top:6px">你只能出「成功」</div>'}`
+      (onTeam && !me.questSubmitted ? `<div class="small muted" style="margin-top:6px">秘密選擇你的任務卡：</div><div class="qpick"><button class="qcard ok" data-a="quest" data-v="1"><img src="/img/q_success.webp" alt="任務成功" width="240" height="320" decoding="async"></button><button class="qcard ng" data-a="quest" data-v="0" ${me.canFail ? '' : 'disabled'}><img src="/img/q_fail.webp" alt="任務失敗" width="240" height="320" decoding="async"></button></div>${me.canFail ? '' : '<div class="small muted center" style="margin-top:6px">你只能出「成功」</div>'}`
         : `<div class="center muted" style="margin-top:10px">${onTeam ? '你已交卡，等待其他隊員…' : '等待隊員秘密出卡…'}</div>`);
   } else if (g.phase === 'lady') {
     center = `<b>湖中仙女</b>${esc(P(g.ladyId).name)} 查驗中`;
@@ -707,10 +783,11 @@ function gameHtml() {
   }
   const selectable = (s) => (g.phase === 'team' && isLeader) || (g.phase === 'assassin' && me && me.role === 'assassin' && s.id !== meId && !s.evil) || (g.phase === 'lady' && isLady && s.id !== meId && !g.ladyUsed.includes(s.id)) || (g.phase === 'sword' && isLeader && g.team.includes(s.id) && s.id !== meId) || (g.phase === 'swordflip' && g.sword === meId && g.team.includes(s.id) && s.id !== meId);
   const ended = g.phase === 'end';
-  const table = roundTable(g.seats, {
+  const table = roundTable(g.seats, { emote: true,
     click: selectable,
     cls: s => (selected.has(s.id) ? 'sel' : (g.team.includes(s.id) ? 'team' : '')) + (s.online ? '' : ' off'),
-    marker: s => [s.id === g.leaderId && !ended ? '<span class="crown">👑</span>' : '', s.id === g.ladyId && !ended ? '🌊' : '', g.team.includes(s.id) ? '🛡️' : '', g.phase === 'vote' && g.voted.includes(s.id) ? '✅' : '', s.id === meId ? '⭐' : '', ended && s.id === g.assassinTarget ? '🗡️' : ''].join(''),
+    badge: s => (s.id === g.leaderId && !ended ? BADGE_LEAD : '') + (s.id === g.ladyId && !ended ? BADGE_LADY : ''),
+    marker: s => [g.team.includes(s.id) ? '🛡️' : '', g.phase === 'vote' && g.voted.includes(s.id) ? '✅' : '', s.id === meId ? '⭐' : '', ended && s.id === g.assassinTarget ? '🗡️' : ''].join(''),
     label: s => ended ? `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>` : (s.evil ? '<span class="lbl e">壞人</span>' : ''),
     center,
   });
@@ -738,7 +815,7 @@ function detailHtml(r) {
   window.__lastRecord = r;
   setTimeout(() => renderCardPreview(r), 30);
   return `<div class="card"><h3>戰果卡</h3><div id="cardprev" class="cardprev"><div class="center muted small">生成中…</div></div>
-    <div class="btns"><button class="btn" data-a="savecard">💾 儲存圖片</button><button class="btn ghost" data-a="sharecard">📤 分享</button></div></div>
+    <div class="btns"><button class="btn" data-a="savecard">💾 儲存圖片</button><button class="btn ghost" data-a="sharecard">📤 分享</button></div><button class="btn story" data-a="story">📸 分享到 IG 限時動態 / Threads</button></div>
   <div class="card"><div class="banner ${r.winner}"><div class="tiny" style="letter-spacing:3px;opacity:.8">${r.room ? '房間 ' + esc(r.room) + ' · ' : ''}${r.n} 人局</div><h2>${r.winner === 'none' ? '🏳️ 提前結束' : goodWin ? '🛡️ 亞瑟陣營勝利' : '🗡️ 莫德雷德陣營勝利'}</h2><div class="small">${esc(r.reason)}</div>
       ${at ? `<div class="small" style="margin-top:6px">刺客刺殺了 ${esc(at.name)}（${ROLE[at.role].n}）· 梅林是 ${esc(merlin ? merlin.name : '?')}</div>` : ''}
       <div style="margin-top:8px;font-size:20px">${r.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join(' ')}</div></div>
@@ -772,12 +849,14 @@ async function loadStats() {
     <div class="row" style="margin-top:14px;gap:8px"><div class="grow"><span class="badge good">好人</span> <b>${gw}</b> 勝 <b>${gp - gw}</b> 負<div class="bar"><i style="width:${pct(gw, gp)}%;background:var(--good)"></i></div></div><div class="grow"><span class="badge evil">壞人</span> <b>${ew}</b> 勝 <b>${ep - ew}</b> 負<div class="bar"><i style="width:${pct(ew, ep)}%;background:var(--evil)"></i></div></div></div></div>
   <div class="card"><h3>各角色戰績</h3><div class="rstats">${ROLE_ORDER.map(k => { const r = (st.roles || {})[k] || { played: 0, won: 0 };
     return `<div class="rstat ${ROLE[k].side}"><img src="${thumb(k)}" alt=""><b>${ROLE[k].n.replace('莫德雷德的', '')}</b>${r.played} 場 · ${pct(r.won, r.played)}%</div>`; }).join('')}</div></div>
+  <button class="btn story" data-a="storystats">📸 分享戰績到 IG 限時動態 / Threads</button>
   <div class="footer">數據跟隨此瀏覽器的玩家身份保存</div>`;
 }
 function skinsHtml() {
   const cbk = cardBackOf();
-  return `<div class="card"><h3 style="margin:0 0 8px">卡背</h3><div class="skinrow">${CARDBACKS.map(([k, n, need]) => `<div class="skin ${playedTotal() >= need ? '' : 'lock'} ${cbk === k ? 'sel' : ''}" data-a="cardback" data-k="${k}"><div class="rc"><div class="art" style="background-image:url(${img(k)})"></div></div><div style="margin-top:4px">${n}${playedTotal() >= need ? '' : ` 🔒${need}場`}</div></div>`).join('')}</div></div><div class="card"><div class="small muted">主要角色有不同服裝（日常便服、節日盛裝）及特效皮膚。玩得越多解鎖越多，揭曉身份時會顯示你所選的皮膚，並保存到帳號。</div></div>` + ROLE_ORDER.map(k => {
-    const played = (myStats.roles[k] || {}).played || 0; const cur = skinOf(k); const next = SKINS.find(s => s.need > played);
+  return `<div class="card"><h3 style="margin:0 0 8px">卡背</h3><div class="skinrow">${CARDBACKS.map(([k, n, ty, need]) => `<div class="skin ${unlockOk(ty, need) ? '' : 'lock'} ${cbk === k ? 'sel' : ''}" data-a="cardback" data-k="${k}"><div class="rc"><div class="art" style="background-image:url(${thumbCb(k)})"></div></div><div style="margin-top:4px">${n}${unlockOk(ty, need) ? '' : `<div class="tiny muted">🔒 ${needText(ty, need)}</div>`}</div></div>`).join('')}</div></div>
+    <div class="card"><div class="toggle"><div class="grow"><b>✨ 閃光卡牌特效</b><div class="muted small">${mvpTotal() >= 10 ? '翻身份卡時有彩虹閃光同星星' : `達成「10次MVP」成就解鎖（${Math.min(myStats.mvp || 0, 10)}/10）`}</div></div><button class="sw ${shinyOn() ? 'on' : ''}" data-a="shiny" ${mvpTotal() >= 10 ? '' : 'disabled'}></button></div></div><div class="card"><div class="small muted">主要角色有不同服裝（日常便服、節日盛裝）及特效皮膚。玩得越多解鎖越多，揭曉身份時會顯示你所選的皮膚，並保存到帳號。</div></div>` + ROLE_ORDER.map(k => {
+    const played = rolePlayed(k); const cur = skinOf(k); const next = SKINS.find(s => s.need > played);
     return `<div class="card"><div class="row between"><h3 style="margin:0">${ROLE[k].n}</h3><span class="small muted">已玩 ${played} 場</span></div>
       <div class="skinrow" style="margin-top:10px">${skinsFor(k).map(s => `<div class="skin ${played >= s.need ? '' : 'lock'} ${cur === s.id ? 'sel' : ''}" data-a="skin" data-r="${k}" data-s="${s.id}">${roleFace(k, s.id, true)}<div style="margin-top:4px">${s.n}${played >= s.need ? '' : ` 🔒${s.need}場`}</div></div>`).join('')}</div>
       ${next ? `<div class="tiny muted" style="margin-top:6px">下一款「${next.n}」：${played}/${next.need} 場</div><div class="bar"><i style="width:${pct(played, next.need)}%"></i></div>` : '<div class="tiny gold" style="margin-top:6px">已解鎖全部皮膚 ✦</div>'}</div>`;
@@ -834,7 +913,7 @@ function rulesBody() {
       <h4>🧙 梅林</h4><ul><li>不要太早、太明顯地指出壞人，用投票暗示。</li><li>偶爾「猜錯」一兩次，降低被刺風險。</li></ul>
       <h4>⚔️ 派西維爾</h4><ul><li>觀察兩位「梅林?」的投票與發言，找出真梅林並替他擋刀。</li><li>可以假裝自己是梅林，吸引刺客。</li></ul>
       <h4>🔴 壞人思路</h4><ul><li>不要每次都出失敗卡，早期可以「潛伏」建立信任。</li><li>兩個壞人同隊時，協調好誰出失敗。</li><li>莫甘娜要模仿梅林的行為，混淆派西維爾。</li><li>刺客全程觀察：誰最清楚壞人是誰？</li></ul>`);
-    case 'ext': return P_(`<h4>🌊 湖中仙女 Lady of the Lake <span class="badge ok">本 App 已支援</span></h4><p>開局時交給隊長右手邊（上一位）玩家。第 2、3、4 個任務結束後，持有者查驗一位玩家的陣營（只有自己看到），然後把仙女交給被查驗者。曾持有仙女的人不能被查驗。建議 8 人以上使用，可在房間設定開啟。</p>
+    case 'ext': return P_(`<h4>🌊 湖中仙女 Lady of the Lake <span class="badge ok">本 App 已支援</span></h4><p>開局時交給首位隊長右手邊的玩家，即座號少一號嗰位（例如 3 號做首位隊長，仙女交 2 號；1 號做隊長就交最大號）。隊長由系統每輪自動指定：首位隨機抽，之後按座號順時針（1→2→3…）輪替。第 2、3、4 個任務結束後，持有者查驗一位玩家的陣營（只有自己看到），然後把仙女交給被查驗者。曾持有仙女的人不能被查驗。建議 8 人以上使用，可在房間設定開啟。</p>
       <h4>⚔️ 王者之劍 Excalibur <span class="badge grey">已實作</span></h4><p>隊長組隊時把王者之劍交給一位隊員（不可給自己）。任務卡交出後，持劍者可以選擇翻轉另一位隊員的任務卡（成功↔失敗），並私下看到原本的卡。為任務結果增加變數。</p>
       <h4>🗡️ 蘭斯洛特 Lancelot <span class="badge grey">已實作</span></h4><p>好人與壞人各有一位蘭斯洛特，開局時互相認識。第 2–4 個任務後公開抽一張忠誠牌（五張牌中有兩張「互換」），可能讓兩人陣營對調。正義蘭斯洛特即使是好人也可以出失敗卡。湖中仙女看到的是當下陣營。11 人以上預設開啟。</p>
       <p class="small">本版本已實作王者之劍、蘭斯洛特與 11–12 人局，可在開局前於房間設定開啟。</p>`);
@@ -885,11 +964,13 @@ async function makePoster(r, personal = true) {
   const logo = await load('/img/amigos.webp');
   const hero = early ? null : (ps.find(p => p.id === r.mvp && sideOf(p) === r.winner) || ps.find(p => sideOf(p) === r.winner));
   const drawAv = async (p, cx, cy, rad, ring) => {
+    const ov = rad * 2 / 0.6;
+    if (PD_BACK[p.pendant]) { const bi = await load(`/img/pd/${p.pendant}_b.webp`); if (bi) x.drawImage(bi, cx - ov / 2, cy - ov / 2, ov, ov); }
     x.save(); x.beginPath(); x.arc(cx, cy, rad, 0, Math.PI * 2); x.fillStyle = p.bg || '#f3d9a4'; x.fill(); x.clip();
     const im = await load(photoSrc(p)); if (im) x.drawImage(im, cx - rad, cy - rad, rad * 2, rad * 2); x.restore();
-    if (ring) { x.strokeStyle = ring; x.lineWidth = Math.max(3, rad / 12); x.beginPath(); x.arc(cx, cy, rad + 1, 0, Math.PI * 2); x.stroke(); }
-    if (PD_IMG[p.pendant]) { const pi = await load(`/img/pd/${p.pendant}.webp`); if (pi) { const s = rad * (p.pendant === 'halo' ? 1.8 : p.pendant === 'crown' ? 1.2 : 0.95); const hh = s * pi.height / pi.width; const oy = p.pendant === 'bow' ? cy - rad * 1.05 : cy - rad - hh * 0.55; const ox = p.pendant === 'bow' ? cx + rad * 0.2 : cx - s / 2; x.drawImage(pi, ox, oy, s, hh); } }
+    if (PD_IMG[p.pendant]) { const pi = await load(`/img/pd/${p.pendant}.webp`); if (pi) x.drawImage(pi, cx - ov / 2, cy - ov / 2, ov, ov); }
   };
+
   if (hero) await drawAv(hero, pad + 92, 150, 58, accent);
   else { x.fillStyle = '#eef0f4'; x.beginPath(); x.arc(pad + 92, 150, 58, 0, Math.PI * 2); x.fill(); x.font = '56px sans-serif'; x.textAlign = 'center'; x.fillText('🏳️', pad + 92, 170); }
   if (logo) x.drawImage(logo, W - pad - 108, 46, 90, 72);
@@ -968,9 +1049,17 @@ async function cardBlob(r) { const c = await makePoster(r, true); return new Pro
 async function saveCard(r, show) {
   if (!r) return;
   openModal('<h2>戰報海報</h2><div class="center muted">生成中…</div>');
-  const c = await makePoster(r, true); const url = c.toDataURL('image/png');
-  openModal(`<h2>戰報海報</h2><img src="${url}" style="width:100%;border-radius:12px;border:1px solid var(--line)"><p class="center small muted">長按圖片可儲存，或按下方下載</p>
-    <div class="btns"><a class="btn" href="${url}" download="mongkok-avalon-${(r.gid || 'game').slice(0, 8)}.png" style="text-align:center;text-decoration:none">💾 下載圖片</a><button class="btn ghost" id="sh">📤 分享</button></div>`, el => { $('#sh', el).onclick = () => shareSheet(r); });
+  const c = await makePoster(r, true); const blob = await new Promise(res => c.toBlob(res, 'image/png')); c.width = c.height = 0;
+  if (window.__posterUrl) URL.revokeObjectURL(window.__posterUrl); const url = window.__posterUrl = URL.createObjectURL(blob);
+  const fname = `mongkok-avalon-${(r.gid || 'game').slice(0, 8)}.png`;
+  openModal(`<h2>戰報海報</h2><img src="${url}" style="width:100%;border-radius:12px;border:1px solid var(--line)"><p class="center small muted">長按圖片可儲存，或按下方儲存</p>
+    <div class="btns"><button type="button" class="btn" id="dl">💾 儲存圖片</button><button type="button" class="btn ghost" id="sh">📤 分享</button></div>`, el => {
+    $('#sh', el).onclick = () => shareSheet(r);
+    $('#dl', el).onclick = async () => { const f = new File([blob], fname, { type: 'image/png' });
+      if (IS_IOS && navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f] }); } catch (e) {} return; }
+      if (IS_IOS) return toast('長按上面張圖 →「加入相片」即可儲存');
+      const a = document.createElement('a'); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove(); };
+  });
 }
 function shareSheet(r) {
   if (!r) return;
@@ -997,7 +1086,8 @@ function shareSheet(r) {
     $('#ig', el).onclick = async () => {
       const b = await cardBlob(r); const f = new File([b], 'mongkok-avalon.png', { type: 'image/png' });
       if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: '旺角阿瓦隆', text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
-      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'mongkok-avalon.png'; a.click();
+      if (IS_IOS) { closeModal(); return saveCard(r, true); }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'mongkok-avalon.png'; document.body.appendChild(a); a.click(); a.remove();
       toast('海報已儲存，請打開 Instagram 發佈（限時動態或貼文）');
     };
     $('#sys', el).onclick = async () => {
@@ -1008,6 +1098,95 @@ function shareSheet(r) {
         else { await navigator.clipboard.writeText(url); toast('此瀏覽器不支援系統分享，已複製連結'); }
       } catch (e) { if (e.name !== 'AbortError') toast('分享未完成'); }
     };
+  });
+}
+
+// ================= 9:16 story share image (IG Story / Threads) =================
+async function makeStory(r) {
+  const load = (src) => new Promise(res => { if (!src) return res(null); const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+  const W = 1080, H = 1920; const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+  const st = myStats || {}; const me = r && r.myId ? (r.players || []).find(p => p.id === r.myId) : null;
+  const meP = me || { ...profile, id: profile.id }; const early = r && r.winner === 'none';
+  const won = !!(r && me && !early && sideOf(me) === r.winner); const good = r ? r.winner === 'good' : true;
+  const accent = !r ? '#7b5cff' : early ? '#7a808c' : good ? '#2f6fe8' : '#e23a52';
+  const rr = (X, Y, w, h, rad) => { x.beginPath(); x.roundRect ? x.roundRect(X, Y, w, h, rad) : x.rect(X, Y, w, h); };
+  const ctr = (s, y, font, col) => { x.font = font; x.fillStyle = col; x.textAlign = 'center'; x.fillText(s, W / 2, y); };
+  // background
+  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, !r ? '#efe9ff' : good && !early ? '#e7efff' : early ? '#eef0f4' : '#ffe9ec'); g.addColorStop(.55, '#ffffff'); g.addColorStop(1, '#fff7e6');
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.save(); x.globalAlpha = .55; for (let i = 0; i < 70; i++) { const sx = (i * 397) % W, sy = (i * 761) % H, s = 3 + (i % 5) * 2; x.fillStyle = i % 3 ? '#ffd76a' : '#c9b8ff'; x.beginPath(); x.moveTo(sx, sy - s * 2); x.lineTo(sx + s / 2, sy - s / 2); x.lineTo(sx + s * 2, sy); x.lineTo(sx + s / 2, sy + s / 2); x.lineTo(sx, sy + s * 2); x.lineTo(sx - s / 2, sy + s / 2); x.lineTo(sx - s * 2, sy); x.lineTo(sx - s / 2, sy - s / 2); x.fill(); } x.restore();
+  // header
+  const [logo, qr] = await Promise.all([load('/img/amigos.webp'), load('/api/qr?text=' + encodeURIComponent(r ? replayUrl(r) : (PUBLIC_ORIGIN || location.origin)))]);
+  if (logo) x.drawImage(logo, W / 2 - 230, 80, 120, 96);
+  x.textAlign = 'left'; x.font = '900 72px sans-serif'; x.fillStyle = '#1f2633'; x.fillText('旺角阿瓦隆', W / 2 - 92, 150);
+  x.font = '600 26px sans-serif'; x.fillStyle = '#8a909c'; x.fillText('M O N G K O K   A V A L O N', W / 2 - 88, 190);
+  // result banner
+  let y = 260;
+  x.save(); x.shadowColor = 'rgba(30,40,80,.12)'; x.shadowBlur = 40; x.shadowOffsetY = 10; x.fillStyle = '#fff'; rr(70, y, W - 140, r ? 1000 : 820, 48); x.fill(); x.restore();
+  x.save(); rr(70, y, W - 140, 170, 48); x.clip(); const bg2 = x.createLinearGradient(70, 0, W - 70, 0); bg2.addColorStop(0, accent); bg2.addColorStop(1, !r ? '#b18cff' : good && !early ? '#6aa0ff' : early ? '#a3a8b3' : '#ff7a8c'); x.fillStyle = bg2; x.fillRect(70, y, W - 140, 170); x.restore();
+  ctr(!r ? '我的戰績' : early ? '提前結束' : good ? '藍方勝利' : '紅方勝利', y + 100, '900 76px sans-serif', '#fff');
+  ctr(!r ? `${st.played || 0} 場 · 勝率 ${pct(st.won, st.played)}%` : `${r.n} 人局${r.room ? ' · 房間 ' + r.room : ''}`, y + 148, '600 30px sans-serif', 'rgba(255,255,255,.92)');
+  y += 230;
+  // avatar + pendant
+  const rad = 130, cx = W / 2, cy = y + rad + 30; const ov = rad * 2 / 0.6;
+  if (PD_BACK[meP.pendant]) { const bi = await load(`/img/pd/${meP.pendant}_b.webp`); if (bi) x.drawImage(bi, cx - ov / 2, cy - ov / 2, ov, ov); }
+  x.save(); x.beginPath(); x.arc(cx, cy, rad, 0, 6.2832); x.fillStyle = meP.bg || '#f3d9a4'; x.fill(); x.clip(); const im = await load(photoSrc(meP)); if (im) x.drawImage(im, cx - rad, cy - rad, rad * 2, rad * 2); x.restore();
+  if (PD_IMG[meP.pendant]) { const pi = await load(`/img/pd/${meP.pendant}.webp`); if (pi) x.drawImage(pi, cx - ov / 2, cy - ov / 2, ov, ov); }
+  y = cy + rad + 70; ctr(String(meP.name || '騎士').slice(0, 10), y, '800 54px sans-serif', '#1f2633');
+  if (r && me) {
+    y += 64; const rn = roleN(me.role); const side = sideOf(me);
+    x.font = '700 34px sans-serif'; const tw = x.measureText(rn).width + 60; x.fillStyle = side === 'good' ? '#e6efff' : '#ffe6ea'; rr(W / 2 - tw / 2 - 90, y - 44, tw, 60, 30); x.fill();
+    x.fillStyle = side === 'good' ? '#2f6fe8' : '#e23a52'; x.textAlign = 'center'; x.fillText(rn, W / 2 - 90, y - 3);
+    const tag = early ? '不計勝負' : won ? '勝利' : '落敗'; x.fillStyle = early ? '#eef0f4' : won ? '#fff3cf' : '#f1f2f5'; rr(W / 2 + tw / 2 - 70, y - 44, 160, 60, 30); x.fill();
+    x.fillStyle = early ? '#7a808c' : won ? '#b07a00' : '#7a808c'; x.fillText(tag, W / 2 + tw / 2 + 10, y - 3);
+    if (r.mvp === me.id) { y += 70; ctr('🏅 本局 MVP', y, '800 40px sans-serif', '#d29a00'); }
+    // mission timeline
+    y += 90; ctr('任務結果', y, '700 30px sans-serif', '#8a909c'); y += 40;
+    const qs = (r.quests || []).slice(0, 5); const gap = 150, x0 = W / 2 - gap * 2;
+    for (let i = 0; i < 5; i++) { const q = qs[i]; const qx = x0 + i * gap, qy = y + 60;
+      if (i < 4) { x.strokeStyle = '#e3e6ef'; x.lineWidth = 6; x.beginPath(); x.moveTo(qx + 50, qy); x.lineTo(qx + gap - 50, qy); x.stroke(); }
+      x.beginPath(); x.arc(qx, qy, 48, 0, 6.2832); x.fillStyle = !q ? '#f1f2f5' : q.success ? '#2f6fe8' : '#e23a52'; x.fill();
+      x.font = '900 42px sans-serif'; x.fillStyle = q ? '#fff' : '#b9bdc8'; x.textAlign = 'center'; x.fillText(!q ? String(i + 1) : q.success ? '✓' : '✗', qx, qy + 15); }
+    y += 150;
+  }
+  // stats box
+  y = Math.max(y + 40, r ? 1330 : 1150);
+  const kp = [['總場數', String(st.played || 0)], ['勝率', pct(st.won, st.played) + '%'], ['MVP', String(st.mvp || 0)]];
+  const bw = (W - 140 - 40) / 3;
+  kp.forEach(([k, v], i) => { const bx = 70 + i * (bw + 20); x.fillStyle = '#ffffff'; x.save(); x.shadowColor = 'rgba(30,40,80,.08)'; x.shadowBlur = 24; rr(bx, y, bw, 170, 32); x.fill(); x.restore();
+    x.textAlign = 'center'; x.font = '900 60px sans-serif'; x.fillStyle = i === 2 ? '#d29a00' : accent; x.fillText(v, bx + bw / 2, y + 90); x.font = '600 28px sans-serif'; x.fillStyle = '#8a909c'; x.fillText(k, bx + bw / 2, y + 138); });
+  // footer: QR + url + credit
+  const fy = H - 300; if (qr) { x.fillStyle = '#fff'; rr(110, fy, 210, 210, 24); x.fill(); x.drawImage(qr, 125, fy + 15, 180, 180); }
+  x.textAlign = 'left'; x.font = '800 40px sans-serif'; x.fillStyle = '#1f2633'; x.fillText(r ? '掃碼睇完整覆盤' : '一齊嚟玩阿瓦隆！', 360, fy + 80);
+  x.font = '600 28px sans-serif'; x.fillStyle = '#5d6472'; x.fillText((PUBLIC_ORIGIN || location.origin).replace(/^https?:\/\//, ''), 360, fy + 130);
+  x.font = '600 26px sans-serif'; x.fillStyle = '#a0a6b2'; x.fillText('by Amigosparty', 360, fy + 180);
+  return c;
+}
+async function storySheet(r) {
+  openModal('<h2>分享到 IG / Threads</h2><div class="center muted">生成圖片中…</div>');
+  const c = await makeStory(r); const blob = await new Promise(res => c.toBlob(res, 'image/png')); c.width = c.height = 0;
+  if (window.__storyUrl) URL.revokeObjectURL(window.__storyUrl); const url = window.__storyUrl = URL.createObjectURL(blob);
+  const file = new File([blob], 'mongkok-avalon-story.png', { type: 'image/png' });
+  const link = r ? replayUrl(r) : (PUBLIC_ORIGIN || location.origin);
+  const text = r ? `旺角阿瓦隆｜${r.winner === 'none' ? '提前結束' : r.winner === 'good' ? '藍方勝利' : '紅方勝利'}！${r.n} 人局戰報` : `我喺旺角阿瓦隆玩咗 ${myStats.played || 0} 場，勝率 ${pct(myStats.won, myStats.played)}%！`;
+  const canFiles = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+  openModal(`<h2>分享到 IG / Threads</h2><img src="${url}" alt="" style="display:block;width:62%;margin:0 auto;border-radius:14px;box-shadow:0 6px 20px rgba(30,40,80,.15)">
+    <div class="share-grid" style="margin-top:12px">
+      <button type="button" class="sh-i" id="s_ig"><span style="background:linear-gradient(45deg,#f9ce34,#ee2a7b,#6228d7)">IG</span>Instagram 限時動態</button>
+      <button type="button" class="sh-i" id="s_th"><span style="background:#111">@</span>Threads</button>
+      <button type="button" class="sh-i" id="s_sys"><span style="background:#b8892f">⋯</span>分享…</button>
+      <button type="button" class="sh-i" id="s_dl"><span style="background:#2b3a6e">💾</span>儲存圖片</button></div>
+    <button type="button" class="btn ghost" id="cc">關閉</button>`, el => {
+    const save = () => { if (IS_IOS && canFiles) return navigator.share({ files: [file] }).catch(() => {}); if (IS_IOS) return toast('長按上面張圖 →「加入相片」'); const a = document.createElement('a'); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); toast('圖片已儲存'); };
+    $('#cc', el).onclick = closeModal;
+    $('#s_dl', el).onclick = save;
+    $('#s_sys', el).onclick = async () => { if (canFiles) { try { await navigator.share({ files: [file], title: '旺角阿瓦隆', text: text + ' ' + link }); } catch (e) {} } else if (navigator.share) navigator.share({ title: '旺角阿瓦隆', text, url: link }).catch(() => {}); else save(); };
+    $('#s_ig', el).onclick = async () => { // share sheet with the PNG → user picks Instagram (Story); else save + open the IG story camera
+      if (canFiles) { try { await navigator.share({ files: [file] }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+      save(); toast('圖片已儲存，喺 Instagram 限時動態揀返呢張相'); setTimeout(() => { location.href = 'instagram-stories://share'; }, 600); };
+    $('#s_th', el).onclick = async () => {
+      if (canFiles) { try { await navigator.share({ files: [file], text: text + ' ' + link }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+      window.open(`https://www.threads.net/intent/post?text=${encodeURIComponent(text + ' ' + link)}`, '_blank', 'noopener'); };
   });
 }
 async function posterDialog() { return saveCard(window.__lastRecord, true); }
@@ -1022,8 +1201,10 @@ document.addEventListener('click', async (e) => {
     case 'about': return openModal(`<h2>關於</h2><div class="center">${LOGO}<div class="name" style="margin-top:6px">旺角阿瓦隆</div><div class="small muted">版本 3.1 · 網頁版阿瓦隆多人遊戲</div><div class="small" style="margin-top:10px">by <b class="gold">Amigosparty</b></div><div class="tiny muted">Design by Teddy Design Limited</div><div class="tiny muted" style="margin-top:8px">原創美術 · 角色立繪、動物頭像、掛件皆為本作原創</div></div><button class="btn" id="ok">關閉</button>`, el2 => $('#ok', el2).onclick = closeModal);
     case 'cfg': cfgOpen = true; openModal(cfgSheetHtml()); cfgOpen = true; return;
     case 'cfgclose': return closeModal();
-    case 'vetoinfo': { const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards); return openModal(`<h2>回避卡</h2><div class="center big">🛡️</div><div class="center name">${vc == null ? '–' : vc} / 10</div><p class="small muted center">每贏一局 +1 張（上限 10 張），永久保存在帳號。房間開啟「回避卡」時，投票階段身為隊員可用一張退出隊伍，本次組隊作廢且不計否決。</p><button class="btn" id="ok">知道了</button>`, el2 => $('#ok', el2).onclick = closeModal); }
-    case 'cardback': { const k = el.dataset.k; const c = CARDBACKS.find(x => x[0] === k); if (playedTotal() < c[2]) return toast(`再玩 ${c[2] - playedTotal()} 場即可解鎖`); skinSel._cardback = k; LS.setItem('cc.skins', JSON.stringify(skinSel)); api('/api/me', { method: 'PUT', body: JSON.stringify({ skins: skinSel }) }).catch(() => {}); return render(); }
+    case 'emote': return toggleEmotes(el);
+    case 'vetoinfo': { const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards); return openModal(`<div class="vuse"><img src="/img/veto.webp" alt="回避卡" width="150" height="200"></div><div class="center name">${vc == null ? '–' : vc} / 10</div><p class="small muted center">每贏一局 +1 張（上限 10 張），永久保存在帳號。房間開啟「回避卡」時，投票階段身為隊員可用一張退出隊伍，本次組隊作廢且不計否決。</p><button class="btn" id="ok">知道了</button>`, el2 => $('#ok', el2).onclick = closeModal); }
+    case 'shiny': { if (mvpTotal() < 10) return toast('達成「10次MVP」即可解鎖'); skinSel._shiny = !skinSel._shiny; LS.setItem('cc.skins', JSON.stringify(skinSel)); api('/api/me', { method: 'PUT', body: JSON.stringify({ skins: skinSel }) }).catch(() => {}); return render(); }
+    case 'cardback': { const k = el.dataset.k; const c = CARDBACKS.find(x => x[0] === k); if (!unlockOk(c[2], c[3])) return toast(`${needText(c[2], c[3])}即可解鎖`); skinSel._cardback = k; LS.setItem('cc.skins', JSON.stringify(skinSel)); api('/api/me', { method: 'PUT', body: JSON.stringify({ skins: skinSel }) }).catch(() => {}); return render(); }
     case 'sharecard': return shareSheet(window.__lastRecord);
     case 'savecard': return saveCard(window.__lastRecord);
     case 'create': return ensureName(createRoom);
@@ -1107,7 +1288,9 @@ document.addEventListener('click', async (e) => {
     case 'assassinate': { const id = [...selected][0]; if (id && confirm(`確定刺殺 ${P(id).name}？`)) { const r = await act('assassinate', { id }); if (r.ok) selected = new Set(); } return; }
     case 'detail': return go('detail', { gid: el.dataset.g, from: 'history' });
     case 'poster': return posterDialog();
-    case 'skin': { const r = el.dataset.r, s = el.dataset.s; const need = SKINS.find(k => k.id === s).need; const played = (myStats.roles[r] || {}).played || 0;
+    case 'story': return storySheet(window.__lastRecord);
+    case 'storystats': return storySheet(null);
+    case 'skin': { const r = el.dataset.r, s = el.dataset.s; const need = SKINS.find(k => k.id === s).need; const played = rolePlayed(r);
       if (played < need) return toast(`再玩 ${need - played} 場${(ROLE[r]||{}).n||r}即可解鎖`); skinSel[r] = s; LS.setItem('cc.skins', JSON.stringify(skinSel)); api('/api/me',{method:'PUT',body:JSON.stringify({skins:skinSel})}).catch(()=>{}); return render(); }
     case 'rtab': rulesTab = el.dataset.v; if (rulesTab === 'round') demoStep = 0; return mountRules();
     case 'wk': wkRole = el.dataset.r; return mountRules();
@@ -1117,5 +1300,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
-window.__av = { get S() { return S; }, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
+window.__av = { makeStory, storySheet, get S() { return S; }, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

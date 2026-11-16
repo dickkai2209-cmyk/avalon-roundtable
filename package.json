@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "URL=http://127.0.0.1:3000 node test/sim.js && URL=http://127.0.0.1:3000 node test/twofail.js && URL=http://127.0.0.1:3000 node test/lobby.js && node test/resume.js"
+    "test": "URL=http://127.0.0.1:3000 node test/sim.js && DIFF=1 URL=http://127.0.0.1:3000 node test/sim.js && URL=http://127.0.0.1:3000 node test/twofail.js && URL=http://127.0.0.1:3000 node test/lobby.js && node test/resume.js"
   },
   "author": "Amigosparty",
   "license": "MIT",

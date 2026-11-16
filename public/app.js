@@ -791,9 +791,9 @@ function roundTable(seats, o = {}) {
   const n = seats.length;
   // Large ring: icon centres sit near the card edge so the middle stays open (5–12 seats).
   const R = n >= 12 ? 39 : n >= 10 ? 40 : 42;
-  // One numeral radius for the whole count, scaled from the icon ring. Not per seat.
-  // Far enough inside the icons that a top-seat name/pill still misses the shared circle.
-  const numR = Math.round(R * 0.38 * 10) / 10;
+  // One numeral radius for every seat: 0.55 of the avatar-centre ring (target ~190/350).
+  // Same angle as the icon, so avatar-centre to number-centre distance is identical.
+  const numR = Math.round(R * 0.55 * 10) / 10;
   const avSize = o.avSize || (n >= 12 ? 46 : n >= 10 ? 52 : 58);
   const st = seats.map((s, i) => {
     const a = (-90 + i * 360 / n) * Math.PI / 180; const x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a);

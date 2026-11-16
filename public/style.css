@@ -918,10 +918,11 @@ img,canvas,svg,video{max-width:100%}
 .card.tbl .rt{max-width:none;width:100%;margin:0 auto}
 .card.tbl .emote-btn{top:2px;right:2px;width:32px;height:32px}
 
-/* Occupied count is black; "/n" and 已就座 are smaller light grey. */
-.rt .table .ctr .seatcount b{font-size:32px;font-weight:800;color:#1a1d26;letter-spacing:0;line-height:1}
-.rt .table .ctr .seatcount b small{font-size:16px;font-weight:600;color:#c5c9d4;letter-spacing:0}
-.rt .table .ctr .seatcount span{font-size:13px;font-weight:500;color:#c5c9d4;margin-top:4px}
+/* Occupied count above 已就座, about a quarter smaller than the 32/16/13 pair. */
+.rt .table .ctr .seatcount{gap:1px}
+.rt .table .ctr .seatcount b{font-size:25px;font-weight:800;color:#1a1d26;letter-spacing:0;line-height:1}
+.rt .table .ctr .seatcount b small{font-size:13px;font-weight:600;color:#c5c9d4;letter-spacing:0}
+.rt .table .ctr .seatcount span{font-size:10px;font-weight:500;color:#c5c9d4;margin-top:1px}
 
 /* Anchor is the icon centre. Numeral is a small light-grey inner-ring label, not a bold badge. */
 .rt .st{width:84px;margin-left:-42px;margin-top:calc(var(--av, 58px) / -2);overflow:visible}
@@ -935,7 +936,15 @@ img,canvas,svg,video{max-width:100%}
     calc(var(--iny) * (var(--seat-r) - var(--num-r)) * 1cqi)
   );
 }
-.rt .st .nm,.st-meta .nm{max-width:84px}
+/* Name box hugs the glyphs and stays centred, so the shared number ring is not blocked by an 84px label slab. */
+.rt .st .nm,.st-meta .nm{width:max-content;max-width:76px;margin-left:auto;margin-right:auto;line-height:1}
+.rt .st.empty .nm{margin-top:2px}
+/* Own name ~2px under the icon box; pills sit on the next line. Pendant stays unclipped. */
+.rt .st .av-wrap{display:flex;width:var(--av,58px);height:var(--av,58px);margin:0 auto;padding:0;line-height:0;align-items:center;justify-content:center;overflow:visible}
+.rt .st .st-meta{margin-top:2px;line-height:1}
+.rt .st .st-meta .nm{margin:0;line-height:1}
+.rt .st .st-pills{margin-top:0;line-height:1}
+.rt .st .hostpill,.rt .st .mepill{margin:0;line-height:11px;padding-top:0;padding-bottom:0}
 
 /* Profile colour row: inset so the first/last circle and the blue ring are fully inside the scroller. */
 .pe-body > .swatches{margin:8px 0 2px}

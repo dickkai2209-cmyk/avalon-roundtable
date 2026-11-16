@@ -237,8 +237,11 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         const icon = (s.querySelector('.av') || s.querySelector('.av-empty')).getBoundingClientRect();
         const no = s.querySelector('.no').getBoundingClientRect();
         const nm = (s.querySelector('.nm') || s.querySelector('.st-meta')).getBoundingClientRect();
-        const pill = s.querySelector('.hostpill, .mepill');
-        const pr = pill ? pill.getBoundingClientRect() : null;
+        const pills = [...s.querySelectorAll('.hostpill, .mepill')].map(el => el.getBoundingClientRect());
+        const pr = pills.length ? {
+          left: Math.min(...pills.map(r => r.left)), top: Math.min(...pills.map(r => r.top)),
+          right: Math.max(...pills.map(r => r.right)), bottom: Math.max(...pills.map(r => r.bottom))
+        } : null;
         const ncs = getComputedStyle(s.querySelector('.no'));
         return {
           seat: s.querySelector('.no').textContent,
@@ -308,6 +311,20 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         const dists = ordered.map(s => { const p = nc(s); return Math.hypot(p.x - cx, p.y - cy); });
         const spread = Math.max(...dists) - Math.min(...dists);
         assert(spread <= 2.5, tag + '/' + n + ' numerals share one radius (spread ' + spread.toFixed(2) + 'px; ' + dists.map(d => d.toFixed(1)).join(',') + '; rt ' + m.rt.w.toFixed(0) + 'x' + m.rt.h.toFixed(0) + ')');
+        const iconD = ordered.map(s => Math.hypot((s.icon.l + s.icon.w / 2) - cx, (s.icon.t + s.icon.h / 2) - cy));
+        const gaps = ordered.map((s, i) => iconD[i] - dists[i]);
+        const gapSpread = Math.max(...gaps) - Math.min(...gaps);
+        const ratio = dists.reduce((a, b) => a + b, 0) / iconD.reduce((a, b) => a + b, 0);
+        assert(gapSpread <= 2.5, tag + '/' + n + ' avatar-to-number distance is the same (spread ' + gapSpread.toFixed(2) + 'px)');
+        assert(ratio > 0.50 && ratio < 0.60, tag + '/' + n + ' number ring is ~0.55 of the avatar ring (' + ratio.toFixed(3) + ')');
+        const host = ordered.find(s => s.pill) || ordered[0];
+        const nameGap = host.nm.t - (host.icon.t + host.icon.h);
+        assert(nameGap >= 1 && nameGap <= 6, tag + '/' + n + ' name sits ' + nameGap.toFixed(1) + 'px under the avatar');
+        if (host.pill) {
+          const pillGap = host.pill.t - host.nm.b;
+          assert(pillGap >= 0 && pillGap <= 5, tag + '/' + n + ' pills sit ' + pillGap.toFixed(1) + 'px under the name');
+        }
+        assert(m.count.bSize >= 22 && m.count.bSize <= 27 && m.count.sSize <= 14 && m.count.bSize > m.count.sSize + 8, tag + ' centre count is smaller but the occupied digit stays larger (' + m.count.bSize + '/' + m.count.sSize + ')');
         const ang = (s) => { const p = nc(s); return Math.atan2(p.y - cy, p.x - cx); };
         const norm = (d) => { while (d <= -Math.PI) d += Math.PI * 2; while (d > Math.PI) d -= Math.PI * 2; return d; };
         const step = Math.PI * 2 / n;

@@ -381,7 +381,33 @@ function flush() {
   clearTimeout(saveTimer);
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); const copy = { ...mem, users: mem.users.map(u => { const { photo, ...r } = u; return r; }) }; fs.writeFileSync(JSON_FILE, JSON.stringify(copy)); } catch (e) { console.error('flush', e.message); }
 }
-module.exports = { flush, saveRoom, deleteRoom, loadRooms,
+
+// ---- one-off cleanup of automated-test guests (strict key patterns that real clients never generate) ----
+const TEST_KEY_SQL = `(guest_key ~ '^(sim|tf|lb|rs|smk|rvb|uibot)[a-z0-9]+$' AND username IS NULL AND google_sub IS NULL)
+  OR (guest_key ~ '^acct[a-z0-9]{8}xx$' AND username ~ '^u[a-z0-9]{6}$' AND google_sub IS NULL)`;
+const TEST_KEY_RE = /^(sim|tf|lb|rs|smk|rvb|uibot)[a-z0-9]+$/;
+async function purgeTestData() {
+  if (mode === 'pg') {
+    const ids = (await pool.query(`SELECT id FROM users WHERE ${TEST_KEY_SQL}`)).rows.map(r => r.id);
+    if (!ids.length) return { users: 0, games: 0, rooms: 0 };
+    const g = await pool.query(`DELETE FROM games WHERE pids <@ $1::text[]`, [ids]);
+    let rooms = 0;
+    for (const r of (await pool.query('SELECT code, data FROM rooms_state')).rows) {
+      const pids = [...(r.data.members || []), ...(r.data.seats || []).filter(Boolean).map(s => s.pid)];
+      if (pids.length && pids.every(x => ids.includes(x))) { await pool.query('DELETE FROM rooms_state WHERE code=$1', [r.code]); rooms++; }
+    }
+    const u = await pool.query(`DELETE FROM users WHERE id = ANY($1::text[])`, [ids]);
+    return { users: u.rowCount, games: g.rowCount, rooms, roomCodes: [] };
+  }
+  const isTest = (u) => !u.google_sub && ((!u.username && TEST_KEY_RE.test(u.guest_key || '')) || (/^acct[a-z0-9]{8}xx$/.test(u.guest_key || '') && /^u[a-z0-9]{6}$/.test(u.username || '')));
+  const ids = new Set(mem.users.filter(isTest).map(u => u.id));
+  if (!ids.size) return { users: 0, games: 0, rooms: 0 };
+  const g0 = mem.games.length; mem.games = mem.games.filter(g => !(g.pids || []).every(x => ids.has(x)));
+  let rooms = 0; for (const [code, r] of Object.entries(mem.rooms || {})) { const pids = [...(r.members || []), ...(r.seats || []).filter(Boolean).map(s => s.pid)]; if (pids.length && pids.every(x => ids.has(x))) { delete mem.rooms[code]; rooms++; } }
+  mem.users = mem.users.filter(u => !ids.has(u.id)); mem.sessions = mem.sessions.filter(s => !ids.has(s.user_id || s.userId)); for (const id of ids) delete mem.stats[id];
+  saveJson(); return { users: ids.size, games: g0 - mem.games.length, rooms };
+}
+module.exports = { purgeTestData, flush, saveRoom, deleteRoom, loadRooms,
   init, mode: () => mode, pubUser,
   getUser, getUserByUsername, getUserByGuestKey, getUserByPubId, getUserByToken,
   createGuest, updateUser, setPhoto, getPhoto,

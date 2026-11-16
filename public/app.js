@@ -46,7 +46,7 @@ const PENDANT_ICON = { none:'', crown:'👑', bow:'🎀', halo:'✨', flower:'�
 const PHASE = { team: '組隊', vote: '投票', sword: '授予王者之劍', quest: '任務', swordflip: '王者之劍', lady: '湖中仙女', assassin: '刺殺梅林', end: '遊戲結束' };
 const TEAM_SIZES = { 5: [2, 3, 2, 3, 3], 6: [2, 3, 4, 3, 4], 7: [2, 3, 3, 4, 4], 8: [3, 4, 4, 5, 5], 9: [3, 4, 4, 5, 5], 10: [3, 4, 4, 5, 5], 11: [3, 4, 4, 5, 5], 12: [3, 4, 5, 5, 5] };
 const LOGO = `<img class="logo amigos" src="/img/amigos.webp" alt="Amigos' Party" width="120" height="96" decoding="async">`;
-const ROLE_ART = { lancelot_evil: 'assassin' };
+const ROLE_ART = {};
 const RN = { merlin:'梅林', percival:'派西維爾', servant:'忠臣', lancelot_good:'蘭斯洛特（正）', assassin:'刺客', morgana:'莫甘娜', mordred:'莫德雷德', oberon:'奧伯倫', minion:'爪牙', lancelot_evil:'蘭斯洛特（邪）' };
 
 // ================= identity =================
@@ -861,92 +861,106 @@ const sideOf = (p) => (ROLE[p.role] || {}).side || p.side || 'good';
 const roleN = (k) => (ROLE[k] || {}).n || RN[k] || k;
 async function makePoster(r, personal = true) {
   const load = (src) => new Promise(res => { if (!src) return res(null); const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
-  const ps = r.players || []; const n = ps.length; const W = 750; const pad = 40;
+  const ps = r.players || []; const n = ps.length; const W = 750; const pad = 36;
   const me = personal && r.myId ? ps.find(p => p.id === r.myId) : null; const sc = r.scores || {};
-  const cols = n > 10 ? 4 : (n > 8 ? 5 : 4); const cellW = (W - pad * 2) / cols, cellH = 190; const gridRows = Math.ceil(n / cols);
+  const cols = n > 10 ? 4 : (n > 8 ? 5 : 4); const cellW = (W - pad * 2 - 32) / cols, cellH = 170; const gridRows = Math.ceil(n / cols);
   const props = []; (r.rounds || []).forEach((rs, ri) => rs.forEach((pp, k) => props.push({ ri, k, pp, last: k === rs.length - 1 })));
-  const chip = Math.min(34, Math.floor((W - pad * 2 - 150) / n) - 4); const rowH = chip + 22;
+  const chip = Math.min(34, Math.floor((W - pad * 2 - 150) / n) - 4); const rowH = chip + 20;
   const roundsN = (r.rounds || []).filter(x => x.length).length;
-  const H = 300 + (me ? 170 : 0) + 70 + gridRows * cellH + 70 + props.length * rowH + roundsN * 40 + 280;
+  const H = 330 + (me ? 180 : 0) + 90 + gridRows * cellH + 110 + props.length * rowH + roundsN * 40 + 300;
   const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
   const rr = (X, Y, w, h, rad) => { x.beginPath(); x.roundRect ? x.roundRect(X, Y, w, h, rad) : x.rect(X, Y, w, h); };
-  const good = r.winner === 'good';
-  let g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#131f4a'); g.addColorStop(1, '#070b20'); x.fillStyle = g; x.fillRect(0, 0, W, H);
-  x.strokeStyle = '#d8b25e'; x.lineWidth = 3; x.strokeRect(14, 14, W - 28, H - 28);
-  // header
-  g = x.createLinearGradient(0, 30, W, 260); g.addColorStop(0, good ? '#2b56b8' : '#a32638'); g.addColorStop(1, good ? '#18306e' : '#5c1020');
-  x.fillStyle = g; rr(pad, 36, W - pad * 2, 230, 22); x.fill();
-  const hero = ps.find(p => p.id === r.mvp && sideOf(p) === r.winner) || ps.find(p => sideOf(p) === r.winner);
-  const drawAv = async (p, cx, cy, rad) => {
+  const C = { bg: '#f4f6fa', card: '#ffffff', line: '#e6e9ef', ink: '#1f2633', sub: '#5d6472', mute: '#8a909c', blue: '#2f6fe8', red: '#e23a52', green: '#2fa866', gold: '#f5b800' };
+  const early = r.winner === 'none'; const good = r.winner === 'good';
+  const accent = early ? '#7a808c' : good ? C.blue : C.red;
+  const card = (Y, h) => { x.save(); x.shadowColor = 'rgba(20,30,60,.08)'; x.shadowBlur = 18; x.shadowOffsetY = 4; x.fillStyle = C.card; rr(pad, Y, W - pad * 2, h, 22); x.fill(); x.restore(); };
+  x.fillStyle = C.bg; x.fillRect(0, 0, W, H);
+  // header card with team-colour band
+  card(28, 270);
+  x.save(); rr(pad, 28, W - pad * 2, 270, 22); x.clip();
+  let g = x.createLinearGradient(pad, 28, W - pad, 28); g.addColorStop(0, early ? '#eef0f4' : good ? '#e8f0ff' : '#ffecef'); g.addColorStop(1, '#ffffff'); x.fillStyle = g; x.fillRect(pad, 28, W - pad * 2, 270);
+  x.fillStyle = accent; x.fillRect(pad, 28, W - pad * 2, 8); x.restore();
+  const logo = await load('/img/amigos.webp');
+  const hero = early ? null : (ps.find(p => p.id === r.mvp && sideOf(p) === r.winner) || ps.find(p => sideOf(p) === r.winner));
+  const drawAv = async (p, cx, cy, rad, ring) => {
     x.save(); x.beginPath(); x.arc(cx, cy, rad, 0, Math.PI * 2); x.fillStyle = p.bg || '#f3d9a4'; x.fill(); x.clip();
     const im = await load(photoSrc(p)); if (im) x.drawImage(im, cx - rad, cy - rad, rad * 2, rad * 2); x.restore();
-    if (PD_IMG[p.pendant]) { const pi = await load(`/img/pd/${p.pendant}.webp`); if (pi) { const s = rad * (p.pendant === 'halo' ? 1.8 : p.pendant === 'crown' ? 1.2 : 0.95); const oy = p.pendant === 'bow' ? cy - rad * 1.05 : cy - rad * 1.55; const ox = p.pendant === 'bow' ? cx + rad * 0.2 : cx - s / 2; x.drawImage(pi, ox, oy, s, s); } }
+    if (ring) { x.strokeStyle = ring; x.lineWidth = Math.max(3, rad / 12); x.beginPath(); x.arc(cx, cy, rad + 1, 0, Math.PI * 2); x.stroke(); }
+    if (PD_IMG[p.pendant]) { const pi = await load(`/img/pd/${p.pendant}.webp`); if (pi) { const s = rad * (p.pendant === 'halo' ? 1.8 : p.pendant === 'crown' ? 1.2 : 0.95); const hh = s * pi.height / pi.width; const oy = p.pendant === 'bow' ? cy - rad * 1.05 : cy - rad - hh * 0.55; const ox = p.pendant === 'bow' ? cx + rad * 0.2 : cx - s / 2; x.drawImage(pi, ox, oy, s, hh); } }
   };
-  if (hero) { x.strokeStyle = '#f3d68f'; x.lineWidth = 4; await drawAv(hero, pad + 90, 130, 56); x.beginPath(); x.arc(pad + 90, 130, 58, 0, Math.PI * 2); x.stroke(); }
-  x.textAlign = 'left'; x.fillStyle = '#fff'; x.font = 'bold 52px sans-serif'; x.fillText(good ? '藍方勝利' : '紅方勝利', pad + 170, 130);
-  x.font = '20px sans-serif'; x.fillStyle = 'rgba(255,255,255,.88)';
+  if (hero) await drawAv(hero, pad + 92, 150, 58, accent);
+  else { x.fillStyle = '#eef0f4'; x.beginPath(); x.arc(pad + 92, 150, 58, 0, Math.PI * 2); x.fill(); x.font = '56px sans-serif'; x.textAlign = 'center'; x.fillText('🏳️', pad + 92, 170); }
+  if (logo) x.drawImage(logo, W - pad - 108, 46, 90, 72);
+  x.textAlign = 'left'; x.fillStyle = accent; x.font = 'bold 54px sans-serif'; x.fillText(early ? '提前結束' : good ? '藍方勝利' : '紅方勝利', pad + 176, 150);
+  x.font = '20px sans-serif'; x.fillStyle = C.sub;
   const merlin = ps.find(p => p.role === 'merlin'); const at = r.assassinTarget && ps.find(p => p.id === r.assassinTarget);
-  const sub = at ? (at.role === 'merlin' ? `刺客刺中梅林（${at.seat}號 ${at.name}）` : `刺客刺中的是 ${at.seat}號${roleN(at.role)}·${at.name}　梅林（${merlin ? merlin.seat : '?'}號）安然無恙`) : r.reason;
-  const wrap = (txt, X, Y, maxW, lh) => { let line = ''; for (const ch of Array.from(txt)) { if (x.measureText(line + ch).width > maxW) { x.fillText(line, X, Y); line = ch; Y += lh; } else line += ch; } x.fillText(line, X, Y); return Y; };
-  wrap(sub, pad + 170, 168, W - pad * 2 - 190, 26);
-  x.font = '18px sans-serif'; x.fillStyle = 'rgba(255,255,255,.7)'; x.fillText(`${n} 人局 · ${fmtTime(r.endedAt || Date.now())}${r.room ? ' · 房間 ' + r.room : ''}`, pad + 170, 240);
-  x.textAlign = 'right'; x.font = '26px sans-serif'; x.fillText((r.quests || []).map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join(''), W - pad - 20, 72);
-  let y = 300;
+  const sub = early ? '房主提前結束本局 · 不計勝負' : at ? (at.role === 'merlin' ? `刺客刺中梅林（${at.seat}號 ${at.name}）` : `刺客刺中的是 ${at.seat}號${roleN(at.role)}·${at.name}　梅林（${merlin ? merlin.seat : '?'}號）安然無恙`) : r.reason;
+  const wrap = (txt, X, Y, maxW, lh) => { let line = ''; for (const ch of Array.from(String(txt || ''))) { if (x.measureText(line + ch).width > maxW) { x.fillText(line, X, Y); line = ch; Y += lh; } else line += ch; } x.fillText(line, X, Y); return Y; };
+  wrap(sub, pad + 176, 190, W - pad * 2 - 200, 26);
+  x.font = '18px sans-serif'; x.fillStyle = C.mute; x.fillText(`${n} 人局 · ${fmtTime(r.endedAt || Date.now())}${r.room ? ' · 房間 ' + r.room : ''}`, pad + 176, 262);
+  // quest dots
+  (r.quests || []).forEach((q, i) => { const cx = W - pad - 30 - (4 - i) * 30, cy = 262 - 6; x.beginPath(); x.arc(cx, cy, 11, 0, Math.PI * 2); x.fillStyle = q ? (q.success ? C.blue : C.red) : '#e3e6ec'; x.fill(); });
+  let y = 320;
   // personal
   if (me) {
-    x.fillStyle = 'rgba(255,255,255,.06)'; rr(pad, y, W - pad * 2, 150, 18); x.fill();
-    await drawAv(me, pad + 70, y + 75, 48);
-    const won = sideOf(me) === r.winner; x.textAlign = 'left'; x.fillStyle = '#f5ecd8'; x.font = 'bold 28px sans-serif'; x.fillText(me.name, pad + 135, y + 55);
-    x.font = '20px sans-serif'; x.fillStyle = sideOf(me) === 'good' ? '#9cc0ff' : '#ff9aa8'; x.fillText(`${me.seat}號 · ${roleN(me.role)}`, pad + 135, y + 88);
-    x.fillStyle = won ? '#7ee2a8' : '#ff8b9c'; x.font = 'bold 22px sans-serif'; x.fillText(won ? '勝利' : '落敗', pad + 135, y + 122);
-    const ri = r.roleImg !== false ? await load(thumb(me.role)) : null; if (ri) { x.save(); rr(W - pad - 250, y + 15, 120, 120, 14); x.clip(); x.drawImage(ri, W - pad - 250, y + 15, 120, 120); x.restore(); }
-    x.textAlign = 'center'; x.fillStyle = '#f3d68f'; x.font = 'bold 40px sans-serif'; x.fillText(sc[me.id] ? `${sc[me.id].total}` : '–', W - pad - 65, y + 75);
-    x.font = '16px sans-serif'; x.fillText(r.mvp === me.id ? '🏅 MVP' : (sc[me.id] ? `第 ${sc[me.id].rank} 名` : '分數'), W - pad - 65, y + 108);
-    y += 170;
+    card(y, 160);
+    await drawAv(me, pad + 76, y + 80, 50, sideOf(me) === 'good' ? C.blue : C.red);
+    const won = !early && sideOf(me) === r.winner; x.textAlign = 'left'; x.fillStyle = C.ink; x.font = 'bold 28px sans-serif'; x.fillText(me.name, pad + 146, y + 60);
+    x.font = 'bold 20px sans-serif'; x.fillStyle = sideOf(me) === 'good' ? C.blue : C.red; x.fillText(`${me.seat}號 · ${roleN(me.role)}`, pad + 146, y + 94);
+    const tag = early ? '提前結束' : won ? '勝利' : '落敗'; x.font = 'bold 18px sans-serif'; const tw = x.measureText(tag).width + 24;
+    x.fillStyle = early ? '#eef0f4' : won ? '#e3f6ec' : '#ffecef'; rr(pad + 146, y + 108, tw, 32, 16); x.fill(); x.fillStyle = early ? C.sub : won ? C.green : C.red; x.fillText(tag, pad + 158, y + 130);
+    const ri = await load(thumb(me.role)); if (ri) { x.save(); rr(W - pad - 260, y + 20, 120, 120, 16); x.clip(); x.drawImage(ri, W - pad - 260, y + 20, 120, 120); x.restore(); }
+    x.textAlign = 'center'; x.fillStyle = C.ink; x.font = 'bold 44px sans-serif'; x.fillText(sc[me.id] ? `${sc[me.id].total}` : '–', W - pad - 70, y + 82);
+    x.font = '16px sans-serif'; x.fillStyle = C.mute; x.fillText(r.mvp === me.id ? '🏅 MVP' : (sc[me.id] ? `第 ${sc[me.id].rank} 名` : '分數'), W - pad - 70, y + 114);
+    y += 180;
   }
   // roles grid
-  x.textAlign = 'left'; x.fillStyle = '#f3d68f'; x.font = 'bold 26px sans-serif'; x.fillText('全員身份', pad, y + 30); y += 56;
+  const gridH = 70 + gridRows * cellH; card(y, gridH);
+  x.textAlign = 'left'; x.fillStyle = C.ink; x.font = 'bold 24px sans-serif'; x.fillText('全員身份', pad + 22, y + 42);
+  const gy = y + 66;
   for (let i = 0; i < n; i++) {
-    const p = ps[i]; const cx = pad + (i % cols) * cellW + cellW / 2, cy = y + Math.floor(i / cols) * cellH + 52;
-    await drawAv(p, cx, cy, 42);
-    if (p.id === r.assassinTarget) { x.strokeStyle = '#ff3b55'; x.lineWidth = 3; x.beginPath(); x.arc(cx + 30, cy - 30, 14, 0, Math.PI * 2); x.moveTo(cx + 12, cy - 30); x.lineTo(cx + 48, cy - 30); x.moveTo(cx + 30, cy - 48); x.lineTo(cx + 30, cy - 12); x.stroke(); }
-    const side = sideOf(p); const tag = roleN(p.role).replace('莫德雷德的', ''); x.font = 'bold 16px sans-serif'; const tw = x.measureText(tag).width + 18;
-    x.fillStyle = side === 'good' ? '#2f6be0' : '#d23a52'; rr(cx - tw / 2, cy + 50, tw, 26, 13); x.fill();
-    x.fillStyle = '#fff'; x.textAlign = 'center'; x.fillText(tag, cx, cy + 69);
-    x.fillStyle = '#e8e1cf'; x.font = '16px sans-serif'; x.fillText(`${p.seat}號 ${String(p.name).slice(0, 6)}${p.id === r.mvp ? ' 🏅' : ''}`, cx, cy + 102);
+    const p = ps[i]; const cx = pad + 16 + (i % cols) * cellW + cellW / 2, cy = gy + Math.floor(i / cols) * cellH + 46;
+    const side = sideOf(p);
+    await drawAv(p, cx, cy, 40, side === 'good' ? '#bcd2ff' : '#ffc2cb');
+    if (p.id === r.assassinTarget) { x.strokeStyle = C.red; x.lineWidth = 3; x.beginPath(); x.arc(cx + 30, cy - 30, 13, 0, Math.PI * 2); x.moveTo(cx + 13, cy - 30); x.lineTo(cx + 47, cy - 30); x.moveTo(cx + 30, cy - 47); x.lineTo(cx + 30, cy - 13); x.stroke(); }
+    const tag = roleN(p.role).replace('莫德雷德的', '').replace('亞瑟的', ''); x.font = 'bold 16px sans-serif'; const tw = x.measureText(tag).width + 18;
+    x.fillStyle = side === 'good' ? C.blue : C.red; rr(cx - tw / 2, cy + 48, tw, 26, 13); x.fill();
+    x.fillStyle = '#fff'; x.textAlign = 'center'; x.fillText(tag, cx, cy + 67);
+    x.fillStyle = C.sub; x.font = '16px sans-serif'; x.fillText(`${p.seat}號 ${String(p.name).slice(0, 6)}${p.id === r.mvp ? ' 🏅' : ''}`, cx, cy + 98);
   }
-  y += gridRows * cellH + 10;
+  y += gridH + 20;
   // mission record
-  x.textAlign = 'left'; x.fillStyle = '#f3d68f'; x.font = 'bold 26px sans-serif'; x.fillText('組隊記錄', pad, y + 30); y += 50;
-  let lastRi = -1;
-  for (const { ri, k, pp, last } of props) {
-    if (ri !== lastRi) { lastRi = ri; const q = (r.quests || [])[ri]; x.font = 'bold 19px sans-serif'; x.fillStyle = '#c9cfe6'; x.textAlign = 'left'; x.fillText(`任務 ${ri + 1}`, pad, y + 26);
-      if (q) { x.fillStyle = q.success ? '#4b8dff' : '#e5475d'; x.fillText(q.success ? `成功${q.fails ? `（${q.fails} 失敗）` : ''}` : `失敗（${q.fails} 張）`, pad + 90, y + 26); } y += 40; }
+  const recH = 70 + props.length * rowH + roundsN * 40 + 40; card(y, recH);
+  x.textAlign = 'left'; x.fillStyle = C.ink; x.font = 'bold 24px sans-serif'; x.fillText('組隊記錄', pad + 22, y + 42);
+  let ry = y + 60; let lastRi = -1;
+  for (const { ri, pp } of props) {
+    if (ri !== lastRi) { lastRi = ri; const q = (r.quests || [])[ri]; x.font = 'bold 19px sans-serif'; x.fillStyle = C.sub; x.textAlign = 'left'; x.fillText(`任務 ${ri + 1}`, pad + 22, ry + 26);
+      if (q) { x.fillStyle = q.success ? C.blue : C.red; x.fillText(q.success ? `成功${q.fails ? `（${q.fails} 失敗）` : ''}` : `失敗（${q.fails} 張）`, pad + 110, ry + 26); } ry += 40; }
     for (let i = 0; i < n; i++) {
-      const p = ps[i]; const cx = pad + 8 + i * (chip + 4) + chip / 2, cy = y + chip / 2 + 4; const v = pp.votes[p.id]; const tm = pp.team.includes(p.id);
-      x.beginPath(); x.arc(cx, cy, chip / 2, 0, Math.PI * 2); x.fillStyle = v === undefined ? '#333b5c' : (v ? '#2e9e62' : '#c83a4e'); x.fill();
-      if (tm) { x.strokeStyle = '#6fb0ff'; x.lineWidth = 3; x.stroke(); }
-      x.fillStyle = '#fff'; x.font = `bold ${Math.round(chip * 0.45)}px sans-serif`; x.textAlign = 'center'; x.fillText(String(i + 1), cx, cy + chip * 0.16);
+      const p = ps[i]; const cx = pad + 30 + i * (chip + 4) + chip / 2, cy = ry + chip / 2 + 4; const v = pp.votes[p.id]; const tm = pp.team.includes(p.id);
+      x.beginPath(); x.arc(cx, cy, chip / 2, 0, Math.PI * 2); x.fillStyle = v === undefined ? '#e3e6ec' : (v ? '#dff4e8' : '#ffe3e7'); x.fill();
+      x.strokeStyle = tm ? C.blue : (v === undefined ? '#d5d9e0' : v ? '#9fdcbc' : '#f5a9b5'); x.lineWidth = tm ? 3 : 1.5; x.stroke();
+      x.fillStyle = v === undefined ? C.mute : v ? '#1f7a4a' : '#b8293f'; x.font = `bold ${Math.round(chip * 0.45)}px sans-serif`; x.textAlign = 'center'; x.fillText(String(i + 1), cx, cy + chip * 0.16);
       if (pp.leader === p.id) { x.font = `${Math.round(chip * 0.5)}px sans-serif`; x.fillText('👑', cx, cy - chip / 2 + 2); }
     }
-    x.textAlign = 'right'; x.font = 'bold 18px sans-serif'; x.fillStyle = pp.approved ? '#7ee2a8' : '#ff8b9c'; x.fillText(pp.approved ? '通過' : '否決', W - pad, y + chip / 2 + 10);
-    y += rowH;
+    const lab = pp.approved ? '通過' : '否決'; x.font = 'bold 16px sans-serif'; const lw = x.measureText(lab).width + 20;
+    x.fillStyle = pp.approved ? '#e3f6ec' : '#ffecef'; rr(W - pad - 22 - lw, ry + chip / 2 - 10, lw, 28, 14); x.fill();
+    x.fillStyle = pp.approved ? C.green : C.red; x.textAlign = 'center'; x.fillText(lab, W - pad - 22 - lw / 2, ry + chip / 2 + 9);
+    ry += rowH;
   }
-  // legend + footer
-  y += 16; x.textAlign = 'left'; x.font = '15px sans-serif'; x.fillStyle = '#97a1c2'; x.fillText('綠＝贊成　紅＝反對　藍框＝隊員　👑＝隊長　⌖＝被刺殺', pad, y); y += 30;
+  x.textAlign = 'left'; x.font = '15px sans-serif'; x.fillStyle = C.mute; x.fillText('綠＝贊成　紅＝反對　藍框＝隊員　👑＝隊長　⌖＝被刺殺', pad + 22, y + recH - 22);
+  y += recH + 20;
+  // footer
+  card(y, 210);
   const qr = await load('/api/qr?text=' + encodeURIComponent(replayUrl(r)));
-  x.fillStyle = '#fff'; rr(pad, y, 170, 170, 14); x.fill(); if (qr) x.drawImage(qr, pad + 10, y + 10, 150, 150);
-  x.fillStyle = '#f3d68f'; x.font = 'bold 30px sans-serif'; x.fillText('旺角阿瓦隆', pad + 200, y + 60);
-  x.fillStyle = '#d8b25e'; x.font = '18px sans-serif'; x.fillText('MONGKOK AVALON · by Amigosparty', pad + 200, y + 92);
-  const lg = await load('/img/amigos.webp'); if (lg) { x.fillStyle = '#fff'; rr(W - pad - 120, y - 104, 120, 96, 12); x.fill(); x.drawImage(lg, W - pad - 110, y - 96, 100, 80); }
-  x.fillStyle = '#c9cfe6'; x.font = '18px sans-serif'; x.fillText('掃碼查看對局回放', pad + 200, y + 130);
-  x.fillStyle = '#7d87aa'; x.font = '14px sans-serif'; x.fillText(replayUrl(r).replace(/^https?:\/\//, ''), pad + 200, y + 156);
+  x.strokeStyle = C.line; x.lineWidth = 2; rr(pad + 20, y + 20, 170, 170, 14); x.stroke(); if (qr) x.drawImage(qr, pad + 30, y + 30, 150, 150);
+  x.textAlign = 'left'; x.fillStyle = C.ink; x.font = 'bold 32px sans-serif'; x.fillText('旺角阿瓦隆', pad + 214, y + 66);
+  x.fillStyle = C.mute; x.font = 'bold 15px sans-serif'; x.fillText('MONGKOK AVALON', pad + 214, y + 92);
+  x.fillStyle = C.sub; x.font = '18px sans-serif'; x.fillText('掃碼查看對局回放', pad + 214, y + 132);
+  x.fillStyle = C.mute; x.font = '14px sans-serif'; x.fillText(replayUrl(r).replace(/^https?:\/\//, ''), pad + 214, y + 158);
+  x.fillText('by Amigosparty · Design by Teddy Design Limited', pad + 214, y + 182);
+  if (logo) x.drawImage(logo, W - pad - 130, y + 60, 110, 88);
   return c;
-}
-async function renderCardPreview(r) {
-  const box = $('#cardprev'); if (!box) return;
-  const c = await makePoster(r, true); if (!$('#cardprev')) return;
-  window.__cardUrl = c.toDataURL('image/png'); $('#cardprev').innerHTML = `<img src="${window.__cardUrl}" alt="戰果卡">`;
 }
 async function cardBlob(r) { const c = await makePoster(r, true); return new Promise(res => c.toBlob(b => res(b), 'image/png')); }
 async function saveCard(r, show) {
@@ -1101,5 +1115,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
-window.__av = { get S() { return S; }, showQuest, closeModal, go, showRole, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
+window.__av = { get S() { return S; }, makePoster, showQuest, closeModal, go, showRole, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

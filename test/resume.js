@@ -8,7 +8,7 @@ async function until(f, ms = 15000) { const t = Date.now(); while (Date.now() - 
 const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); console.log('ok -', m); };
 let srv;
 async function startServer() {
-  srv = spawn(process.execPath, ['server.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, DATA_DIR: DATA, DATABASE_URL: '' }, stdio: ['ignore', 'pipe', 'inherit'] });
+  srv = spawn(process.execPath, ['server.js'], { cwd: __dirname + '/..', env: { ...process.env, PORT, DATA_DIR: DATA, DATABASE_URL: '', PURGE_TEST_DATA: '0' }, stdio: ['ignore', 'pipe', 'inherit'] });
   await new Promise(r => srv.stdout.on('data', d => { if (/on :/.test(String(d))) r(); }));
 }
 async function mk(pid, name) {

@@ -832,7 +832,9 @@ async function flushRooms() {
 }
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { flushRooms().finally(() => process.exit(0)); setTimeout(() => process.exit(0), 4000).unref(); });
 
-db.init().then(restoreRooms).then(() => {
+db.init().then(async () => {
+  if (process.env.PURGE_TEST_DATA !== '0') { try { const r = await db.purgeTestData(); if (r.users) console.log('purged test data', JSON.stringify(r)); } catch (e) { console.error('purge', e.message); } }
+}).then(restoreRooms).then(() => {
   server.listen(PORT, () => console.log('旺角阿瓦隆 on :' + PORT, 'db=' + db.mode()));
   // keep the free Render instance warm (it sleeps after 15 min idle); disable with KEEPALIVE=0
   const self = process.env.KEEPALIVE_URL || (process.env.RENDER_EXTERNAL_URL && process.env.RENDER_EXTERNAL_URL + '/healthz');

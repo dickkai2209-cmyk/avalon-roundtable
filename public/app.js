@@ -922,6 +922,41 @@ function knowsHtml(me, list) {
   if (!me.knows.length) return me.role === 'oberon' ? '你不知道同伴是誰，他們也不知道你。' : '你沒有額外資訊，靠推理吧。';
   return me.knows.map(k => `${chip(k.id, list)} <span class="badge ${k.label.includes('壞') ? 'evil' : ''}">${esc(k.label)}</span>`).join('<br>');
 }
+function teamHistoryHtml(g) {
+  const seats = (g.seats || []).slice().sort((a, b) => (a.seat || 0) - (b.seat || 0));
+  const n = seats.length || g.n || 0;
+  const rounds = g.rounds || [];
+  const quests = g.quests || [];
+  const sizes = g.teamSizes || [];
+  const idxs = [];
+  for (let i = 0; i < Math.max(rounds.length, quests.length); i++) {
+    if ((rounds[i] && rounds[i].length) || quests[i]) idxs.push(i);
+  }
+  idxs.reverse();
+  const legend = `<div class="th-leg"><span><i class="mem"></i>隊員</span><span><i class="ld">👑</i>隊長</span><span><i class="yes"></i>同意</span><span><i class="no"></i>反對</span></div>`;
+  if (!idxs.length) return `<h3>組隊記錄</h3>${legend}<div class="th-empty muted small">完成一次組隊投票後會顯示在這裡</div>`;
+  const blocks = idxs.map(ri => {
+    const props = rounds[ri] || [];
+    const q = quests[ri];
+    const two = ri === g.twoFailRound;
+    const known = props.find(p => p.approved) || props[0];
+    const size = sizes[ri] || (known && known.team ? known.team.length : '');
+    const head = q ? (q.success ? '<em class="ok">成功</em>' : `<em class="bad">失敗 · ${q.fails || 0}張失敗</em>`) : '';
+    const rows = props.map((p, k) => {
+      const cells = seats.map((s, i) => {
+        const num = s.seat || (i + 1);
+        const on = (p.team || []).includes(s.id);
+        const leader = p.leader === s.id;
+        const v = p.votes ? p.votes[s.id] : undefined;
+        const tone = v === true ? 'yes' : v === false ? 'no' : '';
+        return `<span class="th-seat ${tone}${on ? ' mem' : ''}${leader ? ' ld' : ''}"><b>${num}</b>${leader ? '<i aria-hidden="true">👑</i>' : ''}</span>`;
+      }).join('');
+      return `<div class="th-row"><span class="th-try">第${k + 1}次</span><span class="th-seats" style="--n:${n}">${cells}</span><span class="th-res ${p.approved ? 'ok' : 'bad'}">${p.approved ? '通過' : '否決'}</span></div>`;
+    }).join('');
+    return `<section class="th-mis"><div class="th-mh"><b>第${ri + 1}個任務</b><span>${size}人${two ? ' · 需2張失敗' : ''}</span>${head}</div>${rows}</section>`;
+  }).join('');
+  return `<h3>組隊記錄</h3>${legend}${blocks}`;
+}
 function voteGrid(seats, rounds, quests, myId) {
   const rows = [];
   rounds.forEach((props, ri) => props.forEach((p, k) => {
@@ -1188,8 +1223,13 @@ function render() {
   if (view !== 'home' && view !== 'room') app._html = null;
   if (view === 'home') setHTML(app, homeHtml());
   else if (view === 'room') {
+    const scroller = document.scrollingElement;
+    const mainEl = document.querySelector('main');
+    const keepScroll = { w: scroller ? scroller.scrollTop : 0, m: mainEl ? mainEl.scrollTop : 0 };
     const before = {}; $$('.rt .st[data-id]').forEach(e => { const r = e.getBoundingClientRect(); before[e.dataset.id] = [r.left, r.top]; });
     setHTML(app, S.game ? gameHtml() : lobbyHtml()); enterIds.clear();
+    if (scroller) scroller.scrollTop = keepScroll.w;
+    if (mainEl) mainEl.scrollTop = keepScroll.m;
     if (!S.game) $$('.rt .st[data-id]').forEach(e => {
       const b = before[e.dataset.id]; if (!b) return; const r = e.getBoundingClientRect(); const dx = b[0] - r.left, dy = b[1] - r.top;
       if (Math.abs(dx) + Math.abs(dy) < 4) return;
@@ -1378,9 +1418,11 @@ function gameHtml() {
   });
   return `${!me ? '<div class="specbar">👁 觀戰中</div>' : ''}<div class="card">${trackHtml(g)}</div>
   <div class="card" style="padding:10px">${table}</div>
+  <div class="card thist" id="teamhist">${teamHistoryHtml(g)}</div>
+  ${ladyChainHtml(g.ladyLog, g.seats) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats)}</div>` : ''}
   <div class="card">${panel}</div>
   ${me ? `<div class="card rolestrip" data-a="role"><div class="th"></div><div class="grow"><div class="serif gold" style="font-weight:700">我的身份卡</div><div class="small muted">點擊翻開查看（請遮住螢幕）</div></div><span class="gold">›</span></div>` : '<div class="specbar">👁 觀戰中 · 唔會看到隱藏身分</div>'}
-  ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : `<div class="card"><h3>組隊 / 投票記錄</h3>${voteGrid(g.seats, g.rounds, g.quests, meId)}${ladyChainHtml(g.ladyLog, g.seats)}</div>`}
+  ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : ''}
   <div class="btns"><button class="btn dark" data-a="invite">房間二維碼</button><button class="btn dark" data-a="go" data-v="home">返回主頁</button></div>
   ${S.isHost && !ended ? '<button class="btn dark" data-a="abort" style="color:#ff8b9c">強制結束本局</button>' : ''}
   ${g.settings.veto && me && !ended ? `<button type="button" class="veto-fab ${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'ready' : 'dim'}" data-a="${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'veto' : 'vetoinfo'}" aria-label="回避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>回避卡</span><b>${vetoAmt(me.vetoCards != null ? me.vetoCards : S.myVetoCards)}</b></button>` : ''}

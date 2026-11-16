@@ -1034,6 +1034,13 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
   z-index:3;
   background:linear-gradient(transparent,rgba(6,10,24,.5) 36%,rgba(6,10,24,.86));
 }
+.flip .rc.evil.lady-reveal .cap{
+  background:linear-gradient(transparent,rgba(6,10,24,.62) 30%,rgba(6,10,24,.94));
+}
+.flip .rc.evil.lady-reveal .cap .rn{
+  color:#ff2d3a !important;
+  text-shadow:0 1px 2px rgba(0,0,0,.96),0 0 8px rgba(40,0,8,.85);
+}
 .rc .cap .rn{
   color:#fff !important;
   letter-spacing:0 !important;

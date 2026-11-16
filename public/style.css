@@ -1147,3 +1147,29 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .lb-rec b{display:block;font-size:16px;line-height:1.2}
 .lb-rec span{display:block;font-size:12px;color:var(--muted);white-space:nowrap}
 .lb-empty{padding:18px 0 8px}
+
+/* In-app confirm for lake inspection and assassination. No native browser dialog. */
+.actconf{text-align:center}
+.actconf h2{margin-bottom:14px}
+.actconf-who{display:flex;align-items:center;gap:14px;text-align:left;border-radius:18px;padding:14px 16px;margin:0 0 12px}
+.actconf-meta{min-width:0}
+.actconf-meta b{display:block;font-size:20px;line-height:1.2;word-break:keep-all}
+.actconf-meta span{display:inline-block;margin-top:4px;font-size:14px;font-weight:800}
+.actconf-note{margin:0 0 4px;font-size:14px;line-height:1.5;color:#5d6472}
+.actconf-btns{display:flex;gap:10px;margin-top:8px}
+.actconf-btns .btn{flex:1;margin-top:0}
+.actconf-btns .btn:disabled{opacity:.55}
+.actconf-btns .btn:focus-visible{outline:3px solid #1d2333;outline-offset:2px}
+.actconf.lake h2{color:#0f6e72}
+.actconf.lake .actconf-who{background:linear-gradient(180deg,#f3fbfb,#fff8ea);border:1px solid #d5ebe6}
+.actconf.lake .actconf-meta span{color:#0f6e72}
+.actconf.lake #act-ok{background:#0f766e;color:#fff}
+.actconf.slay h2{color:#9d1830}
+.actconf.slay .actconf-who{background:linear-gradient(180deg,#4a1822,#241014);border:1px solid #e23a52}
+.actconf.slay .actconf-meta b{color:#fff}
+.actconf.slay .actconf-meta span{color:#ffd0d6}
+.actconf.slay .actconf-note{color:#6b3a42}
+.actconf.slay #act-ok{background:#b4233a;color:#fff}
+.modal:has(.actconf){z-index:80 !important;background:rgba(16,20,32,.62)}
+.sheet:has(.actconf){animation:none;opacity:1;background:#fff;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+.toast{z-index:90}

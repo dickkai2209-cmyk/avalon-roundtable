@@ -237,6 +237,10 @@ socket.on('state', (st) => {
   }
   if (autoRoom && view === 'home' && st.code) { autoRoom = false; view = 'room'; }
   handleEvent(st);
+  if (actConfirm && !actConfirm.busy && !confirmStillValid(actConfirm)) {
+    toast(actConfirm.kind === 'lady' ? '查驗已經失效' : '刺殺已經失效', 'bad');
+    closeModal();
+  }
   if (view === 'room' || view === 'home') render();
   if (cfgOpen && !st.game && !$('#modal').classList.contains('hidden')) $('#sheet').innerHTML = cfgSheetHtml();
   syncVoteRemind();
@@ -250,9 +254,67 @@ const act = (type, data) => emit('act', { type, data });
 let toastT;
 function toast(msg, kind) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (kind ? ' ' + kind : ''); t.classList.remove('hidden'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), kind ? 2800 : 2200); }
 let modalLock = false;
+let actConfirm = null;
+let actKeyHandler = null;
 function openModal(html, onMount, lock) { modalLock = !!lock; $('#sheet').innerHTML = html; $('#modal').classList.remove('hidden'); onMount && onMount($('#sheet')); }
 let cfgOpen = false;
-function closeModal() { cfgOpen = false; $('#modal').classList.add('hidden'); $('#sheet').innerHTML = ''; modalLock = false; modalQueueNext(); }
+function closeModal() {
+  cfgOpen = false;
+  if (actKeyHandler) { document.removeEventListener('keydown', actKeyHandler, true); actKeyHandler = null; }
+  actConfirm = null;
+  $('#modal').classList.add('hidden'); $('#sheet').innerHTML = ''; modalLock = false; modalQueueNext();
+}
+function confirmStillValid(c) {
+  const g = S && S.game; const me = g && g.me;
+  if (!g || !me || !c || g.phase !== c.phase) return false;
+  const target = g.seats.find(s => s && s.id === c.id);
+  if (!target || target.id === S.meId) return false;
+  if (c.kind === 'lady') return g.phase === 'lady' && g.ladyId === S.meId && !(g.ladyUsed || []).includes(target.id);
+  return g.phase === 'assassin' && me.role === 'assassin' && !target.evil;
+}
+function openActConfirm(kind) {
+  const g = S && S.game;
+  const id = [...selected][0];
+  if (!g || !id) return;
+  const draft = { kind, id, phase: g.phase, busy: false };
+  if (!confirmStillValid(draft)) return toast(kind === 'lady' ? '現在不能查驗這位騎士' : '現在不能刺殺這位騎士', 'bad');
+  const target = g.seats.find(s => s.id === id);
+  const seatNo = target.seat || (g.seats.findIndex(s => s.id === id) + 1);
+  const lady = kind === 'lady';
+  actConfirm = draft;
+  openModal(`<div class="actconf ${lady ? 'lake' : 'slay'}" id="actconf" role="dialog" aria-modal="true" aria-labelledby="actconf-title">
+    <h2 id="actconf-title">${lady ? '查驗這位騎士？' : '刺殺這位騎士？'}</h2>
+    <div class="actconf-who">${av(target, 84)}<div class="actconf-meta"><b>${esc(target.name)}</b><span>${seatNo}號</span></div></div>
+    <p class="actconf-note" id="actconf-note">${lady ? '只有你會看到陣營。取消不會查驗。' : '刺中梅林紅方勝，刺錯藍方勝。取消不會刺殺。'}</p>
+    <div class="actconf-btns"><button type="button" class="btn ghost" id="act-cancel">取消</button><button type="button" class="btn ${lady ? '' : 'evil'}" id="act-ok">${lady ? '確認查驗' : '確認刺殺'}</button></div>
+  </div>`, (el) => {
+    const cancel = $('#act-cancel', el);
+    const ok = $('#act-ok', el);
+    const stop = (e) => { if (actConfirm && actConfirm.busy) { e.preventDefault(); return; } e.preventDefault(); closeModal(); };
+    cancel.onclick = () => { if (actConfirm && actConfirm.busy) return; closeModal(); };
+    ok.onclick = async () => {
+      if (!actConfirm || actConfirm.busy || ok.disabled) return;
+      if (!confirmStillValid(actConfirm)) { toast(lady ? '查驗已經失效' : '刺殺已經失效', 'bad'); closeModal(); return; }
+      actConfirm.busy = true; ok.disabled = true; cancel.disabled = true; modalLock = true;
+      const idNow = actConfirm.id;
+      const r = await act(lady ? 'lady' : 'assassinate', { id: idNow });
+      if (r && r.ok) selected = new Set();
+      closeModal();
+    };
+    actKeyHandler = (e) => {
+      if (!$('#actconf')) return;
+      if (e.key === 'Escape') return stop(e);
+      if (e.key !== 'Tab') return;
+      const items = [cancel, ok].filter(b => !b.disabled);
+      if (!items.length) return;
+      e.preventDefault();
+      const i = items.indexOf(document.activeElement);
+      items[(i + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus();
+    };
+    document.addEventListener('keydown', actKeyHandler, true);
+    if (cancel.focus) cancel.focus();
+  });
+}
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && !modalLock) closeModal(); });
 const modalQueue = [];
 function queueModal(fn) { if ($('#modal').classList.contains('hidden')) fn(); else modalQueue.push(fn); }
@@ -2166,8 +2228,8 @@ document.addEventListener('click', async (e) => {
     case 'quest': hideVoteRemind(); return act('quest', { success: el.dataset.v === '1' });
     case 'votego': return focusVoteControls();
     case 'voteremind-x': return hideVoteRemind();
-    case 'lady': { const id = [...selected][0]; if (id && confirm(`用湖中仙女查驗 ${P(id).name}？`)) { const r = await act('lady', { id }); if (r.ok) selected = new Set(); } return; }
-    case 'assassinate': { const id = [...selected][0]; if (id && confirm(`確定刺殺 ${P(id).name}？`)) { const r = await act('assassinate', { id }); if (r.ok) selected = new Set(); } return; }
+    case 'lady': return openActConfirm('lady');
+    case 'assassinate': return openActConfirm('assassinate');
     case 'detail': return go('detail', { gid: el.dataset.g, from: 'history' });
     case 'poster': return posterDialog();
     case 'story': return storySheet(window.__lastRecord);

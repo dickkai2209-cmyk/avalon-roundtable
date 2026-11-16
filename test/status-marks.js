@@ -156,6 +156,23 @@ function bot(key, name) {
     assert(!covers(lead.crown, lead.cx, lead.cy) && lead.crown.b <= lead.atop + 10, 'the crown sits above the face');
     const lady = v.seats.find(s => s.lady);
     assert(!covers(lady.wreath, lady.cx, lady.cy), 'the wreath does not cover the face');
+    const wreath = await evalj(`(() => {
+      const seat = document.querySelector('.rt .st.is-lady');
+      const w = seat.querySelector('.mark.wreath');
+      const g = w.querySelector('.glow');
+      const wr = w.getBoundingClientRect();
+      const gr = g.getBoundingClientRect();
+      const av = seat.querySelector('.av').getBoundingClientRect();
+      const nm = seat.querySelector('.nm').getBoundingClientRect();
+      const nums = [...document.querySelectorAll('.rt > .no')].map(n => n.getBoundingClientRect());
+      const hitNum = nums.some(r => wr.left < r.right && wr.right > r.left && wr.top < r.bottom && wr.bottom > r.top);
+      const gs = getComputedStyle(g);
+      return { w: Math.round(wr.width), h: Math.round(wr.height), gw: Math.round(gr.width), gh: Math.round(gr.height), aboveFace: wr.bottom <= av.top + av.height / 2, aboveName: wr.bottom <= nm.top + 1, hitNum, anim: gs.animationName, bg: gs.backgroundImage };
+    })()`);
+    assert(wreath.w >= 48 && wreath.h >= 22, 'the wreath is large enough to read on a phone seat (' + wreath.w + 'x' + wreath.h + ')');
+    assert(wreath.gw <= 46 && wreath.gh <= 20 && wreath.gw > wreath.gh, 'the lake glow is a small ellipse, not a team ring (' + wreath.gw + 'x' + wreath.gh + ')');
+    assert(wreath.aboveFace && wreath.aboveName && !wreath.hitNum, 'the wreath stays off the face, name and seat number');
+    assert(wreath.anim === 'wreathglow' && /186,\s*255,\s*236|18,\s*176,\s*158/.test(wreath.bg), 'the wreath has a soft teal glow');
     const before = await nums();
 
     await propose(false, 3);
@@ -209,8 +226,9 @@ function bot(key, name) {
     await setSize(375, 812);
     await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
     await sleep(50);
-    const motion = await evalj(`(() => { const g = document.querySelector('.mark.crown .glint'); const h = document.querySelector('.mark.crown .halo'); const gs = getComputedStyle(g), hs = getComputedStyle(h); return { g: gs.animationName, h: hs.animationName, op: hs.opacity }; })()`);
+    const motion = await evalj(`(() => { const g = document.querySelector('.mark.crown .glint'); const h = document.querySelector('.mark.crown .halo'); const w = document.querySelector('.mark.wreath .glow'); const gs = getComputedStyle(g), hs = getComputedStyle(h), ws = getComputedStyle(w); return { g: gs.animationName, h: hs.animationName, op: hs.opacity, w: ws.animationName, wop: ws.opacity }; })()`);
     assert(motion.g === 'none' && motion.h === 'none' && Number(motion.op) > 0.5, 'reduced motion keeps a static crown glow (' + JSON.stringify(motion) + ')');
+    assert(motion.w === 'none' && Number(motion.wop) > 0.5, 'reduced motion keeps a static lake glow (' + JSON.stringify(motion) + ')');
     await shot('marks-reduced-375.png');
     console.log('STATUS MARK TESTS PASSED');
   } finally {

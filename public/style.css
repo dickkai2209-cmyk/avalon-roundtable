@@ -620,14 +620,16 @@ main{padding:8px 16px 96px}
 .rt .st .mark.crown .glint.c{left:12px;bottom:-5px;animation-delay:1.7s}
 @keyframes crownhalo{0%,100%{opacity:.7;transform:translate(-50%,-50%) scale(.92)}50%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 @keyframes crownglint{0%,100%{opacity:.15;transform:scale(.55)}45%,55%{opacity:1;transform:scale(1)}}
-.rt .st .mark.wreath{left:50%;top:-1px;width:40px;height:18px;transform:translateX(-50%);filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
+.rt .st .mark.wreath{left:50%;top:-12px;width:54px;height:26px;transform:translateX(-50%);filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 4px rgba(16,180,160,.9))}
+.rt .st .mark.wreath .glow{position:absolute;left:50%;top:68%;width:38px;height:14px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(ellipse at center,rgba(186,255,236,.95),rgba(18,176,158,.38) 52%,transparent 74%);animation:wreathglow 3.4s ease-in-out infinite;z-index:-1}
+@keyframes wreathglow{0%,100%{opacity:.5;transform:translate(-50%,-50%) scale(.94)}50%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 .rt .st:has(.crown) .wreath .mid{display:none}
 .rt .st .mark.sword{right:-1px;top:-2px;width:16px;height:34px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
 .rt .st .mark.cast{right:-3px;top:50%;width:22px;height:22px;margin:0;transform:translateY(-50%);border-radius:50%;background:rgba(8,14,28,.78);display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
 .markleg{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 14px;margin:18px 0 2px;padding:0 6px;font-size:12px;line-height:1;color:#5d6472}
 .markleg>span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .markleg .mark{position:static;transform:none;width:18px;height:18px;filter:none;background:none;box-shadow:none}
-.markleg .halo,.markleg .glint{display:none}
+.markleg .halo,.markleg .glint,.markleg .glow{display:none}
 .markleg svg{width:18px;height:18px;display:block}
 .markleg i{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 18px;overflow:hidden}
 .markleg i.sword{height:22px;flex-basis:14px;width:14px}
@@ -635,9 +637,10 @@ main{padding:8px 16px 96px}
 .markleg i.ring{border:2px solid #2f6fe8;border-radius:50%;box-sizing:border-box}
 .markleg i.cast{background:rgba(8,14,28,.72);border-radius:50%}
 @media (prefers-reduced-motion: reduce){
-  .rt .st .mark.crown .halo,.rt .st .mark.crown .glint{animation:none}
+  .rt .st .mark.crown .halo,.rt .st .mark.crown .glint,.rt .st .mark.wreath .glow{animation:none}
   .rt .st .mark.crown .halo{opacity:.9;transform:translate(-50%,-50%)}
   .rt .st .mark.crown .glint{opacity:.8;transform:none}
+  .rt .st .mark.wreath .glow{opacity:.85;transform:translate(-50%,-50%)}
 }
 .mepill{display:inline-block;margin:0;font-size:9px;line-height:14px;padding:0 5px;border-radius:7px;background:#e3edff;color:#3b6fd9;font-weight:700}
 .skel{height:11px;border-radius:6px;margin-top:4px;background:linear-gradient(90deg,#eef0f5 0%,#f8f9fc 50%,#eef0f5 100%);background-size:200% 100%;animation:skel 1.1s linear infinite}

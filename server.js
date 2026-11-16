@@ -17,13 +17,15 @@ const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) {
 const cleanName = (s) => Array.from(String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim()).slice(0, 10).join('') || '騎士';
 const ANIMALS = ['fox','panda','duck','squirrel','hedgehog','bunny','bear','redpanda','otter','hamster','shiba','dalmatian','capybara','penguin','koala','cat'];
 const FXS = ['none','spot','gold','spark','petals','fire','lightning'];
-const PENDANTS = ['none','crown','flower','star','sword','moon','wings'];
+const PENDANTS = ['none','crown','bow','halo','flower','star','sword','moon','wings'];
 const cleanAvatar = (s) => ANIMALS.includes(s) || s === 'photo' ? s : 'fox';
 const cleanBg = (s) => /^#[0-9a-fA-F]{6}$/.test(String(s)) ? s : '#f3d9a4';
 const cleanFx = (s) => FXS.includes(s) ? s : 'spot';
 const cleanPendant = (s) => PENDANTS.includes(s) ? s : 'none';
 
 const rooms = new Map();
+const vetoCache = new Map(); // userId -> evasion cards left
+const hostAway = new Map(); // room code -> timer
 const pidRoom = new Map();
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function newCode() {
@@ -59,6 +61,17 @@ function makeRoom(host) {
   return room;
 }
 
+function onlinePids(room) {
+  const s = new Set(); for (const so of io.sockets.sockets.values()) if (so.data.room === room.code && so.data.pid) s.add(so.data.pid); return s;
+}
+function pickNextHost(room, oldPid) {
+  const n = room.seats.length; const from = Math.max(0, room.seats.findIndex(p => p && p.pid === oldPid));
+  const online = onlinePids(room); const cands = [];
+  for (let k = 1; k <= n; k++) { const p = room.seats[(from + k) % n]; if (p && p.pid !== oldPid) cands.push(p); }
+  const pick = cands.find(p => online.has(p.pid)) || cands[0];
+  if (pick) { room.hostPid = pick.pid; pick.ready = false; room.lastEvent = { seq: ++room.eventSeq, type: 'host', id: pick.id, name: pick.name }; return true; }
+  return false;
+}
 function standUp(room, pid) {
   const i = findSeat(room, pid);
   if (i >= 0) room.seats[i] = null;
@@ -151,9 +164,11 @@ function scoreGame(g) {
 async function endGame(room, winner, reason) {
   const g = room.game;
   g.phase = 'end'; g.winner = winner; g.reason = reason; g.endedAt = Date.now();
-  const { scores, mvp, runnerUp, highlights } = scoreGame(g);
+  const early = winner === 'none';
+  if (early) g.early = true;
+  const { scores, mvp, runnerUp, highlights } = early ? { scores: null, mvp: null, runnerUp: null, highlights: [] } : scoreGame(g);
   g.scores = scores; g.mvp = mvp; g.runnerUp = runnerUp; g.highlights = highlights;
-  room.lastEvent = { seq: ++room.eventSeq, type: 'end', winner, reason };
+  room.lastEvent = { seq: ++room.eventSeq, type: 'end', winner, reason, early };
   const mvpPid = g.seats.find(s => s.id === mvp)?.pid;
   const rec = {
     gid: g.gid, room: room.code, startedAt: g.startedAt, endedAt: g.endedAt, n: g.n, winner, reason,
@@ -161,9 +176,11 @@ async function endGame(room, winner, reason) {
     players: g.seats.map((s, i) => ({ id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, pendant: s.pendant, role: s.role, side: currentSide(s.role, g.lanceSwitched), seat: i + 1 })),
     quests: g.quests.map(q => q ? { success: q.success, fails: q.fails, team: q.team, sword: q.sword, flipped: q.flipped } : null),
     rounds: g.rounds, ladyLog: g.ladyLog, lanceLog: g.lanceLog, assassinTarget: g.assassinTarget,
-    scores, mvp, runnerUp, highlights, pids: g.seats.map(s => s.pid), mvpPid,
+    scores, mvp, runnerUp, highlights, pids: g.seats.map(s => s.pid), mvpPid, early,
   };
   try { await db.saveGame(rec); } catch (e) { console.error('saveGame', e); }
+  for (const s of g.seats) db.getVetoCards(s.pid).then(c => { vetoCache.set(s.pid, c); }).catch(() => {});
+  setTimeout(() => rooms.has(room.code) && broadcast(room), 800);
 }
 
 function afterQuest(room, qev) {
@@ -250,6 +267,7 @@ async function act(room, pid, type, data) {
       const p = seated(room).find(x => x.id === data.id);
       if (!p) return '對方必須已就座';
       room.hostPid = p.pid; p.ready = false;
+      room.lastEvent = { seq: ++room.eventSeq, type: 'host', id: p.id, name: p.name };
       return null;
     }
     case 'dissolve': {
@@ -258,13 +276,25 @@ async function act(room, pid, type, data) {
       for (const s of io.sockets.sockets.values()) if (s.data.room === room.code) { s.leave(room.code); s.data.room = null; s.emit('dissolved'); }
       for (const p of seated(room)) pidRoom.delete(p.pid);
       for (const mid of room.members) pidRoom.delete(mid);
-      rooms.delete(room.code);
+      dropRoom(room.code);
       return 'dissolved';
     }
     case 'start': {
       if (!isHost) return '只有房主可以開始';
       if (g && g.phase !== 'end') return '遊戲已開始';
-      return startGame(room);
+      const e = startGame(room);
+      if (!e && room.game) {
+        room.game.vetoInv = {};
+        for (const s of room.game.seats) { const c = await db.getVetoCards(s.pid).catch(() => 0); room.game.vetoInv[s.id] = c; vetoCache.set(s.pid, c); }
+      }
+      return e;
+    }
+    case 'endearly': {
+      if (!isHost) return '只有房主可以提前結束';
+      if (!g || g.phase === 'end') return '目前沒有進行中的遊戲';
+      clearTimeout(g.timer);
+      await endGame(room, 'none', '提前結束');
+      return null;
     }
     case 'abort': {
       if (!isHost) return '只有房主可以結束';
@@ -299,7 +329,10 @@ async function act(room, pid, type, data) {
       if (!g.settings.veto) return '本局未啟用回避卡';
       if (g.phase !== 'vote') return '現在不是投票階段';
       if (!g.team.includes(seat.id)) return '你不在任務隊伍中';
-      if (g.vetoUsed.includes(seat.id)) return '你已經用過回避卡';
+      if (g.vetoUsed.includes(seat.id)) return '你本局已經用過回避卡';
+      const left = await db.consumeVeto(pid);
+      if (left < 0) return '你沒有回避卡（每贏一局可獲得 1 張）';
+      vetoCache.set(pid, left); if (g.vetoInv) g.vetoInv[seat.id] = left;
       g.vetoUsed.push(seat.id);
       g.vetoBlocked[g.round] = (g.vetoBlocked[g.round] || []).concat(seat.id);
       room.lastEvent = { seq: ++room.eventSeq, type: 'veto', who: seat.id, name: seat.name, round: g.round };
@@ -377,14 +410,22 @@ async function act(room, pid, type, data) {
       g.round++; g.phase = 'team'; g.leader = (g.leader + 1) % g.n;
       return null;
     }
+    case 'earlyassassin': {
+      if (!g || ['end', 'assassin'].includes(g.phase)) return '現在不能提前刺殺';
+      if (seat.role !== 'assassin') return '只有刺客可以提前刺殺';
+      g.phase = 'assassin'; g.earlyAssassin = true; g.team = []; g.votes = {}; g.questVotes = {}; g.sword = null;
+      room.lastEvent = { seq: ++room.eventSeq, type: 'earlyassassin', name: seat.name };
+      return null;
+    }
     case 'assassinate': {
       if (g.phase !== 'assassin') return '現在不是刺殺階段';
       if (seat.role !== 'assassin') return '只有刺客可以刺殺';
       const t = g.seats.find(s => s.id === data.id);
       if (!t || t.pid === pid) return '無效目標';
       g.assassinTarget = t.id;
-      if (t.role === 'merlin') await endGame(room, 'evil', `刺客刺中梅林（${t.name}），壞人逆轉勝利`);
-      else await endGame(room, 'good', `刺客刺錯了（${t.name} 不是梅林），好人勝利`);
+      const pre = g.earlyAssassin ? '提前刺殺：' : '';
+      if (t.role === 'merlin') await endGame(room, 'evil', `${pre}刺客刺中梅林（${t.name}），壞人${g.earlyAssassin ? '' : '逆轉'}勝利`);
+      else await endGame(room, 'good', `${pre}刺客刺錯了（${t.name} 不是梅林），好人勝利`);
       return null;
     }
   }
@@ -412,7 +453,7 @@ function viewFor(room, pid) {
     code: room.code, hostId: pubId(room.hostPid), meId: pubId(pid), isHost: room.hostPid === pid,
     settings: room.settings, lastEvent: room.lastEvent ? (({ swordPrivate, ...rest }) => rest)(room.lastEvent) : null,
     capacity: room.capacity, seated: seated(room).length, readyCount: readyN,
-    mySeat: meSeated ? findSeat(room, pid) + 1 : null,
+    mySeat: meSeated ? findSeat(room, pid) + 1 : null, myVetoCards: vetoCache.has(pid) ? vetoCache.get(pid) : null,
     seats: room.seats.map((p, i) => p ? { ...pubPlayer({ ...p, seat: i + 1 }), online: online.has(p.pid), isHost: p.pid === room.hostPid } : { empty: true, seat: i + 1 }),
     preset, teamSizes: TEAM_SIZES[room.capacity], evilCount: EVIL_COUNT[room.capacity],
     game: null,
@@ -423,7 +464,7 @@ function viewFor(room, pid) {
     const ended = g.phase === 'end';
     const revealEvil = g.phase === 'assassin';
     v.game = {
-      gid: g.gid, n: g.n, phase: g.phase, round: g.round, leaderId: g.seats[g.leader].id, rejects: g.rejects,
+      gid: g.gid, n: g.n, phase: g.phase, earlyAssassin: !!g.earlyAssassin, round: g.round, leaderId: g.seats[g.leader].id, rejects: g.rejects,
       teamSizes: TEAM_SIZES[g.n], twoFailRound: g.n >= 7 ? 3 : -1, settings: g.settings,
       seats: g.seats.map(s => ({
         id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, fx: s.fx, pendant: s.pendant,
@@ -447,7 +488,8 @@ function viewFor(room, pid) {
         knows: knowledge(g.seats, seat, g.lanceSwitched),
         voted: seat.id in g.votes, myVote: g.votes[seat.id], questSubmitted: seat.id in g.questVotes,
         canFail: canPlayFail(seat.role, g.lanceSwitched),
-        hasVeto: !!(g.settings.veto && !g.vetoUsed.includes(seat.id)),
+        hasVeto: !!(g.settings.veto && !g.vetoUsed.includes(seat.id) && (g.vetoInv ? g.vetoInv[seat.id] > 0 : true)),
+        vetoCards: g.vetoInv ? g.vetoInv[seat.id] : vetoCache.get(pid),
         swordPrivate: room.lastEvent && room.lastEvent.swordPrivate && room.lastEvent.swordPrivate.holder === seat.id ? room.lastEvent.swordPrivate : undefined,
       } : null,
     };
@@ -455,9 +497,35 @@ function viewFor(room, pid) {
   return v;
 }
 
+const persistT = new Map();
+function persistRoom(room) {
+  if (persistT.has(room.code)) return;
+  persistT.set(room.code, setTimeout(() => {
+    persistT.delete(room.code);
+    if (!rooms.has(room.code)) return;
+    db.saveRoom(room.code, { ...room, members: [...room.members] }).catch(e => console.error('saveRoom', e.message));
+  }, 600));
+}
+function dropRoom(code) {
+  rooms.delete(code); clearTimeout(persistT.get(code)); persistT.delete(code);
+  db.deleteRoom(code).catch(() => {});
+}
+async function restoreRooms() {
+  try {
+    for (const d of await db.loadRooms()) {
+      if (!d || !d.code || rooms.has(d.code)) continue;
+      const room = { ...d, members: new Set(d.members || []) };
+      rooms.set(room.code, room);
+      for (const pid of room.members) pidRoom.set(pid, room.code);
+      for (const p of room.seats) if (p) pidRoom.set(p.pid, room.code);
+      if (room.game) for (const s of room.game.seats) pidRoom.set(s.pid, room.code);
+    }
+    if (rooms.size) console.log('restored rooms:', rooms.size);
+  } catch (e) { console.error('restoreRooms', e.message); }
+}
 function broadcast(room) {
   if (!rooms.has(room.code)) return;
-  room.touched = Date.now();
+  room.touched = Date.now(); persistRoom(room);
   for (const s of io.sockets.sockets.values()) if (s.data.room === room.code) s.emit('state', viewFor(room, s.data.pid));
 }
 
@@ -467,11 +535,8 @@ function leaveCurrent(socket, pid, removeFromLobby) {
   if (!room) { pidRoom.delete(pid); return; }
   if (removeFromLobby && (!room.game || room.game.phase === 'end')) {
     standUp(room, pid); room.members.delete(pid); pidRoom.delete(pid);
-    if (room.hostPid === pid) {
-      const left = seated(room);
-      if (left.length) room.hostPid = left[0].pid;
-    }
-    if (!room.members.size && !seated(room).length) rooms.delete(code);
+    if (room.hostPid === pid) pickNextHost(room, pid);
+    if (!room.members.size && !seated(room).length) dropRoom(code);
   }
   socket.leave(code); socket.data.room = null;
   if (rooms.has(code)) broadcast(room);
@@ -605,12 +670,44 @@ app.get('/api/history', authUser, async (req, res) => {
   }));
 });
 app.get('/api/stats', authUser, async (req, res) => res.json(await db.getStats(req.user.id)));
-app.get('/api/game/:gid', authUser, async (req, res) => {
+app.get('/api/game/:gid', async (req, res) => {
   const g = await db.getGame(req.params.gid); if (!g) return res.status(404).json({ error: 'not found' });
-  const idx = (g.pids || []).indexOf(req.user.id);
+  const viewer = await db.getUserByToken(bearer(req)) || (req.query.pid && await db.getUserByGuestKey(String(req.query.pid))) || (req.query.pid && await db.getUser(String(req.query.pid)));
+  const idx = viewer ? (g.pids || []).indexOf(viewer.id) : -1;
   const { pids, ...rest } = g;
   res.json({ ...rest, myId: idx >= 0 && rest.players[idx] ? rest.players[idx].id : null });
 });
+// ---------- Google sign-in (enabled when GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are set) ----------
+const G_ID = process.env.GOOGLE_CLIENT_ID, G_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const oauthStates = new Map();
+const baseUrl = (req) => process.env.PUBLIC_URL || `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}`;
+app.get('/api/config', (req, res) => res.json({ google: !!(G_ID && G_SECRET) }));
+app.post('/api/auth/google/start', async (req, res) => {
+  if (!G_ID || !G_SECRET) return res.status(503).json({ error: 'Google 登入尚未設定' });
+  const u = await db.getUserByToken(bearer(req));
+  const state = crypto.randomBytes(18).toString('hex');
+  for (const [k, v] of oauthStates) if (v.exp < Date.now()) oauthStates.delete(k);
+  oauthStates.set(state, { linkId: u ? u.id : null, room: String(req.body.room || '').slice(0, 8), exp: Date.now() + 10 * 60 * 1000 });
+  const q = new URLSearchParams({ client_id: G_ID, redirect_uri: baseUrl(req) + '/auth/google/callback', response_type: 'code', scope: 'openid email profile', state, prompt: 'select_account' });
+  res.json({ url: 'https://accounts.google.com/o/oauth2/v2/auth?' + q });
+});
+app.get('/auth/google/callback', async (req, res) => {
+  const st = oauthStates.get(String(req.query.state || '')); oauthStates.delete(String(req.query.state || ''));
+  if (!st || st.exp < Date.now() || !req.query.code) return res.redirect('/?gerr=state');
+  try {
+    const tok = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code: String(req.query.code), client_id: G_ID, client_secret: G_SECRET, redirect_uri: baseUrl(req) + '/auth/google/callback', grant_type: 'authorization_code' }) }).then(r => r.json());
+    if (!tok.access_token) throw new Error('token exchange failed');
+    const info = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { Authorization: 'Bearer ' + tok.access_token } }).then(r => r.json());
+    if (!info.sub) throw new Error('no sub');
+    let u = await db.getUserByGoogle(info.sub);
+    if (!u && st.linkId) { const cur = await db.getUser(st.linkId); if (cur && !cur.google_sub) u = await db.linkGoogle(cur.id, info.sub, info.email); }
+    if (!u) { u = await db.createGuest({ guestKey: 'g:' + info.sub, name: cleanName(info.given_name || info.name) }); u = await db.linkGoogle(u.id, info.sub, info.email); }
+    const token = await db.createSession(u.id);
+    res.redirect('/#gauth=' + token + (st.room ? '&room=' + encodeURIComponent(st.room) : ''));
+  } catch (e) { console.error('google oauth', e.message); res.redirect('/?gerr=google'); }
+});
+app.get('/g/:gid', (req, res) => res.redirect('/?game=' + encodeURIComponent(req.params.gid)));
 app.get(['/r/:code', '/room/:code'], (req, res) => res.redirect('/?room=' + encodeURIComponent(req.params.code.toUpperCase())));
 
 async function bindSocketUser(socket, token, guestKey, profile) {
@@ -618,6 +715,7 @@ async function bindSocketUser(socket, token, guestKey, profile) {
   if (!u && guestKey) u = await db.getUserByGuestKey(guestKey) || await db.createGuest({ guestKey, name: cleanName(profile && profile.name), avatar: cleanAvatar(profile && profile.avatar), bg: cleanBg(profile && profile.bg), fx: cleanFx(profile && profile.fx), pendant: cleanPendant(profile && profile.pendant) });
   if (!u) return null;
   socket.data.pid = u.id;
+  vetoCache.set(u.id, u.veto_cards == null ? 1 : u.veto_cards);
   socket.data.name = u.name || cleanName(profile && profile.name);
   socket.data.avatar = u.avatar;
   socket.data.bg = u.bg;
@@ -686,16 +784,36 @@ io.on('connection', (socket) => {
     if (err) return cb({ error: err });
     broadcast(room); cb({ ok: true });
   });
-  socket.on('disconnect', () => { const room = socket.data.room && rooms.get(socket.data.room); if (room) setTimeout(() => rooms.has(room.code) && broadcast(room), 100); });
+  socket.on('disconnect', () => {
+    const room = socket.data.room && rooms.get(socket.data.room);
+    if (process.env.DEBUG_HOST) console.log('disc', socket.data.pid, socket.data.room, !!room, room && room.hostPid);
+    if (!room) return;
+    setTimeout(() => rooms.has(room.code) && broadcast(room), 100);
+    if (room.hostPid === socket.data.pid) {
+      clearTimeout(hostAway.get(room.code));
+      hostAway.set(room.code, setTimeout(() => {
+        hostAway.delete(room.code);
+        if (process.env.DEBUG_HOST) console.log('hostAway fire', room.code, rooms.has(room.code), onlinePids(room).has(room.hostPid));
+        if (!rooms.has(room.code) || onlinePids(room).has(room.hostPid)) return;
+        if (pickNextHost(room, room.hostPid)) broadcast(room);
+      }, Number(process.env.HOST_AWAY_MS || 90000)));
+    }
+  });
 });
 
 setInterval(() => {
   const cutoff = Date.now() - 12 * 3600 * 1000;
-  for (const [code, r] of rooms) if (r.touched < cutoff) { for (const p of seated(r)) pidRoom.delete(p.pid); rooms.delete(code); }
+  for (const [code, r] of rooms) if (r.touched < cutoff) { for (const p of seated(r)) pidRoom.delete(p.pid); dropRoom(code); }
 }, 30 * 60 * 1000).unref();
 
-db.init().then(() => {
-  server.listen(PORT, () => console.log('Camelot Cipher on :' + PORT, 'db=' + db.mode()));
+async function flushRooms() {
+  await Promise.all([...rooms.values()].map(r => db.saveRoom(r.code, { ...r, members: [...r.members] }).catch(() => {})));
+  if (db.flush) db.flush();
+}
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { flushRooms().finally(() => process.exit(0)); setTimeout(() => process.exit(0), 4000).unref(); });
+
+db.init().then(restoreRooms).then(() => {
+  server.listen(PORT, () => console.log('旺角Avalon on :' + PORT, 'db=' + db.mode()));
 }).catch(e => { console.error('DB init failed', e); process.exit(1); });
 
 module.exports = { server, TEAM_SIZES, EVIL_COUNT };

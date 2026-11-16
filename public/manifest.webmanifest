@@ -1,0 +1,18 @@
+{
+ "name": "旺角Avalon",
+ "short_name": "旺角Avalon",
+ "description": "免安裝、手機瀏覽器即玩的阿瓦隆多人遊戲 · by Amigosparty",
+ "lang": "zh-Hant",
+ "start_url": "/",
+ "display": "standalone",
+ "background_color": "#0b1230",
+ "theme_color": "#0b1230",
+ "icons": [
+  {
+   "src": "/img/icon.svg",
+   "sizes": "any",
+   "type": "image/svg+xml",
+   "purpose": "any"
+  }
+ ]
+}

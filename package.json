@@ -1,12 +1,13 @@
 {
   "name": "yuanzhuo-avalon",
   "version": "1.0.0",
-  "description": "卡美洛密令 · Camelot Cipher — 免安裝網頁版阿瓦隆多人遊戲",
+  "description": "旺角Avalon (by Amigosparty) — 免安裝網頁版阿瓦隆多人遊戲",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "test": "URL=http://127.0.0.1:3000 node test/sim.js && URL=http://127.0.0.1:3000 node test/twofail.js"
   },
+  "author": "Amigosparty",
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {

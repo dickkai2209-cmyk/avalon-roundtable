@@ -1,4 +1,6 @@
-# 卡美洛密令 · Camelot Cipher
+# 旺角Avalon
+
+by Amigosparty
 
 免安裝、用手機瀏覽器就可以玩的《阿瓦隆》(The Resistance: Avalon) 多人遊戲。不需要微信。深海軍藍 + 金色、木質圓桌與羊皮紙規則的原創介面。
 

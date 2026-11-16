@@ -69,12 +69,20 @@ async function init() {
         );
         CREATE INDEX IF NOT EXISTS games_pids_idx ON games USING GIN (pids);
         ALTER TABLE users ADD COLUMN IF NOT EXISTS pub_id TEXT UNIQUE;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS veto_cards INT NOT NULL DEFAULT 1;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT UNIQUE;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
         CREATE TABLE IF NOT EXISTS user_stats (
           user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
           played INT NOT NULL DEFAULT 0,
           won INT NOT NULL DEFAULT 0,
           mvp INT NOT NULL DEFAULT 0,
           roles JSONB NOT NULL DEFAULT '{}'
+        );
+        CREATE TABLE IF NOT EXISTS rooms_state (
+          code TEXT PRIMARY KEY,
+          data JSONB NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
       `);
       mode = 'pg';
@@ -83,7 +91,7 @@ async function init() {
   } else {
     fs.mkdirSync(PHOTO_DIR, { recursive: true });
     try { mem = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8')); } catch (e) { /* fresh */ }
-    mem.users = mem.users || []; mem.sessions = mem.sessions || []; mem.games = mem.games || []; mem.stats = mem.stats || {};
+    mem.users = mem.users || []; mem.sessions = mem.sessions || []; mem.games = mem.games || []; mem.stats = mem.stats || {}; mem.rooms = mem.rooms || {};
     mode = 'json';
     console.log('DB: local json at', JSON_FILE);
   }
@@ -107,7 +115,9 @@ function saveJson() {
 function pubUser(u) {
   if (!u) return null;
   return {
-    id: u.id, username: u.username || null, guest: !u.username,
+    id: u.id, username: u.username || null, guest: !u.username && !u.google_sub,
+    google: !!u.google_sub, email: u.email || null,
+    vetoCards: u.veto_cards == null ? 1 : u.veto_cards,
     name: u.name, avatar: u.avatar, bg: u.bg, fx: u.fx, pendant: u.pendant,
     skins: typeof u.skins === 'string' ? JSON.parse(u.skins) : (u.skins || {}),
     hasPhoto: u.avatar === 'photo' || !!(u.photo || (mode === 'json' && fs.existsSync(path.join(PHOTO_DIR, u.id + '.webp')))),
@@ -153,7 +163,7 @@ async function createGuest({ guestKey, name, avatar, bg, fx, pendant, skins }) {
   const u = {
     id, username: null, username_norm: null, password_hash: null, guest_key: guestKey, pub_id: pub,
     name: name || '', avatar: avatar || 'fox', bg: bg || '#f3d9a4', fx: fx || 'spot',
-    pendant: pendant || 'none', skins: skins || {}, created_at: new Date().toISOString(),
+    pendant: pendant || 'none', skins: skins || {}, veto_cards: 1, created_at: new Date().toISOString(),
   };
   if (mode === 'pg') {
     await pool.query(
@@ -263,10 +273,11 @@ async function saveGame(rec) {
        ON CONFLICT (gid) DO NOTHING`,
       [rec.gid, rec.room, rec.startedAt ? new Date(rec.startedAt) : null, rec.endedAt ? new Date(rec.endedAt) : new Date(), rec.n, rec.winner, rec.reason, J(rec.settings), J(rec.players), J(rec.quests), J(rec.rounds), J(rec.ladyLog), rec.assassinTarget, J(rec.scores), rec.mvp, rec.runnerUp, J(rec.highlights), rec.pids]
     );
-    for (const pid of rec.pids) {
+    for (const pid of rec.winner === 'none' ? [] : rec.pids) {
       const st = rec.players[rec.pids.indexOf(pid)];
       if (!st) continue;
       const won = st.side === rec.winner;
+      if (won) await pool.query('UPDATE users SET veto_cards = LEAST(COALESCE(veto_cards,0) + 1, 10) WHERE id=$1', [pid]);
       await pool.query(
         `INSERT INTO user_stats (user_id,played,won,mvp,roles) VALUES ($1,1,$2,$3,$4)
          ON CONFLICT (user_id) DO UPDATE SET
@@ -286,13 +297,14 @@ async function saveGame(rec) {
   } else {
     mem.games.push(rec);
     if (mem.games.length > 2000) mem.games.splice(0, mem.games.length - 2000);
-    for (const pid of rec.pids) {
+    for (const pid of rec.winner === 'none' ? [] : rec.pids) {
       const st = rec.players[rec.pids.indexOf(pid)]; if (!st) continue;
       const won = (st.side || require('./rules').ROLE_SIDE[st.role]) === rec.winner;
       const s = mem.stats[pid] || (mem.stats[pid] = { played: 0, won: 0, mvp: 0, roles: {} });
       const r = s.roles[st.role] || (s.roles[st.role] = { played: 0, won: 0 });
       s.played++; r.played++; if (won) { s.won++; r.won++; }
       if (rec.mvpPid === pid) s.mvp = (s.mvp || 0) + 1;
+      if (won) { const u = mem.users.find(x => x.id === pid); if (u) u.veto_cards = Math.min((u.veto_cards == null ? 1 : u.veto_cards) + 1, 10); }
     }
     saveJson();
   }
@@ -328,10 +340,52 @@ async function getStats(userId) {
   return mem.stats[userId] || { played: 0, won: 0, mvp: 0, roles: {} };
 }
 
-module.exports = {
+async function getVetoCards(id) {
+  const u = await getUser(id); return u ? (u.veto_cards == null ? 1 : u.veto_cards) : 0;
+}
+async function consumeVeto(id) {
+  if (mode === 'pg') {
+    const r = await pool.query('UPDATE users SET veto_cards = veto_cards - 1 WHERE id=$1 AND veto_cards > 0 RETURNING veto_cards', [id]);
+    return r.rows.length ? r.rows[0].veto_cards : -1;
+  }
+  const u = mem.users.find(x => x.id === id); if (!u) return -1;
+  const c = u.veto_cards == null ? 1 : u.veto_cards; if (c <= 0) return -1;
+  u.veto_cards = c - 1; saveJson(); return u.veto_cards;
+}
+async function getUserByGoogle(sub) {
+  if (mode === 'pg') return (await pool.query('SELECT * FROM users WHERE google_sub=$1', [sub])).rows[0] || null;
+  return mem.users.find(u => u.google_sub === sub) || null;
+}
+async function linkGoogle(id, sub, email) {
+  if (mode === 'pg') await pool.query('UPDATE users SET google_sub=$2, email=COALESCE($3,email), updated_at=now() WHERE id=$1', [id, sub, email || null]);
+  else { const u = mem.users.find(x => x.id === id); if (u) { u.google_sub = sub; if (email) u.email = email; } saveJson(); }
+  return getUser(id);
+}
+
+
+// ---- live room snapshots (resume after tab close / server restart) ----
+async function saveRoom(code, data) {
+  if (mode === 'pg') await pool.query(`INSERT INTO rooms_state (code,data,updated_at) VALUES ($1,$2,now()) ON CONFLICT (code) DO UPDATE SET data=$2, updated_at=now()`, [code, JSON.stringify(data)]);
+  else { mem.rooms[code] = data; saveJson(); }
+}
+async function deleteRoom(code) {
+  if (mode === 'pg') await pool.query('DELETE FROM rooms_state WHERE code=$1', [code]);
+  else { delete mem.rooms[code]; saveJson(); }
+}
+async function loadRooms() {
+  if (mode === 'pg') { await pool.query(`DELETE FROM rooms_state WHERE updated_at < now() - interval '12 hours'`); return (await pool.query('SELECT data FROM rooms_state')).rows.map(r => r.data); }
+  return Object.values(mem.rooms || {});
+}
+function flush() {
+  if (mode !== 'json') return;
+  clearTimeout(saveTimer);
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); const copy = { ...mem, users: mem.users.map(u => { const { photo, ...r } = u; return r; }) }; fs.writeFileSync(JSON_FILE, JSON.stringify(copy)); } catch (e) { console.error('flush', e.message); }
+}
+module.exports = { flush, saveRoom, deleteRoom, loadRooms,
   init, mode: () => mode, pubUser,
   getUser, getUserByUsername, getUserByGuestKey, getUserByPubId, getUserByToken,
   createGuest, updateUser, setPhoto, getPhoto,
   validUsername, validPassword, registerOrUpgrade, verifyLogin,
   createSession, deleteSession, saveGame, listHistory, getGame, getStats,
+  getVetoCards, consumeVeto, getUserByGoogle, linkGoogle,
 };

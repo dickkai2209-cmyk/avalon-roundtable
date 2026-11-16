@@ -18,10 +18,16 @@ const ROLE = {
   lancelot_good: { n: '蘭斯洛特（正）', en: 'LANCELOT (LOYAL)', side: 'good', d: '你知道邪惡蘭斯洛特是誰。你即使是好人也可以出失敗卡。忠誠牌可能讓你們互換陣營。' },
   lancelot_evil: { n: '蘭斯洛特（邪）', en: 'LANCELOT (EVIL)', side: 'evil', d: '你知道正義蘭斯洛特是誰。忠誠牌可能讓你們互換陣營。' },
 };
+const CARDBACKS = [['cardback', '經典', 0], ['cardback_halloween', '萬聖節', 3], ['cardback_lny', '新春', 6]];
+const cardBackOf = () => { const k = (skinSel && skinSel._cardback) || 'cardback'; const c = CARDBACKS.find(x => x[0] === k); return c && playedTotal() >= c[2] ? k : 'cardback'; };
+const OUTFIT_ROLES = ['merlin', 'percival', 'morgana', 'assassin', 'servant'];
+const skinsFor = (role) => SKINS.filter(s => !s.outfit || OUTFIT_ROLES.includes(role));
 const ROLE_ORDER = ['merlin', 'percival', 'servant', 'assassin', 'morgana', 'mordred', 'oberon', 'minion'];
 const img = (r) => `/img/${r}.webp`, thumb = (r) => `/img/${r}_t.webp`;
 const SKINS = [
   { id: 'classic', n: '經典', need: 0 },
+  { id: 'casual', n: '日常便服', need: 0, outfit: 1 },
+  { id: 'festive', n: '節日盛裝', need: 2, outfit: 1 },
   { id: 'moon', n: '月影', need: 1 },
   { id: 'gold', n: '鎏金', need: 3 },
   { id: 'blood', n: '血月', need: 6 },
@@ -34,12 +40,13 @@ const ANIMALS = [
 const EMOJI_MAP = {'🦊':'fox','🐼':'panda','🦆':'duck','🐿️':'squirrel','🦔':'hedgehog','🐰':'bunny','🐻':'bear','🦝':'redpanda','🦦':'otter','🐹':'hamster','🐕':'shiba','🐶':'shiba','🦫':'capybara','🐧':'penguin','🐨':'koala','🐱':'cat'};
 const BGS = ['#f3d9a4', '#f7c1c8', '#bfe3c9', '#bcd6ff', '#d9c6ff', '#ffe08a', '#c8eef0', '#ffcfa6', '#2b3a6e', '#3a2a1c'];
 const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['spark','星火',1],['petals','花瓣',3],['fire','火焰圈',6],['lightning','閃電',10]];
-const PENDANTS = [['none','無',0],['crown','王冠',0],['flower','花環',1],['star','星星',3],['sword','短劍',3],['moon','新月',6],['wings','雙翼',10]];
-const PENDANT_ICON = { none:'', crown:'👑', flower:'🌸', star:'⭐', sword:'⚔️', moon:'🌙', wings:'🕊️' };
+const PENDANTS = [['none','無',0],['crown','小王冠',0],['bow','花花蝴蝶結',0],['halo','星星光環',0],['star','星星',3],['sword','短劍',3],['moon','新月',6],['wings','雙翼',10]];
+const PD_IMG = { crown: 1, bow: 1, halo: 1 };
+const PENDANT_ICON = { none:'', crown:'👑', bow:'🎀', halo:'✨', flower:'🌸', star:'⭐', sword:'⚔️', moon:'🌙', wings:'🕊️' };
 const PHASE = { team: '組隊', vote: '投票', sword: '授予王者之劍', quest: '任務', swordflip: '王者之劍', lady: '湖中仙女', assassin: '刺殺梅林', end: '遊戲結束' };
 const TEAM_SIZES = { 5: [2, 3, 2, 3, 3], 6: [2, 3, 4, 3, 4], 7: [2, 3, 3, 4, 4], 8: [3, 4, 4, 5, 5], 9: [3, 4, 4, 5, 5], 10: [3, 4, 4, 5, 5], 11: [3, 4, 4, 5, 5], 12: [3, 4, 5, 5, 5] };
 const LOGO = `<svg class="logo" viewBox="0 0 64 64"><defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0c0"/><stop offset="1" stop-color="#b8892f"/></linearGradient></defs><path d="M32 4l22 7v17c0 16-10 27-22 32C20 55 10 44 10 28V11z" fill="#16224a" stroke="url(#lg)" stroke-width="3"/><path d="M32 13v38M24 21h16" stroke="url(#lg)" stroke-width="3.6" stroke-linecap="round"/><circle cx="32" cy="12" r="3" fill="url(#lg)"/><path d="M20 40c4 4 8 6 12 6s8-2 12-6" stroke="url(#lg)" stroke-width="2" fill="none" opacity=".6"/></svg>`;
-const ROLE_ART = { lancelot_good: 'percival', lancelot_evil: 'assassin' };
+const ROLE_ART = { lancelot_evil: 'assassin' };
 const RN = { merlin:'梅林', percival:'派西維爾', servant:'忠臣', lancelot_good:'蘭斯洛特（正）', assassin:'刺客', morgana:'莫甘娜', mordred:'莫德雷德', oberon:'奧伯倫', minion:'爪牙', lancelot_evil:'蘭斯洛特（邪）' };
 
 // ================= identity =================
@@ -80,6 +87,14 @@ async function ensureSession() {
 let S = null, view = 'home', viewArg = null;
 let selected = new Set(), lastSeatIds = [], enterIds = new Set();
 let seenEvent = 0;
+(function pickGoogleToken() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('gauth')) { token = h.get('gauth'); LS.setItem('cc.token', token); if (h.get('room')) history.replaceState(null, '', '/?room=' + h.get('room')); else history.replaceState(null, '', '/'); setTimeout(() => toast('已用 Google 登入'), 800); }
+  const q = new URLSearchParams(location.search);
+  if (q.get('gerr')) { setTimeout(() => toast(q.get('gerr') === 'notconfigured' ? 'Google 登入尚未設定' : 'Google 登入未完成，請再試'), 800); history.replaceState(null, '', '/'); }
+})();
+let pendingGame = (location.pathname.match(/^\/g\/([\w-]{8,})/) || [])[1] || new URLSearchParams(location.search).get('game');
+if (pendingGame) history.replaceState(null, '', '/');
 let pendingJoin = new URLSearchParams(location.search).get('room');
 if (pendingJoin) history.replaceState(null, '', '/');
 let autoRoom = true;
@@ -92,11 +107,17 @@ socket.on('connect', () => {
       if (r && r.user) applyUser(r.user);
       if (!r || !r.room) { S = null; if (view === 'room') go('home'); }
       if (pendingJoin) { const c = pendingJoin; pendingJoin = null; ensureName(() => joinRoom(c)); }
+      if (pendingGame) { const gid = pendingGame; pendingGame = null; return go('detail', { gid, from: 'home' }); }
       render();
     });
   }).catch(e => toast(e.message || '無法連線至伺服器'));
 });
 socket.on('disconnect', () => $('#conn').classList.remove('on'));
+function refreshRoom() {
+  toast('重新同步中…'); sessionStorage.removeItem('cc.modalq');
+  socket.once('state', () => toast('已同步最新房間狀態 ✓'));
+  socket.disconnect(); setTimeout(() => socket.connect(), 250);
+}
 socket.on('state', (st) => {
   const prev = S;
   const occ = (st.seats || []).filter(s => !s.empty);
@@ -112,6 +133,7 @@ socket.on('state', (st) => {
   if (autoRoom && view === 'home' && st.code) { autoRoom = false; view = 'room'; }
   handleEvent(st);
   if (view === 'room' || view === 'home') render();
+  if (cfgOpen && !st.game && !$('#modal').classList.contains('hidden')) $('#sheet').innerHTML = cfgSheetHtml();
 });
 socket.on('kicked', () => { S = null; toast('你已被房主移出房間'); go('home'); });
 socket.on('dissolved', () => { S = null; toast('房間已解散'); go('home'); });
@@ -123,7 +145,8 @@ let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), 2600); }
 let modalLock = false;
 function openModal(html, onMount, lock) { modalLock = !!lock; $('#sheet').innerHTML = html; $('#modal').classList.remove('hidden'); onMount && onMount($('#sheet')); }
-function closeModal() { $('#modal').classList.add('hidden'); $('#sheet').innerHTML = ''; modalLock = false; modalQueueNext(); }
+let cfgOpen = false;
+function closeModal() { cfgOpen = false; $('#modal').classList.add('hidden'); $('#sheet').innerHTML = ''; modalLock = false; modalQueueNext(); }
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && !modalLock) closeModal(); });
 const modalQueue = [];
 function queueModal(fn) { if ($('#modal').classList.contains('hidden')) fn(); else modalQueue.push(fn); }
@@ -141,6 +164,7 @@ function photoSrc(p) {
 }
 function pendantHtml(p) {
   const k = (p && p.pendant) || 'none'; if (k === 'none') return '';
+  if (PD_IMG[k]) return `<img class="pimg ${k}" src="/img/pd/${k}.webp" alt="">`;
   if (k === 'wings') return `<span class="pendant wings">✨<span></span>✨</span>`;
   return `<span class="pendant ${k}">${PENDANT_ICON[k] || ''}</span>`;
 }
@@ -159,8 +183,8 @@ function pdUnlocked(k) { const item = PENDANTS.find(x => x[0] === k); return pla
 function previewHtml(d) {
   return `<div class="preview-stage ${d.fx && d.fx !== 'none' ? 'enter fx-' + d.fx : ''}">${av(d, 56)}<div class="nm gold" style="position:absolute;bottom:10px">${esc(d.name || '騎士')}</div></div>`;
 }
-function editProfile(after) {
-  const d = { ...profile }; let tab = 'avatar';
+function editProfile(after, startTab) {
+  const d = { ...profile }; let tab = startTab || 'avatar';
   const draw = (el) => {
     const sub = d._forceSub || ((d.avatar === 'photo' || (d.avatar && String(d.avatar).startsWith('data:'))) ? 'photo' : 'animal');
     el.innerHTML = `<h2>個人檔案</h2>
@@ -173,7 +197,7 @@ function editProfile(after) {
         ${sub==='animal' ? `<div class="agrid">${ANIMALS.map(([k,n]) => `<button data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div></button>`).join('')}</div>
           <div class="small muted" style="margin-top:12px">背景顏色</div><div class="swatches">${BGS.map(c => `<button data-c="${c}" class="${c===d.bg?'sel':''}" style="background:${c}"></button>`).join('')}</div>`
         : `<div class="center" style="margin-top:12px"><label class="btn ghost" style="display:inline-block;width:auto;padding:10px 20px">選擇相片<input id="file" type="file" accept="image/*" hidden></label><div class="small muted" style="margin-top:6px">相片會壓縮保存到你的帳號，歷史記錄也看得到</div></div>`}
-      ` : tab==='pendant' ? `<div class="agrid">${PENDANTS.map(([k,n,need]) => `<button data-pd="${k}" class="${d.pendant===k?'sel':''} ${pdUnlocked(k)?'':'off'}"><div class="cell" style="background:${d.bg}">${k==='none'?'—':PENDANT_ICON[k]}</div><div class="lb">${n}${pdUnlocked(k)?'':` 🔒${need}場`}</div></button>`).join('')}</div>`
+      ` : tab==='pendant' ? `<div class="agrid">${PENDANTS.map(([k,n,need]) => `<button data-pd="${k}" class="${d.pendant===k?'sel':''} ${pdUnlocked(k)?'':'off'}"><div class="cell" style="background:${d.bg}">${k==='none'?'—':(PD_IMG[k]?`<img src="/img/pd/${k}.webp" alt="" style="width:80%;height:80%;object-fit:contain">`:PENDANT_ICON[k])}</div><div class="lb">${n}${pdUnlocked(k)?'':` 🔒${need}場`}</div></button>`).join('')}</div>`
       : `<div class="agrid">${FXS.map(([k,n,need]) => `<button data-fx="${k}" class="${d.fx===k?'sel':''} ${fxUnlocked(k)?'':'off'}"><div class="cell" style="background:#1a2550">${k==='none'?'—':({spot:'💡',gold:'✨',spark:'🌟',petals:'🌸',fire:'🔥',lightning:'⚡'}[k]||'')}</div><div class="lb">${n}${fxUnlocked(k)?'':` 🔒${need}場`}</div></button>`).join('')}</div><div class="small muted center" style="margin-top:8px">選擇後可在上方預覽，入座時所有人會看見</div>`}
       <button class="btn" id="ok">儲存到帳號</button>`;
     const nm = $('#nm', el); if (nm) nm.oninput = () => d.name = nm.value;
@@ -237,7 +261,7 @@ function inviteDialog() {
     <div class="center"><div class="tiny muted">房間號</div><div class="code">${S.code}</div></div>
     <div class="btns"><button class="btn ghost" id="cp">複製連結</button>${navigator.share ? '<button class="btn" id="sh">分享</button>' : ''}</div>`, (el) => {
     $('#cp', el).onclick = async () => { try { await navigator.clipboard.writeText(url); toast('已複製：' + url); } catch { prompt('複製此連結', url); } };
-    const sh = $('#sh', el); if (sh) sh.onclick = () => navigator.share({ title: '卡美洛密令 · 阿瓦隆', text: `入房玩阿瓦隆！房間號 ${S.code}`, url }).catch(() => {});
+    const sh = $('#sh', el); if (sh) sh.onclick = () => navigator.share({ title: '旺角Avalon', text: `入房玩旺角Avalon！房間號 ${S.code}`, url }).catch(() => {});
   });
 }
 function authDialog(mode) {
@@ -246,7 +270,11 @@ function authDialog(mode) {
     <input class="inp" id="un" maxlength="10" placeholder="帳號" style="margin-top:10px">
     <input class="inp" id="pw" type="password" maxlength="64" placeholder="密碼或 PIN" style="margin-top:8px">
     <button class="btn" id="ok">${mode==='login'?'登入':'註冊並綁定此訪客資料'}</button>
-    <button class="btn ghost" id="sw">${mode==='login'?'沒有帳號？改為註冊':'已有帳號？改為登入'}</button>`, (el) => {
+    <button class="btn ghost" id="sw">${mode==='login'?'沒有帳號？改為註冊':'已有帳號？改為登入'}</button>
+    <div class="or"><span>或</span></div>
+    <button class="btn gbtn" id="gg"><svg viewBox="0 0 48 48" width="18" height="18"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg> 使用 Google 登入</button>
+    <div class="tiny muted center" style="margin-top:6px">用 Google 登入會綁定你目前的訪客資料（戰績、頭像會保留）</div>`, (el) => {
+    $('#gg', el).onclick = () => googleLogin();
     $('#ok', el).onclick = async () => {
       try {
         await ensureSession();
@@ -259,19 +287,25 @@ function authDialog(mode) {
     $('#sw', el).onclick = () => authDialog(mode==='login'?'register':'login');
   });
 }
+async function googleLogin() {
+  try {
+    const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
+    if (!cfg.google) return toast('Google 登入即將開放（伺服器尚未設定）');
+    await ensureSession();
+    const r = await api('/api/auth/google/start', { method: 'POST', body: JSON.stringify({ room: S && S.code || '' }) });
+    if (r.url) location.href = r.url;
+  } catch (e) { toast(e.message || 'Google 登入失敗'); }
+}
 async function doLogout() { try { await api('/api/auth/logout', { method:'POST' }); } catch(e){} token=''; LS.removeItem('cc.token'); account=null; await ensureSession(); socket.emit('hello', { token, guestKey: LS.getItem('cc.pid'), ...profile }, ()=>{}); render(); toast('已登出，現為訪客'); }
 
 // ================= components =================
 function roomHead() {
   if (!S) return '';
   const n = S.capacity, x = S.seated, r = S.readyCount;
-  return `<div class="room-head">
-    <div class="row between">
-      <div><span class="code" data-a="copycode">${S.code}</span> <button class="btn sm ghost" data-a="copycode">複製</button></div>
-      <div><button class="btn sm" data-a="invite">邀請</button> <button class="btn sm dark" data-a="menu">•••</button></div>
-    </div>
-    <div class="room-status">等待開局 · 就座 ${x}/${n} · 準備 ${r}/${Math.max(0,x-(S.isHost?1:0) || x)}</div>
-    <div class="center small">${S.mySeat ? `座位 ${S.mySeat}` : '尚未就座'}${S.isHost ? ' <span class="badge">房主</span>' : ''}</div>
+  return `<div class="rhead">
+    <div class="rh-row"><button class="rpill" data-a="copycode">房間 <b>${S.code}</b> <span class="cpy">⧉</span></button><span class="grow"></span>
+      <button class="rbtn" data-a="invite">邀請</button><button class="rbtn" data-a="menu" aria-label="更多">•••</button></div>
+    <div class="rh-sub">等待開局 · 就座 ${x}/${n} · 準備 ${r}/${x}<span class="grow"></span>${S.mySeat ? `${S.mySeat}號座` : '未就座'}${S.isHost ? ' · 👑 房主' : ''}</div>
   </div>`;
 }
 function presetCard(pr) {
@@ -281,15 +315,30 @@ function presetCard(pr) {
   const gc = g.filter(x=>x==='忠臣').length, ec = e.filter(x=>x==='爪牙').length;
   const gl = g.filter(x=>x!=='忠臣'); if (gc) gl.push(`忠臣×${gc}`);
   const el = e.filter(x=>x!=='爪牙'); if (ec) el.push(`爪牙×${ec}`);
-  return `<div class="preset"><div class="blue"><b>藍方 ${pr.good.length}</b>${gl.join('、')}</div><div class="red"><b>紅方 ${pr.evil.length}</b>${el.join('、')}</div></div>`;
+  return `<div class="preset"><div class="blue"><b>藍方 ${pr.good.length}</b>${gl.map(v => `<span class="pill">${v}</span>`).join('')}</div><div class="red"><b>紅方 ${pr.evil.length}</b>${el.map(v => `<span class="pill">${v}</span>`).join('')}</div></div>`;
 }
 function roleFace(role, skin = 'classic', small) {
   const r = ROLE[role] || { n: RN[role], side: (role||'').includes('evil')?'evil':'good', en: '' };
-  const art = ROLE_ART[role] || role;
+  let art = ROLE_ART[role] || role;
+  if (OUTFIT_ROLES.includes(role) && (skin === 'casual' || skin === 'festive')) art = `${role}_${skin}`;
   return `<div class="rc ${r.side||'good'} sk-${skin}"><div class="art" style="background-image:url(${img(art)})"></div>
     <div class="cap">${small ? `<div class="rn" style="font-size:13px;letter-spacing:1px">${r.n||RN[role]}</div>` : `<div class="side">${(r.side==='good') ? '亞瑟的忠誠陣營' : '莫德雷德的爪牙陣營'}</div><div class="rn">${r.n||RN[role]||''}</div><div class="en">${r.en||''}</div>`}</div></div>`;
 }
 
+function knowRing(items, o) {
+  const n = items.length; const R = 40;
+  const seats = items.map((it, i) => {
+    const a = (-90 + i * 360 / n) * Math.PI / 180; const x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a);
+    let circ, lbl, cls = '';
+    if (it.me) { circ = `<div class="kc me" style="background-image:url(${thumb(it.art)})"></div>`; lbl = '<span class="kl me">你</span>'; }
+    else if (o.reveal && it.real) { cls = it.kind === 'u' ? 'faded' : ''; circ = `<div class="kc real ${it.real.side}" style="background-image:url(${thumb(it.real.art)})"></div>`; lbl = `<span class="kl ${it.real.side === 'good' ? 'g' : 'e'}">${esc(it.real.n)}</span>`; }
+    else if (it.kind === 'e') { circ = '<div class="kc e">💀</div>'; lbl = `<span class="kl e">${esc(it.label)}</span>`; }
+    else if (it.kind === 'p') { circ = '<div class="kc p">✨</div>'; lbl = `<span class="kl p">${esc(it.label)}</span>`; }
+    else { circ = '<div class="kc u">?</div>'; lbl = '<span class="kl u">?</span>'; }
+    return `<div class="ks ${cls}" style="left:${x}%;top:${y}%">${circ}${lbl}${it.name && !it.me ? `<span class="kn">${esc(it.name)}</span>` : ''}</div>`;
+  }).join('');
+  return `<div class="kring"><div class="kcen"><span class="tiny">你係</span><b class="${o.side}">${esc(o.role)}</b><span class="tiny">睇到 ${o.n} 人</span></div>${seats}</div>`;
+}
 function roundTable(seats, o = {}) {
   const n = seats.length; const R = n > 8 ? 42 : n > 10 ? 40 : 40;
   const st = seats.map((s, i) => {
@@ -351,6 +400,8 @@ function handleEvent(st) {
   else if (ev.type === 'veto') queueModal(() => openModal(`<h2>回避卡</h2><p class="center">${esc(ev.name||'一位騎士')} 使用回避卡退出隊伍，本輪否決不增加，隊長需重新組隊。</p><button class="btn" id="ok">知道了</button>`, el => $('#ok',el).onclick=closeModal));
   else if (ev.type === 'end') { if (ev.prev) queueModal(() => showVote(ev.prev)); queueModal(showEnd); }
   else if (ev.type === 'abort') toast('房主已結束本局');
+  else if (ev.type === 'earlyassassin') queueModal(() => openModal(`<div class="center"><div class="big">🗡️</div><h2 class="result-evil">提前刺殺！</h2><p>${esc(ev.name || '刺客')} 發動提前刺殺，紅方已亮明身份（奧伯倫除外）。<br>刺客正在選擇目標：刺中梅林紅方勝，刺錯藍方勝。</p></div><button class="btn" id="ok">知道了</button>`, el => $('#ok', el).onclick = closeModal));
+  else if (ev.type === 'host') toast(ev.id === st.meId ? '你現在是房主 👑' : `${ev.name} 成為新房主 👑`);
   if (ev.type === 'quest' && ev.then === 'end') queueModal(showEnd);
 }
 function showLance(L) {
@@ -359,16 +410,65 @@ function showLance(L) {
     <p class="center muted small">兩位蘭斯洛特${L.switched?'此刻已互換陣營':'維持原先陣營'}。這個資訊對所有人公開。</p>
     <button class="btn" id="ok">繼續</button>`, el => $('#ok',el).onclick=closeModal);
 }
+const ROLE_INFO = {
+  merlin: '你看得到所有壞人（莫德雷德除外）。派西維爾會看到你（與莫甘娜一起）。小心別被刺客發現！',
+  percival: '你會看到梅林和莫甘娜，但分不出誰是誰。保護真正的梅林。',
+  servant: '你沒有特殊資訊，靠投票與任務記錄推理出壞人。',
+  lancelot_good: '你知道另一位蘭斯洛特是誰。忠誠牌可能讓你們互換陣營；你即使是好人也可以出失敗卡。',
+  assassin: '你知道壞人隊友（奧伯倫除外）。梅林看得到你。好人完成三個任務後，由你刺殺梅林翻盤。',
+  morgana: '梅林看得到你是壞人；你知道壞人隊友；派西維爾會把你和梅林一起看到，請假扮梅林。',
+  mordred: '梅林看不到你！你知道壞人隊友（奧伯倫除外）。',
+  oberon: '梅林可以看到你是壞人；你同隊友互相唔知。',
+  minion: '你知道壞人隊友（奧伯倫除外）。梅林看得到你。',
+  lancelot_evil: '你知道另一位蘭斯洛特是誰。忠誠牌可能讓你們互換陣營。',
+};
 function showRole(first) {
   const g = S && S.game; const me = g && g.me; if (!me) return;
-  openModal(`<h2>${first ? '你的身份' : '我的身份'}</h2>
-    <div class="flip" id="flip"><div class="in"><div class="face back"><div class="hint">🤫 遮住螢幕 · 點擊翻開</div></div><div class="face front">${roleFace(me.role, skinOf(me.role))}</div></div></div>
-    <div id="kn" class="hidden"><div class="small" style="margin-top:12px;color:var(--ivory)">${ROLE[me.role].d}</div><div class="know">${knowsHtml(me, g.seats)}</div></div>
-    <div class="cover">翻開前請確認旁邊沒有人偷看</div>
-    <button class="btn" id="ok">記住了，蓋上</button>`, (el) => {
-    const f = $('#flip', el); f.onclick = () => { f.classList.toggle('on'); $('#kn', el).classList.toggle('hidden', !f.classList.contains('on')); };
+  const r = ROLE[me.role] || {}; const side = me.side || r.side;
+  const seatNo = (id) => g.seats.findIndex(s => s.id === id) + 1;
+  const mates = (me.knows || []).map(k => { const p = P(k.id, g.seats); return `<div class="mate">${av(p, 40)}<div class="grow"><b>${esc(p.name)}</b><div class="tiny muted">${esc(k.label)}</div></div><span class="seatpill ${k.label.includes('壞') ? 'e' : ''}">${seatNo(k.id)}號</span></div>`; }).join('');
+  const ladyMine = (g.ladyLog || []).filter(l => l.side && l.holder === S.meId).map(l => { const p = P(l.target, g.seats); return `<div class="mate">${av(p, 34)}<div class="grow"><b>${esc(p.name)}</b><div class="tiny muted">第 ${l.round + 1} 輪後查驗</div></div><span class="seatpill ${l.side === 'evil' ? 'e' : ''}">${seatNo(l.target)}號 · ${l.side === 'good' ? '好人' : '壞人'}</span></div>`; }).join('');
+  const kmap = {}; (me.knows || []).forEach(k => { kmap[k.id] = k.label; });
+  const special = !['servant', 'minion'].includes(me.role);
+  let art = ROLE_ART[me.role] || me.role; const sk = skinOf(me.role);
+  if (OUTFIT_ROLES.includes(me.role) && (sk === 'casual' || sk === 'festive')) art = `${me.role}_${sk}`;
+  const cb = cardBackOf();
+  openModal(`<div class="reveal ${side} ${special ? 'special' : ''}"><div class="rv-h">你的身份是</div>
+    <div class="rv-stage"><div class="rays"></div><canvas class="fxc" id="fxc"></canvas>
+    <div class="flip" id="flip"><div class="in"><div class="face back" style="background-image:url(${img(cb)})"><div class="hint">👉 點擊卡片翻開</div></div>
+      <div class="face front"><div class="rcard ${side}"><div class="strip"></div><div class="rart" style="background-image:url(${img(art)})"></div>
+        <div class="rname">${r.n || me.roleName}</div><span class="teampill ${side}">${side === 'good' ? '藍方' : '紅方'}</span></div></div></div></div></div>
+    <div id="kn" class="hidden">
+      <div class="rinfo">${ROLE_INFO[me.role] || r.d || ''}${g.lanceSwitched !== undefined && me.side !== r.side ? '<br><b>注意：蘭斯洛特已互換陣營</b>' : ''}</div>
+      ${mates ? `<div class="matepanel"><div class="mp-h">${side === 'evil' ? '可看到的隊友' : '可看到的人物'}</div>${mates}</div>` : ''}
+      <div class="matepanel"><div class="mp-h">你開局睇到嘅人</div>${knowRing(g.seats.map(s => s.id === S.meId ? { me: true, art } : (kmap[s.id] ? { kind: /梅林/.test(kmap[s.id]) ? 'p' : (/壞|同伴|隊友/.test(kmap[s.id]) ? 'e' : 'p'), label: kmap[s.id], name: s.name } : { kind: 'u', name: s.name })), { role: r.n || me.roleName, side, n: Object.keys(kmap).length })}<div class="tiny muted center" style="margin-top:6px">灰色「?」= 你睇唔到佢嘅身份</div></div>
+      ${ladyMine ? `<div class="matepanel"><div class="mp-h">🌊 湖中仙女查驗結果</div>${ladyMine}</div>` : ''}
+    </div>
+    <div class="cover" id="cov">翻開前請確認旁邊沒有人偷看</div>
+    ${!first && me.role === 'assassin' && !['end', 'assassin'].includes(g.phase) ? '<button class="btn evil big" id="early">🗡️ 提前刺殺</button>' : ''}
+    <button class="btn big" id="ok">我記住了</button></div>`, (el) => {
+    const eb = $('#early', el); if (eb) eb.onclick = () => { if (!confirm('確定提前刺殺？\n紅方會即時亮明身份（奧伯倫除外），你要喺圓桌上揀一位玩家刺殺：刺中梅林紅方即勝，刺錯藍方即勝。')) return; closeModal(); act('earlyassassin'); };
+    const f = $('#flip', el); const rv = $('.reveal', el);
+    f.onclick = () => { f.classList.toggle('on'); const on = f.classList.contains('on'); rv.classList.toggle('opened', on); $('#kn', el).classList.toggle('hidden', !on); $('#cov', el).classList.toggle('hidden', on); if (on) burst($('#fxc', el), side); };
     $('#ok', el).onclick = closeModal;
-  }, true);
+  }, !!first);
+}
+function burst(cv, side) {
+  if (!cv || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const r = cv.getBoundingClientRect(); const dpr = Math.min(2, devicePixelRatio || 1); cv.width = r.width * dpr; cv.height = r.height * dpr;
+  const x = cv.getContext('2d'); x.scale(dpr, dpr); const cx = r.width / 2, cy = r.height / 2; const good = side === 'good';
+  const ps = Array.from({ length: good ? 90 : 70 }, () => { const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * (good ? 6 : 3.5);
+    return { x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - (good ? 0 : 1.2), life: 1, sz: good ? 1.5 + Math.random() * 3 : 4 + Math.random() * 10, hue: good ? 42 + Math.random() * 15 : 350 + Math.random() * 20 }; });
+  const t0 = performance.now();
+  const step = (t) => {
+    const k = (t - t0) / 1500; x.clearRect(0, 0, r.width, r.height); if (k > 1) return;
+    if (k < 0.25) { const gr = x.createRadialGradient(cx, cy, 0, cx, cy, r.width * 0.7); gr.addColorStop(0, `rgba(255,${good ? 240 : 190},${good ? 190 : 170},${0.8 * (1 - k * 4)})`); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, r.width, r.height); }
+    for (const p of ps) { p.x += p.vx; p.y += p.vy; p.vx *= 0.97; p.vy = p.vy * 0.97 + (good ? 0.05 : -0.04); p.life = 1 - k;
+      x.globalAlpha = Math.max(0, p.life); x.fillStyle = good ? `hsl(${p.hue},95%,${60 + Math.random() * 25}%)` : `hsla(${p.hue},80%,${35 + Math.random() * 20}%,.7)`;
+      x.beginPath(); if (good) { const s = p.sz; x.moveTo(p.x, p.y - s * 2); x.lineTo(p.x + s * .6, p.y - s * .6); x.lineTo(p.x + s * 2, p.y); x.lineTo(p.x + s * .6, p.y + s * .6); x.lineTo(p.x, p.y + s * 2); x.lineTo(p.x - s * .6, p.y + s * .6); x.lineTo(p.x - s * 2, p.y); x.lineTo(p.x - s * .6, p.y - s * .6); } else x.arc(p.x, p.y, p.sz * (0.6 + k), 0, Math.PI * 2); x.fill(); }
+    x.globalAlpha = 1; requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 function showVote(ev) {
   const ids = Object.keys(ev.votes); const list = people();
@@ -385,13 +485,20 @@ function showVote(ev) {
 function showQuest(ev) {
   const cards = Array(ev.size).fill(true); for (let i = 0; i < ev.fails; i++) cards[i] = false;
   for (let i = cards.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cards[i], cards[j]] = [cards[j], cards[i]]; }
-  openModal(`<h2>第 ${ev.round + 1} 個任務</h2><p class="center muted small">洗牌後逐張翻開任務卡…</p>
-    <div class="qcards">${cards.map(c => `<div class="vc"><div class="c"><div class="ci"><div class="f b"></div><div class="f ${c ? 'y' : 'n'}">${c ? '🛡️' : '🗡️'}</div></div></div><div class="nm">${c ? '成功' : '失敗'}</div></div>`).join('')}</div>
-    <div class="tally ${ev.success ? 'result-good' : 'result-evil'}" id="tl"><div class="big">${ev.success ? '🏆' : '💥'}</div>${ev.success ? '任務成功' : '任務失敗'}<div class="small muted" style="font-family:sans-serif;font-weight:500">${ev.size} 張中有 ${ev.fails} 張失敗${!ev.success || ev.fails === 0 ? '' : '（本輪需 2 張失敗）'}</div></div>
-    <button class="btn" id="ok">繼續</button>`, async (el) => {
+  const sub = ev.fails === 0 ? '全部係成功牌' : `${ev.fails} 張失敗牌${ev.success ? '（本輪需要 2 張失敗先算失敗）' : ''}`;
+  openModal(`<div class="qreveal"><div class="qr-h">第 ${ev.round + 1} 個任務 · 結果揭曉</div><div class="qr-sub">牌已打亂，睇唔到係邊個出</div>
+    <div class="qr-cards">${cards.map(c => `<div class="qc"><div class="qci"><div class="f b"><span>?</span></div><div class="f fr ${c ? 'ok' : 'ng'}"><img src="/img/${c ? 'q_success' : 'q_fail'}.webp" alt=""><b>${c ? '成功' : '失敗'}</b></div></div></div>`).join('')}</div>
+    <div class="qr-res ${ev.success ? 'ok' : 'ng'}" id="tl"><div class="t">${ev.success ? '任務成功' : '任務失敗'}</div><div class="s">${sub}</div></div>
+    <button class="btn big" id="ok">繼續</button></div>`, async (el) => {
     $('#ok', el).onclick = closeModal;
-    for (const c of $$('.vc', el)) { await sleep(650); c.classList.add('on'); }
-    await sleep(500); const t = $('#tl', el); t && t.classList.add('on');
+    const cs = $$('.qc', el); await sleep(700);
+    for (let i = 0; i < cs.length; i++) {
+      const last = i === cs.length - 1;
+      if (last && cs.length > 1) { cs[i].classList.add('tense'); await sleep(1100); cs[i].classList.remove('tense'); }
+      cs[i].classList.add('on'); if (navigator.vibrate && !cards[i]) navigator.vibrate(60);
+      await sleep(last ? 500 : 800);
+    }
+    const t = $('#tl', el); t && t.classList.add('on');
   });
 }
 function showLady(ev) {
@@ -405,9 +512,14 @@ function showLady(ev) {
 function showEnd() {
   const g = S && S.game; if (!g || g.phase !== 'end') return;
   const goodWin = g.winner === 'good'; refreshStats();
-  openModal(`<div class="banner ${g.winner}"><div class="big">${goodWin ? '🛡️' : '🗡️'}</div><h2>${goodWin ? '亞瑟陣營勝利' : '莫德雷德陣營勝利'}</h2><div class="small">${esc(g.reason)}</div></div>
-    ${roundTable(g.seats, { label: s => `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>`, marker: s => (s.id === g.assassinTarget ? '🗡️' : '') + (s.id === g.mvp ? '🏅' : ''), center: `<b>${goodWin ? '好人勝' : '壞人勝'}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}` })}
-    <button class="btn" id="ok">查看對局詳情</button>`, (el) => $('#ok', el).onclick = () => { closeModal(); setTimeout(() => { const d = $('#detail'); d && d.scrollIntoView({ behavior: 'smooth' }); }, 100); });
+  const sn = (id) => g.seats.findIndex(s => s.id === id) + 1; const mer = g.seats.find(s => s.role === 'merlin'); const tgt = g.assassinTarget && g.seats.find(s => s.id === g.assassinTarget);
+  const atLine = tgt ? `刺殺目標係 ${sn(tgt.id)}號${(ROLE[tgt.role] || {}).n || ''}，梅林係 ${mer ? sn(mer.id) : '?'}號` : '';
+  const qrows = g.quests.map((q, i) => q ? `<div class="qrow"><b>任務${i + 1}</b><span class="qm">${q.team.map(id => `<span class="seatpill ${(g.seats.find(s => s.id === id) || {}).side === 'evil' ? 'e' : ''}">${sn(id)}</span>`).join('')}</span><span class="badge ${q.success ? 'good' : 'evil'}">${q.success ? '成功' : '失敗'}</span></div>` : '').join('');
+  openModal(`<div class="banner ${g.winner}"><div class="big">${g.winner === 'none' ? '🏳️' : goodWin ? '🛡️' : '🗡️'}</div><h2>${g.winner === 'none' ? '提前結束' : goodWin ? '藍方勝利' : '紅方勝利'}</h2><div class="small">${g.winner === 'none' ? '房主提前結束本局 · 不計勝負、不計分、不派回避卡' : esc(g.reason)}</div>${atLine ? `<div class="small" style="margin-top:4px"><b>${atLine}</b></div>` : ''}</div>
+    ${roundTable(g.seats, { cls: s => s.side === 'evil' ? 'evil-tint' : '', label: s => `<span class="lbl ${s.side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>`, marker: s => (s.id === S.hostId ? '👑' : '') + (s.id === g.assassinTarget ? '🎯' : '') + (s.id === g.mvp ? '🏅' : ''), center: `<b>${goodWin ? '好人勝' : '壞人勝'}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}` })}
+    <div class="qrows">${qrows}</div>
+    <div class="btns"><button class="btn" id="sh">📤 分享戰果</button><button class="btn ghost" id="pp">🖼️ 生成海報</button></div>
+    <button class="btn dark" id="ok">查看對局詳情</button>`, (el) => { const rec = liveRecord(g); window.__lastRecord = rec; $('#sh', el).onclick = () => shareSheet(rec); $('#pp', el).onclick = () => saveCard(rec, true); $('#ok', el).onclick = () => { closeModal(); setTimeout(() => { const d = $('#detail'); d && d.scrollIntoView({ behavior: 'smooth' }); }, 100); }; });
 }
 
 // ================= views =================
@@ -415,51 +527,108 @@ function render() {
   const app = $('#app'); const inRoom = S && S.code;
   if (view === 'room' && !inRoom) view = 'home';
   $('#backBtn').classList.toggle('hidden', view === 'home');
-  $('#topTitle').textContent = { home: '卡美洛密令', room: inRoom ? `圓桌 ${S.code}` : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情' }[view];
+  $('#topTitle').textContent = { home: '旺角Avalon', room: inRoom ? `圓桌 ${S.code}` : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就' }[view];
   if (view === 'home') app.innerHTML = homeHtml();
-  else if (view === 'room') { app.innerHTML = S.game ? gameHtml() : lobbyHtml(); enterIds.clear(); }
+  else if (view === 'room') {
+    const before = {}; $$('.rt .st[data-id]').forEach(e => { const r = e.getBoundingClientRect(); before[e.dataset.id] = [r.left, r.top]; });
+    app.innerHTML = S.game ? gameHtml() : lobbyHtml(); enterIds.clear();
+    if (!S.game) $$('.rt .st[data-id]').forEach(e => {
+      const b = before[e.dataset.id]; if (!b) return; const r = e.getBoundingClientRect(); const dx = b[0] - r.left, dy = b[1] - r.top;
+      if (Math.abs(dx) + Math.abs(dy) < 4) return;
+      e.style.transition = 'none'; e.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`; e.style.zIndex = 5;
+      requestAnimationFrame(() => requestAnimationFrame(() => { e.style.transition = 'transform .55s cubic-bezier(.3,1.3,.5,1)'; e.style.transform = ''; setTimeout(() => { e.style.zIndex = ''; e.style.transition = ''; }, 600); }));
+    });
+  }
   else if (view === 'rules') { app.innerHTML = rulesHtml(); mountRules(); }
   else if (view === 'history') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadHistory(); }
   else if (view === 'stats') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadStats(); }
+  else if (view === 'ach') { app.innerHTML = '<div class="card center muted">載入中…</div>'; refreshStats().catch(() => {}).then(() => { if (view === 'ach') app.innerHTML = achHtml(); }); }
   else if (view === 'skins') { app.innerHTML = '<div class="card center muted">載入中…</div>'; refreshStats().then(() => { if (view === 'skins') app.innerHTML = skinsHtml(); }); }
   else if (view === 'detail') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadDetail(viewArg.gid); }
 }
 function homeHtml() {
   const inRoom = S && S.code;
-  return `<div class="hero">${LOGO}<h1>卡美洛密令</h1><div class="en">CAMELOT CIPHER</div><div class="small muted" style="margin-top:6px">免安裝 · 手機瀏覽器即玩的阿瓦隆</div></div>
-  <div class="card row" data-a="profile" style="cursor:pointer">${av(profile, 56)}
-    <div class="grow"><div class="name">${profile.name ? esc(profile.name) : '未設定暱稱'}</div><div class="muted small">${myStats.played||0} 場 · 勝率 ${pct(myStats.won, myStats.played)}%　點擊編輯檔案</div></div><span class="gold">✎</span></div>
-  <div class="card">${account && account.username ? `<div class="row between"><div>已登入 <b>${esc(account.username)}</b></div><button class="btn sm dark" data-a="logout">登出</button></div><div class="tiny muted">換一部手機登入同一個帳號，頭像、戰績與皮膚都會在。</div>` : `<div class="small muted">目前是訪客。註冊帳號後，暱稱、頭像、戰績會永久保存，換機也能登入。</div><div class="btns"><button class="btn" data-a="register">註冊帳號</button><button class="btn ghost" data-a="login">登入</button></div>`}</div>
-  ${inRoom ? `<div class="card"><h3>我的圓桌</h3><div class="row between"><div><span class="code">${S.code}</span>${S.isHost ? '<span class="badge">👑 房主</span>' : ''}<div class="muted small">就座 ${S.seated}/${S.capacity} · ${S.game ? (S.game.phase === 'end' ? '已結束' : '遊戲中') : '等待開局'}</div></div><button class="btn sm" data-a="toroom">回到房間</button></div></div>` : ''}
-  <div class="btns"><button class="btn" data-a="create">⚔️ 建立房間</button><button class="btn ghost" data-a="join">🛡️ 加入房間</button></div>
-  <div class="card menu" style="margin-top:16px">
+  const vc = account ? account.vetoCards : null;
+  return `<div class="hero sm">${LOGO}<h1>旺角Avalon</h1></div>
+  <div class="card prof-head">
+    <div class="row" data-a="profile" style="cursor:pointer">${av(profile, 60)}
+      <div class="grow"><div class="name">${profile.name ? esc(profile.name) : '未設定暱稱'}</div><div class="muted small">${myStats.played || 0} 場 · 勝率 ${pct(myStats.won, myStats.played)}%${vc != null ? ` · 🛡️ 回避卡 ${vc}/10` : ''}</div></div></div>
+    <div class="row" style="gap:8px;margin-top:10px"><button class="btn sm ghost" data-a="profile">✎ 編輯檔案</button><button class="btn sm ghost" data-a="ptab" data-t="pendant">🎀 頭像掛件</button></div>
+    <div class="acct">${account && (account.username || account.google) ? `<div class="row between"><div class="small">已登入 <b>${esc(account.username || account.email || 'Google 帳號')}</b>${account.google ? ' <span class="badge">Google</span>' : ''}</div><button class="btn sm dark" data-a="logout">登出</button></div>` : `<div class="tiny muted">目前是訪客。註冊或用 Google 登入後，資料永久保存、換機也能找回。</div><div class="btns"><button class="btn sm" data-a="register">註冊帳號</button><button class="btn sm ghost" data-a="login">登入</button></div>`}</div>
+  </div>
+  ${inRoom ? `<div class="card"><div class="row between"><div><span class="code">${S.code}</span>${S.isHost ? '<span class="badge">👑 房主</span>' : ''}<div class="muted small">就座 ${S.seated}/${S.capacity} · ${S.game ? (S.game.phase === 'end' ? '已結束' : '遊戲中') : '等待開局'}</div></div><button class="btn sm" data-a="toroom">回到房間</button></div></div>` : ''}
+  <div class="bigcards">
+    <div class="bigcard create" data-a="create"><div class="ic">⚔️</div><b>建立房間</b><span>我做房主</span></div>
+    <div class="bigcard join" data-a="join"><div class="ic">🛡️</div><b>加入房間</b><span>輸入 4 位房間號</span></div>
+  </div>
+  <div class="card menu" style="margin-top:14px">
     <div class="item" data-a="go" data-v="history"><span class="ic">📜</span><span class="grow">歷史記錄</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="stats"><span class="ic">📊</span><span class="grow">數據統計</span><span class="chev">›</span></div>
+    <div class="item" data-a="ptab" data-t="avatar"><span class="ic">🦊</span><span class="grow">我的頭像</span><span class="chev">›</span></div>
+    <div class="item" data-a="ptab" data-t="fx"><span class="ic">✨</span><span class="grow">我的入場特效</span><span class="chev">›</span></div>
+    <div class="item" data-a="ptab" data-t="pendant"><span class="ic">🎀</span><span class="grow">頭像掛件</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="skins"><span class="ic">🎴</span><span class="grow">角色皮膚</span><span class="chev">›</span></div>
+    <div class="item" data-a="go" data-v="ach"><span class="ic">🏆</span><span class="grow">成就</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="rules"><span class="ic">📖</span><span class="grow">規則介紹</span><span class="chev">›</span></div>
+    <div class="item" data-a="about"><span class="ic">ℹ️</span><span class="grow">版本</span><span class="muted small">v3.1</span><span class="chev">›</span></div>
   </div>
-  <div class="footer">一人開房，同枱朋友掃碼入座<br>5–12 人 · 繁體中文 · 無需微信</div>`;
+  <div class="footer"><span class="credit">旺角Avalon · by Amigosparty · v3.1</span><br><span class="credit2">Design by Teddy Design Limited</span></div>`;
+}
+const ACHS = [
+  ['first', '初入圓桌', '完成第 1 場遊戲', s => s.played >= 1],
+  ['ten', '圓桌常客', '完成 10 場遊戲', s => s.played >= 10],
+  ['win1', '首勝', '贏得第 1 場', s => s.won >= 1],
+  ['win10', '常勝騎士', '累積 10 場勝利', s => s.won >= 10],
+  ['mvp', '全場最佳', '獲得一次 MVP', s => (s.mvp || 0) >= 1],
+  ['merlin', '智者', '以梅林身份獲勝', s => ((s.roles || {}).merlin || {}).won >= 1],
+  ['assassin', '暗影之刃', '以刺客身份獲勝', s => ((s.roles || {}).assassin || {}).won >= 1],
+  ['allroles', '千面騎士', '玩過 6 種不同角色', s => Object.keys(s.roles || {}).length >= 6],
+];
+function achHtml() {
+  const s = myStats || {}; const got = ACHS.filter(a => a[3](s)).length;
+  return `<div class="card"><h3>成就 ${got}/${ACHS.length}</h3><div class="bar"><i style="width:${pct(got, ACHS.length)}%"></i></div></div>` +
+    `<div class="card ach">${ACHS.map(([k, n, d, f]) => `<div class="ach-i ${f(s) ? 'on' : ''}"><span class="medal">${f(s) ? '🏅' : '🔒'}</span><div><b>${n}</b><div class="tiny muted">${d}</div></div></div>`).join('')}</div>`;
+}
+function expStatus(s) {
+  return [['蘭斯洛特', s.lancelot], ['湖中仙女', s.lady], ['王者之劍', s.excalibur], ['回避卡', s.veto]]
+    .map(([n, on]) => `<span class="xp ${on ? 'on' : ''}">${n}<i>${on ? '已開啟' : '未開啟'}</i></span>`).join('');
+}
+function cfgSheetHtml() {
+  if (!S) return '';
+  const n = S.capacity, s = S.settings, host = S.isHost; const dis = host ? '' : 'disabled';
+  const tg = (k, title, desc, icon) => `<div class="toggle">${icon || ''}<div class="grow"><b>${title}</b><div class="muted small">${desc}</div></div><button class="sw ${s[k] ? 'on' : ''}" data-a="tg" data-k="${k}" ${dis}></button></div>`;
+  return `<h2>${n} 人局設定</h2>${host ? '' : '<div class="center small muted">由房主設定，所有人即時同步</div>'}
+    <div class="small muted" style="margin-top:6px">玩家人數</div>
+    <div class="nums">${[5,6,7,8,9,10,11,12].map(k => `<button data-a="cap" data-n="${k}" class="${k === n ? 'sel' : ''}" ${dis}>${k}</button>`).join('')}</div>
+    ${presetCard(S.preset)}
+    <div class="tiny muted" style="margin-top:6px">任務人數：${(S.teamSizes || []).join(' / ')}${n >= 7 ? '（第 4 輪需 2 張失敗）' : ''}　減少人數時，多出座位上的玩家會自動離座</div>
+    ${tg('lady', '湖中仙女', '第 2–4 個任務後查驗一人陣營（8 人以上預設開啟）', `<img src="${thumb('lady')}" alt="">`)}
+    ${tg('veto', '允許使用回避卡', '投票時可用一張回避卡退出隊伍，不計否決（每贏一局得 1 張，上限 10）')}
+    ${tg('excalibur', '王者之劍', '隊長把劍交給隊員，任務後可翻轉一張任務卡')}
+    ${tg('lancelot', '蘭斯洛特', '正邪各一，忠誠牌可能互換陣營（11 人以上預設開啟）')}
+    <div class="adv"><button class="btn ghost sm" data-a="adv" ${dis}>${s.advanced ? '收起進階角色調整' : '進階：自行調整角色（選用）'}</button></div>
+    ${s.advanced ? `<div class="small muted" style="margin-top:8px">進階模式會改寫上方預設陣容</div>${[['percival','派西維爾'],['morgana','莫甘娜'],['mordred','莫德雷德'],['oberon','奧伯倫']].map(([k, nm]) => `<div class="toggle"><div class="grow"><b>${nm}</b></div><button class="sw ${s[k] ? 'on' : ''}" data-a="tg" data-k="${k}" ${dis}></button></div>`).join('')}` : ''}
+    <button class="btn" data-a="cfgclose" style="margin-top:12px">完成</button>`;
 }
 function lobbyHtml() {
   const n = S.capacity, x = S.seated, s = S.settings, host = S.isHost;
-  const me = (S.seats||[]).find(p => p && p.id === S.meId);
-  return `<div class="card">${roomHead()}</div>
-  <div class="card" style="padding:10px">${roundTable(S.seats, { seatClick: 'seat', marker: p => (p.isHost||p.id===S.hostId?'👑':'')+(p.id===S.meId?'⭐':'')+(p.ready?'✅':''), center: `<b>${x}/${n} 已就座</b>${S.mySeat?'點頭像看名片或離座':'點空位就座'}` })}</div>
-  <div class="card"><h3>人數與陣容${host?'':'（由房主設定，即時同步）'}</h3>
-    <div class="nums">${[5,6,7,8,9,10,11,12].map(k=>`<button data-a="cap" data-n="${k}" class="${k===n?'sel':''}" ${host?'':'disabled'}>${k}</button>`).join('')}</div>
+  const me = (S.seats || []).find(p => p && p.id === S.meId);
+  const vc = S.myVetoCards == null ? (account && account.vetoCards) : S.myVetoCards;
+  return `${roomHead()}
+  <div class="card" style="padding:10px">${roundTable(S.seats, {
+      seatClick: 'seat',
+      marker: p => (p.isHost || p.id === S.hostId ? '👑' : '') + (p.ready ? '✅' : ''),
+      label: p => p.isHost || p.id === S.hostId ? '<span class="lbl y">房主</span>' : (p.id === S.meId ? '<span class="lbl g">我</span>' : ''),
+      center: `<b>${x}/${n} 已就座</b>` })}
+    <div class="tiny muted center" style="margin-top:4px">點空位就座 · 點玩家看名片${host ? '或請他離座' : ''}</div></div>
+  <div class="card cfgcard" data-a="cfg">
+    <div class="row between"><h3 style="margin:0">${n} 人局</h3><span class="small gold">${host ? '調整 ›' : '查看 ›'}</span></div>
     ${presetCard(S.preset)}
-    <div class="small muted" style="margin-top:6px">任務人數：${(S.teamSizes||[]).join(' / ')}${n>=7?'（第 4 輪需 2 張失敗）':''}</div>
-    <div class="toggle"><img src="${thumb('lady')}" alt=""><div class="grow"><b>湖中仙女</b><div class="muted small">第 2–4 個任務後查驗一人陣營（8 人以上預設開啟）</div></div><button class="sw ${s.lady?'on':''}" data-a="tg" data-k="lady" ${host?'':'disabled'}></button></div>
-    <div class="toggle"><div class="grow"><b>王者之劍</b><div class="muted small">隊長把劍交給一位隊員，任務後可翻轉一張任務卡</div></div><button class="sw ${s.excalibur?'on':''}" data-a="tg" data-k="excalibur" ${host?'':'disabled'}></button></div>
-    <div class="toggle"><div class="grow"><b>蘭斯洛特</b><div class="muted small">正邪各一，忠誠牌可能互換陣營（11 人以上預設開啟）</div></div><button class="sw ${s.lancelot?'on':''}" data-a="tg" data-k="lancelot" ${host?'':'disabled'}></button></div>
-    <div class="toggle"><div class="grow"><b>回避卡</b><div class="muted small">每人一張，投票階段可退出隊伍且不計否決</div></div><button class="sw ${s.veto?'on':''}" data-a="tg" data-k="veto" ${host?'':'disabled'}></button></div>
-    <div class="adv"><button class="btn ghost sm" data-a="adv">${s.advanced?'收起進階角色調整':'進階：自行調整角色（選用）'}</button></div>
-    ${s.advanced?`<div class="small muted" style="margin-top:8px">進階模式會改寫上方預設陣容</div>
-      ${[['percival','派西維爾'],['morgana','莫甘娜'],['mordred','莫德雷德'],['oberon','奧伯倫']].map(([k,nm])=>`<div class="toggle"><div class="grow"><b>${nm}</b></div><button class="sw ${s[k]?'on':''}" data-a="tg" data-k="${k}" ${host?'':'disabled'}></button></div>`).join('')}`:''}
+    <div class="xps">${expStatus(s)}</div>
   </div>
-  <div class="bottombar"><div class="thumb" data-a="role"></div>
-    ${host?`<button class="btn" data-a="start" ${x===n?'':'disabled'}>開始遊戲（${x}/${n}）</button>`:
-      S.mySeat?`<button class="btn ${me&&me.ready?'ghost':''}" data-a="ready">${me&&me.ready?'已準備 ✓':'準備'}</button>`:`<button class="btn ghost" disabled>請先就座</button>`}
+  <div class="bottombar">${s.veto ? `<div class="veto-ic" data-a="vetoinfo" title="回避卡"><span>🛡️</span><b>${vc == null ? '–' : vc}</b></div>` : `<div class="thumb" data-a="role"></div>`}
+    ${host ? `<button class="btn" data-a="start" ${x === n ? '' : 'disabled'}>開始遊戲（${x}/${n}）</button>` :
+      S.mySeat ? `<button class="btn ${me && me.ready ? 'ghost' : ''}" data-a="ready">${me && me.ready ? '已準備 ✓' : '準備'}</button>` : `<button class="btn ghost" disabled>請先點空位就座</button>`}
   </div>`;
 }
 function gameHtml() {
@@ -498,11 +667,11 @@ function gameHtml() {
       : `<div class="phase">🌊 湖中仙女</div><div class="small muted">${chip(g.ladyId)} 正在選擇查驗對象</div>`;
   } else if (g.phase === 'assassin') {
     const amA = me && me.role === 'assassin'; const as = g.seats.find(s => s.assassin);
-    center = `<b>刺殺時刻</b>好人已完成 3 個任務`;
-    panel = `<div class="phase">🗡️ 刺客的最後一擊</div><div class="small muted">壞人可以公開討論，由刺客 ${as ? chip(as.id) : ''} 指認梅林</div>` +
+    center = g.earlyAssassin ? `<b>刺殺階段</b>紅方已亮明身份` : `<b>刺殺時刻</b>好人已完成 3 個任務`;
+    panel = (g.earlyAssassin ? `<div class="phase evilbar">🗡️ 刺殺階段 — 紅方已亮明身份，刺客選擇目標中</div><div class="small muted">刺客 ${as ? chip(as.id) : ''} 發動提前刺殺：刺中梅林紅方即勝，刺錯藍方即勝（奧伯倫仍然隱藏）</div>` : `<div class="phase">🗡️ 刺客的最後一擊</div><div class="small muted">壞人可以公開討論，由刺客 ${as ? chip(as.id) : ''} 指認梅林</div>`) +
       (amA ? `<div class="small muted" style="margin-top:6px">點選目標：${selCount ? esc(P([...selected][0]).name) : '未選'}</div><button class="btn evil" data-a="assassinate" ${selCount === 1 ? '' : 'disabled'}>確認刺殺</button>` : '');
   } else if (g.phase === 'end') {
-    center = `<b>${g.winner === 'good' ? '好人勝' : '壞人勝'}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}`;
+    center = `<b>${g.winner === 'none' ? '提前結束' : g.winner === 'good' ? '好人勝' : '壞人勝'}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}`;
     panel = `${S.isHost ? '<button class="btn" data-a="lobby" style="margin-top:0">🔁 再來一局（保留座位）</button>' : '<div class="center muted small">等待房主開新一局（座位保留）</div>'}`;
   }
   const selectable = (s) => (g.phase === 'team' && isLeader) || (g.phase === 'assassin' && me && me.role === 'assassin' && s.id !== meId && !s.evil) || (g.phase === 'lady' && isLady && s.id !== meId && !g.ladyUsed.includes(s.id)) || (g.phase === 'sword' && isLeader && g.team.includes(s.id) && s.id !== meId) || (g.phase === 'swordflip' && g.sword === meId && g.team.includes(s.id) && s.id !== meId);
@@ -520,14 +689,15 @@ function gameHtml() {
   ${me ? `<div class="card rolestrip" data-a="role"><div class="th"></div><div class="grow"><div class="serif gold" style="font-weight:700">我的身份卡</div><div class="small muted">點擊翻開查看（請遮住螢幕）</div></div><span class="gold">›</span></div>` : '<div class="card muted">你是觀眾</div>'}
   ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : `<div class="card"><h3>組隊 / 投票記錄</h3>${voteGrid(g.seats, g.rounds, g.quests, meId)}${ladyChainHtml(g.ladyLog, g.seats)}</div>`}
   <div class="btns"><button class="btn dark" data-a="invite">房間二維碼</button><button class="btn dark" data-a="go" data-v="home">返回主頁</button></div>
-  ${S.isHost && !ended ? '<button class="btn dark" data-a="abort" style="color:#ff8b9c">強制結束本局</button>' : ''}`;
+  ${S.isHost && !ended ? '<button class="btn dark" data-a="abort" style="color:#ff8b9c">強制結束本局</button>' : ''}
+  ${me && !ended ? `<button class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}`;
 }
 function ladyChainHtml(log, seats) {
   if (!log || !log.length) return '';
   return `<div class="small" style="margin-top:12px"><span class="gold">🌊 湖中仙女：</span>${log.map(l => `${esc(P(l.holder, seats).name)} → ${esc(P(l.target, seats).name)}${l.side ? ` <span class="badge ${l.side}">${l.side === 'good' ? '好' : '壞'}</span>` : ''}`).join('　')}</div>`;
 }
 function liveRecord(g) {
-  return { winner: g.winner, reason: g.reason, n: g.n, players: g.seats.map((s, i) => ({ ...s, seat: i + 1 })), quests: g.quests, rounds: g.rounds, ladyLog: g.ladyLog, assassinTarget: g.assassinTarget, scores: g.scores || {}, mvp: g.mvp, runnerUp: g.runnerUp, highlights: g.highlights || [], myId: S.meId, room: S.code, endedAt: Date.now() };
+  return { gid: g.gid, winner: g.winner, reason: g.reason, n: g.n, players: g.seats.map((s, i) => ({ ...s, seat: i + 1 })), quests: g.quests, rounds: g.rounds, ladyLog: g.ladyLog, assassinTarget: g.assassinTarget, scores: g.scores || {}, mvp: g.mvp, runnerUp: g.runnerUp, highlights: g.highlights || [], myId: S.meId, room: S.code, endedAt: Date.now() };
 }
 function detailHtml(r) {
   const seats = r.players; const me = seats.find(s => s.id === r.myId); const sc = r.scores || {};
@@ -535,7 +705,10 @@ function detailHtml(r) {
   const at = r.assassinTarget && seats.find(s => s.id === r.assassinTarget);
   const mvpBox = (id, t) => { if (!id || !sc[id]) return ''; const p = P(id, seats); return `<div><div class="t">${t}</div>${av(p, 44)}<div style="font-weight:700;margin-top:4px">${esc(p.name)}</div><div class="small"><span class="badge ${ROLE[p.role].side}">${ROLE[p.role].n}</span> <b class="gold">${sc[id].total} 分</b></div><ul>${sc[id].items.map(([l, v]) => `<li>${esc(l)} <b>+${v}</b></li>`).join('')}</ul></div>`; };
   window.__lastRecord = r;
-  return `<div class="card"><div class="banner ${r.winner}"><div class="tiny" style="letter-spacing:3px;opacity:.8">${r.room ? '房間 ' + esc(r.room) + ' · ' : ''}${r.n} 人局</div><h2>${goodWin ? '🛡️ 亞瑟陣營勝利' : '🗡️ 莫德雷德陣營勝利'}</h2><div class="small">${esc(r.reason)}</div>
+  setTimeout(() => renderCardPreview(r), 30);
+  return `<div class="card"><h3>戰果卡</h3><div id="cardprev" class="cardprev"><div class="center muted small">生成中…</div></div>
+    <div class="btns"><button class="btn" data-a="savecard">💾 儲存圖片</button><button class="btn ghost" data-a="sharecard">📤 分享</button></div></div>
+  <div class="card"><div class="banner ${r.winner}"><div class="tiny" style="letter-spacing:3px;opacity:.8">${r.room ? '房間 ' + esc(r.room) + ' · ' : ''}${r.n} 人局</div><h2>${r.winner === 'none' ? '🏳️ 提前結束' : goodWin ? '🛡️ 亞瑟陣營勝利' : '🗡️ 莫德雷德陣營勝利'}</h2><div class="small">${esc(r.reason)}</div>
       ${at ? `<div class="small" style="margin-top:6px">刺客刺殺了 ${esc(at.name)}（${ROLE[at.role].n}）· 梅林是 ${esc(merlin ? merlin.name : '?')}</div>` : ''}
       <div style="margin-top:8px;font-size:20px">${r.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join(' ')}</div></div>
     ${me && sc[me.id] ? `<div class="row between" style="margin-top:12px"><div class="row">${av(me, 36)}<div><b>我的表現</b><div class="small muted">${ROLE[me.role].n} · 座位 ${me.seat} · ${ROLE[me.role].side === r.winner ? '<span class="badge ok">勝利</span>' : '<span class="badge evil">落敗</span>'}</div></div></div><div class="center"><div class="code" style="font-size:22px;letter-spacing:1px">${sc[me.id].total} 分</div><div class="tiny muted">第 ${sc[me.id].rank} 名</div></div></div>` : ''}
@@ -556,8 +729,8 @@ async function loadHistory() {
   if (view !== 'history') return;
   $('#app').innerHTML = list.length ? list.map(g => {
     const r = ROLE[g.myRole] || ROLE.servant; const won = r.side === g.winner; const me = g.players.find(p => p.id === g.myId) || {};
-    return `<div class="card hitem" data-a="detail" data-g="${g.gid}"><img src="${thumb(g.myRole)}" alt=""><div class="grow"><div><b class="serif">${r.n}</b> ${won ? '<span class="badge ok">勝</span>' : '<span class="badge evil">負</span>'}${g.mvp === g.myId ? '<span class="badge">🏅 MVP</span>' : ''}</div>
-      <div class="small muted">${g.n} 人局 · 座位 ${me.seat || '-'} · ${g.winner === 'good' ? '好人勝' : '壞人勝'}</div><div class="tiny muted">${fmtTime(g.endedAt)}　${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}</div></div><span class="gold">›</span></div>`;
+    return `<div class="card hitem" data-a="detail" data-g="${g.gid}"><img src="${thumb(g.myRole)}" alt=""><div class="grow"><div><b class="serif">${r.n}</b> ${g.winner === 'none' ? '<span class="badge">提前結束</span>' : won ? '<span class="badge ok">勝</span>' : '<span class="badge evil">負</span>'}${g.mvp === g.myId ? '<span class="badge">🏅 MVP</span>' : ''}</div>
+      <div class="small muted">${g.n} 人局 · 座位 ${me.seat || '-'} · ${g.winner === 'none' ? '提前結束' : g.winner === 'good' ? '好人勝' : '壞人勝'}</div><div class="tiny muted">${fmtTime(g.endedAt)}　${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}</div></div><span class="gold">›</span></div>`;
   }).join('') : '<div class="card center muted">還未有完成的對局<br><span class="small">完成一局後會自動記錄</span></div>';
 }
 async function loadStats() {
@@ -571,10 +744,11 @@ async function loadStats() {
   <div class="footer">數據跟隨此瀏覽器的玩家身份保存</div>`;
 }
 function skinsHtml() {
-  return `<div class="card"><div class="small muted">每個角色玩得越多，解鎖越多皮膚。揭曉身份時會顯示你所選的皮膚。</div></div>` + ROLE_ORDER.map(k => {
+  const cbk = cardBackOf();
+  return `<div class="card"><h3 style="margin:0 0 8px">卡背</h3><div class="skinrow">${CARDBACKS.map(([k, n, need]) => `<div class="skin ${playedTotal() >= need ? '' : 'lock'} ${cbk === k ? 'sel' : ''}" data-a="cardback" data-k="${k}"><div class="rc"><div class="art" style="background-image:url(${img(k)})"></div></div><div style="margin-top:4px">${n}${playedTotal() >= need ? '' : ` 🔒${need}場`}</div></div>`).join('')}</div></div><div class="card"><div class="small muted">主要角色有不同服裝（日常便服、節日盛裝）及特效皮膚。玩得越多解鎖越多，揭曉身份時會顯示你所選的皮膚，並保存到帳號。</div></div>` + ROLE_ORDER.map(k => {
     const played = (myStats.roles[k] || {}).played || 0; const cur = skinOf(k); const next = SKINS.find(s => s.need > played);
     return `<div class="card"><div class="row between"><h3 style="margin:0">${ROLE[k].n}</h3><span class="small muted">已玩 ${played} 場</span></div>
-      <div class="skinrow" style="margin-top:10px">${SKINS.map(s => `<div class="skin ${played >= s.need ? '' : 'lock'} ${cur === s.id ? 'sel' : ''}" data-a="skin" data-r="${k}" data-s="${s.id}">${roleFace(k, s.id, true)}<div style="margin-top:4px">${s.n}${played >= s.need ? '' : ` 🔒${s.need}場`}</div></div>`).join('')}</div>
+      <div class="skinrow" style="margin-top:10px">${skinsFor(k).map(s => `<div class="skin ${played >= s.need ? '' : 'lock'} ${cur === s.id ? 'sel' : ''}" data-a="skin" data-r="${k}" data-s="${s.id}">${roleFace(k, s.id, true)}<div style="margin-top:4px">${s.n}${played >= s.need ? '' : ` 🔒${s.need}場`}</div></div>`).join('')}</div>
       ${next ? `<div class="tiny muted" style="margin-top:6px">下一款「${next.n}」：${played}/${next.need} 場</div><div class="bar"><i style="width:${pct(played, next.need)}%"></i></div>` : '<div class="tiny gold" style="margin-top:6px">已解鎖全部皮膚 ✦</div>'}</div>`;
   }).join('');
 }
@@ -596,14 +770,16 @@ function rulesBody() {
     case 'sides': return `<div class="rolegrid">${ROLE_ORDER.map(k => `<div class="rolecell ${ROLE[k].side}" style="background-image:url(${img(k)})" data-a="rolepeek" data-r="${k}"><div class="t"><b>${ROLE[k].n}</b><span class="tiny">${ROLE[k].side === 'good' ? '好人陣營' : '壞人陣營'}</span></div></div>`).join('')}</div><div class="small muted center" style="margin-top:8px">點擊角色查看能力</div>`;
     case 'knows': {
       const viewer = WK_ROLES.indexOf(wkRole); const vr = wkRole;
-      const seen = (r, i) => { if (i === viewer) return null; if (vr === 'merlin' && ROLE[r].side === 'evil' && r !== 'mordred') return ['壞人', 'e']; if (vr === 'percival' && (r === 'merlin' || r === 'morgana')) return ['梅林?', 'p']; if (ROLE[vr].side === 'evil' && vr !== 'oberon' && ROLE[r].side === 'evil' && r !== 'oberon') return ['同伴', 'e']; return null; };
-      const desc = { merlin: '梅林看到所有壞人——但看不到莫德雷德。', percival: '派西維爾看到兩個「梅林?」：一個是真梅林，一個是莫甘娜。', servant: '忠臣甚麼都看不到。', assassin: '壞人互相認識（奧伯倫除外）。', morgana: '壞人互相認識（奧伯倫除外）。', mordred: '壞人互相認識，而且梅林看不見莫德雷德。', oberon: '奧伯倫看不到同伴，同伴也看不到他。' }[vr];
-      return `<div class="card"><h3>選擇視角</h3><div class="rchips">${['merlin', 'percival', 'servant', 'assassin', 'morgana', 'mordred', 'oberon'].map(k => `<button data-a="wk" data-r="${k}" class="${k === wkRole ? 'sel' : ''}"><img src="${thumb(k)}" alt="">${ROLE[k].n}</button>`).join('')}</div>
-        ${roundTable(DEMO_SEATS, { cls: (s, i) => i === viewer ? 'sel' : (seen(WK_ROLES[i], i) ? (seen(WK_ROLES[i], i)[1] === 'p' ? 'glowg' : 'glow') : (wkReveal ? '' : 'dim')),
-          label: (s, i) => { const r = WK_ROLES[i]; if (i === viewer) return '<span class="lbl y">你</span>'; const v = seen(r, i); if (wkReveal) return `<span class="lbl ${ROLE[r].side === 'good' ? 'g' : 'e'}">${ROLE[r].n.replace('亞瑟的', '')}</span>`; return v ? `<span class="lbl ${v[1]}">${v[0]}</span>` : ''; },
-          center: `<b>${ROLE[vr].n}</b>的視角` })}
-        <div class="small" style="text-align:center;margin-top:4px">${desc}</div>
-        <button class="btn ghost" data-a="wkrev">${wkReveal ? '隱藏真實身份' : '揭曉所有真實身份'}</button></div>`;
+      const seenAs = (v, r) => { if (v === 'merlin' && ROLE[r].side === 'evil' && r !== 'mordred') return ['壞人', 'e']; if (v === 'percival' && (r === 'merlin' || r === 'morgana')) return ['梅林?', 'p']; if (ROLE[v].side === 'evil' && v !== 'oberon' && ROLE[r].side === 'evil' && r !== 'oberon' && r !== v) return ['隊友', 'e']; return null; };
+      const items = WK_ROLES.map((r, i) => { if (i === viewer) return { me: true, art: r, name: '你' }; const v = seenAs(vr, r); return { kind: v ? v[1] : 'u', label: v ? v[0] : '?', real: { art: r, n: ROLE[r].n.replace('亞瑟的', ''), side: ROLE[r].side }, name: DEMO_SEATS[i][0] }; });
+      const nSeen = items.filter(x => !x.me && x.kind !== 'u').length;
+      const seers = [...new Set(WK_ROLES.filter((r, i) => i !== viewer && seenAs(r, vr)).map(r => ROLE[r].n.replace('亞瑟的', '')))];
+      const desc = { merlin: '梅林睇到所有壞人，但睇唔到莫德雷德。', percival: '派西維爾睇到兩個「梅林?」，一個係真梅林，一個係扮梅林嘅莫甘娜。', servant: '忠臣乜都睇唔到，只可以靠推理。', assassin: '壞人互相認識，但睇唔到奧伯倫。', morgana: '壞人互相認識，但睇唔到奧伯倫。', mordred: '壞人互相認識，而且梅林睇唔到莫德雷德。', oberon: '奧伯倫睇唔到隊友，隊友亦睇唔到佢。' }[vr];
+      return `<div class="card wk"><div class="wk-tabs">${['merlin', 'percival', 'servant', 'assassin', 'morgana', 'mordred', 'oberon'].map(k => `<button data-a="wk" data-r="${k}" class="${k === wkRole ? 'sel' : ''}">${ROLE[k].n.replace('亞瑟的', '')}</button>`).join('')}</div>
+        ${knowRing(items, { role: ROLE[vr].n.replace('亞瑟的', ''), side: ROLE[vr].side, n: nSeen, reveal: wkReveal })}
+        <p class="wk-desc">${desc}</p>
+        <div class="wk-seers">👁 ${seers.length ? `睇到你嘅人：${seers.join('、')}` : '冇人睇到你'}</div>
+        <div class="wk-tog" data-a="wkrev"><div class="grow"><b>揭曉真實身份</b><div class="tiny muted">對照一下：變淡嘅人，你開局時睇唔到</div></div><span class="sw2 ${wkReveal ? 'on' : ''}"><i></i></span></div></div>`;
     }
     case 'round': {
       const s = DEMO[demoStep];
@@ -651,36 +827,144 @@ async function animateDemo() {
 }
 
 // ================= poster =================
-async function makePoster(r) {
-  const rowsN = Math.ceil(r.players.length / 5); const W = 750, H = 760 + rowsN * 250; const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
-  const load = (src) => new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
-  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#131f4a'); g.addColorStop(1, '#070b20'); x.fillStyle = g; x.fillRect(0, 0, W, H);
-  x.strokeStyle = '#d8b25e'; x.lineWidth = 4; x.strokeRect(20, 20, W - 40, H - 40); x.lineWidth = 1; x.strokeRect(32, 32, W - 64, H - 64);
-  x.textAlign = 'center'; x.fillStyle = '#f3d68f'; x.font = 'bold 54px serif'; x.fillText('卡美洛密令', W / 2, 110);
-  x.font = '20px sans-serif'; x.fillStyle = '#d8b25e'; x.fillText('CAMELOT CIPHER · 戰報', W / 2, 145);
-  const good = r.winner === 'good'; x.fillStyle = good ? '#2b56b8' : '#a32638'; x.fillRect(60, 180, W - 120, 120);
-  x.fillStyle = '#fff'; x.font = 'bold 44px serif'; x.fillText(good ? '🛡️ 亞瑟陣營勝利' : '🗡️ 莫德雷德陣營勝利', W / 2, 240);
-  x.font = '22px sans-serif'; x.fillText(r.reason.slice(0, 26), W / 2, 280);
-  x.font = '34px sans-serif'; x.fillText(r.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join(' '), W / 2, 350);
-  const ps = r.players; const cols = 5, cw = (W - 120) / cols, ch = 250;
-  for (let i = 0; i < ps.length; i++) {
-    const p = ps[i]; const cx = 60 + (i % cols) * cw, cy = 390 + Math.floor(i / cols) * ch; const im = await load(thumb(p.role));
-    x.save(); x.beginPath(); x.roundRect ? x.roundRect(cx + 8, cy, cw - 16, cw - 16, 14) : x.rect(cx + 8, cy, cw - 16, cw - 16); x.clip(); if (im) x.drawImage(im, cx + 8, cy, cw - 16, cw - 16); x.restore();
-    x.strokeStyle = ROLE[p.role].side === 'good' ? '#7fb0ff' : '#ff7d90'; x.lineWidth = 3; x.strokeRect(cx + 8, cy, cw - 16, cw - 16);
-    x.fillStyle = '#f5ecd8'; x.font = 'bold 20px sans-serif'; x.fillText(String(p.name).slice(0, 8), cx + cw / 2, cy + cw + 14);
-    x.fillStyle = ROLE[p.role].side === 'good' ? '#9cc0ff' : '#ff9aa8'; x.font = '17px sans-serif'; x.fillText(ROLE[p.role].n.replace('莫德雷德的', '') + (p.id === r.mvp ? ' 🏅' : '') + (p.id === r.assassinTarget ? ' 🗡️' : ''), cx + cw / 2, cy + cw + 40);
+const replayUrl = (r) => r && r.gid ? `${location.origin}/g/${r.gid}` : location.origin;
+const sideOf = (p) => (ROLE[p.role] || {}).side || p.side || 'good';
+const roleN = (k) => (ROLE[k] || {}).n || RN[k] || k;
+async function makePoster(r, personal = true) {
+  const load = (src) => new Promise(res => { if (!src) return res(null); const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+  const ps = r.players || []; const n = ps.length; const W = 750; const pad = 40;
+  const me = personal && r.myId ? ps.find(p => p.id === r.myId) : null; const sc = r.scores || {};
+  const cols = n > 10 ? 4 : (n > 8 ? 5 : 4); const cellW = (W - pad * 2) / cols, cellH = 190; const gridRows = Math.ceil(n / cols);
+  const props = []; (r.rounds || []).forEach((rs, ri) => rs.forEach((pp, k) => props.push({ ri, k, pp, last: k === rs.length - 1 })));
+  const chip = Math.min(34, Math.floor((W - pad * 2 - 150) / n) - 4); const rowH = chip + 22;
+  const roundsN = (r.rounds || []).filter(x => x.length).length;
+  const H = 300 + (me ? 170 : 0) + 70 + gridRows * cellH + 70 + props.length * rowH + roundsN * 40 + 280;
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+  const rr = (X, Y, w, h, rad) => { x.beginPath(); x.roundRect ? x.roundRect(X, Y, w, h, rad) : x.rect(X, Y, w, h); };
+  const good = r.winner === 'good';
+  let g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#131f4a'); g.addColorStop(1, '#070b20'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.strokeStyle = '#d8b25e'; x.lineWidth = 3; x.strokeRect(14, 14, W - 28, H - 28);
+  // header
+  g = x.createLinearGradient(0, 30, W, 260); g.addColorStop(0, good ? '#2b56b8' : '#a32638'); g.addColorStop(1, good ? '#18306e' : '#5c1020');
+  x.fillStyle = g; rr(pad, 36, W - pad * 2, 230, 22); x.fill();
+  const hero = ps.find(p => p.id === r.mvp && sideOf(p) === r.winner) || ps.find(p => sideOf(p) === r.winner);
+  const drawAv = async (p, cx, cy, rad) => {
+    x.save(); x.beginPath(); x.arc(cx, cy, rad, 0, Math.PI * 2); x.fillStyle = p.bg || '#f3d9a4'; x.fill(); x.clip();
+    const im = await load(photoSrc(p)); if (im) x.drawImage(im, cx - rad, cy - rad, rad * 2, rad * 2); x.restore();
+    if (PD_IMG[p.pendant]) { const pi = await load(`/img/pd/${p.pendant}.webp`); if (pi) { const s = rad * (p.pendant === 'halo' ? 1.8 : p.pendant === 'crown' ? 1.2 : 0.95); const oy = p.pendant === 'bow' ? cy - rad * 1.05 : cy - rad * 1.55; const ox = p.pendant === 'bow' ? cx + rad * 0.2 : cx - s / 2; x.drawImage(pi, ox, oy, s, s); } }
+  };
+  if (hero) { x.strokeStyle = '#f3d68f'; x.lineWidth = 4; await drawAv(hero, pad + 90, 130, 56); x.beginPath(); x.arc(pad + 90, 130, 58, 0, Math.PI * 2); x.stroke(); }
+  x.textAlign = 'left'; x.fillStyle = '#fff'; x.font = 'bold 52px sans-serif'; x.fillText(good ? '藍方勝利' : '紅方勝利', pad + 170, 130);
+  x.font = '20px sans-serif'; x.fillStyle = 'rgba(255,255,255,.88)';
+  const merlin = ps.find(p => p.role === 'merlin'); const at = r.assassinTarget && ps.find(p => p.id === r.assassinTarget);
+  const sub = at ? (at.role === 'merlin' ? `刺客刺中梅林（${at.seat}號 ${at.name}）` : `刺客刺中的是 ${at.seat}號${roleN(at.role)}·${at.name}　梅林（${merlin ? merlin.seat : '?'}號）安然無恙`) : r.reason;
+  const wrap = (txt, X, Y, maxW, lh) => { let line = ''; for (const ch of Array.from(txt)) { if (x.measureText(line + ch).width > maxW) { x.fillText(line, X, Y); line = ch; Y += lh; } else line += ch; } x.fillText(line, X, Y); return Y; };
+  wrap(sub, pad + 170, 168, W - pad * 2 - 190, 26);
+  x.font = '18px sans-serif'; x.fillStyle = 'rgba(255,255,255,.7)'; x.fillText(`${n} 人局 · ${fmtTime(r.endedAt || Date.now())}${r.room ? ' · 房間 ' + r.room : ''}`, pad + 170, 240);
+  x.textAlign = 'right'; x.font = '26px sans-serif'; x.fillText((r.quests || []).map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join(''), W - pad - 20, 72);
+  let y = 300;
+  // personal
+  if (me) {
+    x.fillStyle = 'rgba(255,255,255,.06)'; rr(pad, y, W - pad * 2, 150, 18); x.fill();
+    await drawAv(me, pad + 70, y + 75, 48);
+    const won = sideOf(me) === r.winner; x.textAlign = 'left'; x.fillStyle = '#f5ecd8'; x.font = 'bold 28px sans-serif'; x.fillText(me.name, pad + 135, y + 55);
+    x.font = '20px sans-serif'; x.fillStyle = sideOf(me) === 'good' ? '#9cc0ff' : '#ff9aa8'; x.fillText(`${me.seat}號 · ${roleN(me.role)}`, pad + 135, y + 88);
+    x.fillStyle = won ? '#7ee2a8' : '#ff8b9c'; x.font = 'bold 22px sans-serif'; x.fillText(won ? '勝利' : '落敗', pad + 135, y + 122);
+    const ri = r.roleImg !== false ? await load(thumb(me.role)) : null; if (ri) { x.save(); rr(W - pad - 250, y + 15, 120, 120, 14); x.clip(); x.drawImage(ri, W - pad - 250, y + 15, 120, 120); x.restore(); }
+    x.textAlign = 'center'; x.fillStyle = '#f3d68f'; x.font = 'bold 40px sans-serif'; x.fillText(sc[me.id] ? `${sc[me.id].total}` : '–', W - pad - 65, y + 75);
+    x.font = '16px sans-serif'; x.fillText(r.mvp === me.id ? '🏅 MVP' : (sc[me.id] ? `第 ${sc[me.id].rank} 名` : '分數'), W - pad - 65, y + 108);
+    y += 170;
   }
-  if (r.mvp) { const m = ps.find(p => p.id === r.mvp); x.fillStyle = '#f3d68f'; x.font = 'bold 30px serif'; x.fillText(`🏅 MVP：${m.name}（${(r.scores[r.mvp] || {}).total || 0} 分）`, W / 2, 420 + rowsN * 250); }
-  x.fillStyle = '#c9cfe6'; x.font = '20px sans-serif'; (r.highlights || []).slice(0, 3).forEach((h, i) => x.fillText('✦ ' + h, W / 2, 470 + rowsN * 250 + i * 34));
-  x.fillStyle = '#97a1c2'; x.font = '18px sans-serif'; x.fillText(`${r.n} 人局 · ${fmtTime(r.endedAt || Date.now())} · ${location.host}`, W / 2, H - 60);
-  return c.toDataURL('image/png');
+  // roles grid
+  x.textAlign = 'left'; x.fillStyle = '#f3d68f'; x.font = 'bold 26px sans-serif'; x.fillText('全員身份', pad, y + 30); y += 56;
+  for (let i = 0; i < n; i++) {
+    const p = ps[i]; const cx = pad + (i % cols) * cellW + cellW / 2, cy = y + Math.floor(i / cols) * cellH + 52;
+    await drawAv(p, cx, cy, 42);
+    if (p.id === r.assassinTarget) { x.strokeStyle = '#ff3b55'; x.lineWidth = 3; x.beginPath(); x.arc(cx + 30, cy - 30, 14, 0, Math.PI * 2); x.moveTo(cx + 12, cy - 30); x.lineTo(cx + 48, cy - 30); x.moveTo(cx + 30, cy - 48); x.lineTo(cx + 30, cy - 12); x.stroke(); }
+    const side = sideOf(p); const tag = roleN(p.role).replace('莫德雷德的', ''); x.font = 'bold 16px sans-serif'; const tw = x.measureText(tag).width + 18;
+    x.fillStyle = side === 'good' ? '#2f6be0' : '#d23a52'; rr(cx - tw / 2, cy + 50, tw, 26, 13); x.fill();
+    x.fillStyle = '#fff'; x.textAlign = 'center'; x.fillText(tag, cx, cy + 69);
+    x.fillStyle = '#e8e1cf'; x.font = '16px sans-serif'; x.fillText(`${p.seat}號 ${String(p.name).slice(0, 6)}${p.id === r.mvp ? ' 🏅' : ''}`, cx, cy + 102);
+  }
+  y += gridRows * cellH + 10;
+  // mission record
+  x.textAlign = 'left'; x.fillStyle = '#f3d68f'; x.font = 'bold 26px sans-serif'; x.fillText('組隊記錄', pad, y + 30); y += 50;
+  let lastRi = -1;
+  for (const { ri, k, pp, last } of props) {
+    if (ri !== lastRi) { lastRi = ri; const q = (r.quests || [])[ri]; x.font = 'bold 19px sans-serif'; x.fillStyle = '#c9cfe6'; x.textAlign = 'left'; x.fillText(`任務 ${ri + 1}`, pad, y + 26);
+      if (q) { x.fillStyle = q.success ? '#4b8dff' : '#e5475d'; x.fillText(q.success ? `成功${q.fails ? `（${q.fails} 失敗）` : ''}` : `失敗（${q.fails} 張）`, pad + 90, y + 26); } y += 40; }
+    for (let i = 0; i < n; i++) {
+      const p = ps[i]; const cx = pad + 8 + i * (chip + 4) + chip / 2, cy = y + chip / 2 + 4; const v = pp.votes[p.id]; const tm = pp.team.includes(p.id);
+      x.beginPath(); x.arc(cx, cy, chip / 2, 0, Math.PI * 2); x.fillStyle = v === undefined ? '#333b5c' : (v ? '#2e9e62' : '#c83a4e'); x.fill();
+      if (tm) { x.strokeStyle = '#6fb0ff'; x.lineWidth = 3; x.stroke(); }
+      x.fillStyle = '#fff'; x.font = `bold ${Math.round(chip * 0.45)}px sans-serif`; x.textAlign = 'center'; x.fillText(String(i + 1), cx, cy + chip * 0.16);
+      if (pp.leader === p.id) { x.font = `${Math.round(chip * 0.5)}px sans-serif`; x.fillText('👑', cx, cy - chip / 2 + 2); }
+    }
+    x.textAlign = 'right'; x.font = 'bold 18px sans-serif'; x.fillStyle = pp.approved ? '#7ee2a8' : '#ff8b9c'; x.fillText(pp.approved ? '通過' : '否決', W - pad, y + chip / 2 + 10);
+    y += rowH;
+  }
+  // legend + footer
+  y += 16; x.textAlign = 'left'; x.font = '15px sans-serif'; x.fillStyle = '#97a1c2'; x.fillText('綠＝贊成　紅＝反對　藍框＝隊員　👑＝隊長　⌖＝被刺殺', pad, y); y += 30;
+  const qr = await load('/api/qr?text=' + encodeURIComponent(replayUrl(r)));
+  x.fillStyle = '#fff'; rr(pad, y, 170, 170, 14); x.fill(); if (qr) x.drawImage(qr, pad + 10, y + 10, 150, 150);
+  x.fillStyle = '#f3d68f'; x.font = 'bold 30px sans-serif'; x.fillText('旺角Avalon', pad + 200, y + 60);
+  x.fillStyle = '#d8b25e'; x.font = '18px sans-serif'; x.fillText('· Amigosparty', pad + 200, y + 92);
+  x.fillStyle = '#c9cfe6'; x.font = '18px sans-serif'; x.fillText('掃碼查看對局回放', pad + 200, y + 130);
+  x.fillStyle = '#7d87aa'; x.font = '14px sans-serif'; x.fillText(replayUrl(r).replace(/^https?:\/\//, ''), pad + 200, y + 156);
+  return c;
 }
-async function posterDialog() {
-  const r = window.__lastRecord; if (!r) return;
+async function renderCardPreview(r) {
+  const box = $('#cardprev'); if (!box) return;
+  const c = await makePoster(r, true); if (!$('#cardprev')) return;
+  window.__cardUrl = c.toDataURL('image/png'); $('#cardprev').innerHTML = `<img src="${window.__cardUrl}" alt="戰果卡">`;
+}
+async function cardBlob(r) { const c = await makePoster(r, true); return new Promise(res => c.toBlob(b => res(b), 'image/png')); }
+async function saveCard(r, show) {
+  if (!r) return;
   openModal('<h2>戰報海報</h2><div class="center muted">生成中…</div>');
-  const url = await makePoster(r);
-  openModal(`<h2>戰報海報</h2><img src="${url}" style="width:100%;border-radius:12px;border:1px solid var(--line)"><p class="center small muted">長按圖片可儲存或分享</p><a class="btn" href="${url}" download="camelot-cipher.png" style="text-align:center;text-decoration:none">下載圖片</a>`);
+  const c = await makePoster(r, true); const url = c.toDataURL('image/png');
+  openModal(`<h2>戰報海報</h2><img src="${url}" style="width:100%;border-radius:12px;border:1px solid var(--line)"><p class="center small muted">長按圖片可儲存，或按下方下載</p>
+    <div class="btns"><a class="btn" href="${url}" download="mongkok-avalon-${(r.gid || 'game').slice(0, 8)}.png" style="text-align:center;text-decoration:none">💾 下載圖片</a><button class="btn ghost" id="sh">📤 分享</button></div>`, el => { $('#sh', el).onclick = () => shareSheet(r); });
 }
+function shareSheet(r) {
+  if (!r) return;
+  const url = replayUrl(r); const text = `旺角Avalon｜${r.winner === 'none' ? '提前結束' : r.winner === 'good' ? '藍方勝利' : '紅方勝利'}！${r.n} 人局戰報`;
+  const e = encodeURIComponent;
+  const links = [
+    ['WhatsApp', '#25D366', `https://wa.me/?text=${e(text + ' ' + url)}`],
+    ['Facebook', '#1877F2', `https://www.facebook.com/sharer/sharer.php?u=${e(url)}`],
+    ['Threads', '#111', `https://www.threads.net/intent/post?text=${e(text + ' ' + url)}`],
+    ['Telegram', '#229ED9', `https://t.me/share/url?url=${e(url)}&text=${e(text)}`],
+    ['LINE', '#06C755', `https://social-plugins.line.me/lineit/share?url=${e(url)}&text=${e(text)}`],
+    ['X', '#000', `https://x.com/intent/post?text=${e(text)}&url=${e(url)}`],
+  ];
+  openModal(`<h2>分享戰果</h2>
+    <div class="share-grid">${links.map(([n, c, href]) => `<a class="sh-i" href="${href}" target="_blank" rel="noopener"><span style="background:${c}">${n[0]}</span>${n}</a>`).join('')}
+      <button class="sh-i" id="ig"><span style="background:linear-gradient(45deg,#f9ce34,#ee2a7b,#6228d7)">IG</span>Instagram</button>
+      <button class="sh-i" id="cp"><span style="background:#56607f">🔗</span>複製連結</button>
+      <button class="sh-i" id="sys"><span style="background:#b8892f">⋯</span>更多</button>
+      <button class="sh-i" id="pp"><span style="background:#2b3a6e">🖼️</span>生成海報</button></div>
+    <div class="tiny muted center" style="margin-top:8px">${esc(url)}</div><button class="btn ghost" id="cc">關閉</button>`, el => {
+    $('#cc', el).onclick = closeModal;
+    $('#cp', el).onclick = async () => { try { await navigator.clipboard.writeText(url); toast('已複製連結'); } catch { prompt('複製連結', url); } };
+    $('#pp', el).onclick = () => saveCard(r, true);
+    $('#ig', el).onclick = async () => {
+      const b = await cardBlob(r); const f = new File([b], 'mongkok-avalon.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: '旺角Avalon', text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'mongkok-avalon.png'; a.click();
+      toast('海報已儲存，請打開 Instagram 發佈（限時動態或貼文）');
+    };
+    $('#sys', el).onclick = async () => {
+      try {
+        const b = await cardBlob(r); const f = new File([b], 'mongkok-avalon.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: '旺角Avalon', text, url });
+        else if (navigator.share) await navigator.share({ title: '旺角Avalon', text, url });
+        else { await navigator.clipboard.writeText(url); toast('此瀏覽器不支援系統分享，已複製連結'); }
+      } catch (e) { if (e.name !== 'AbortError') toast('分享未完成'); }
+    };
+  });
+}
+async function posterDialog() { return saveCard(window.__lastRecord, true); }
 
 // ================= actions =================
 document.addEventListener('click', async (e) => {
@@ -688,6 +972,14 @@ document.addEventListener('click', async (e) => {
   const a = el.dataset.a;
   switch (a) {
     case 'profile': return editProfile();
+    case 'ptab': return editProfile(null, el.dataset.t);
+    case 'about': return openModal(`<h2>關於</h2><div class="center">${LOGO}<div class="name" style="margin-top:6px">旺角Avalon</div><div class="small muted">版本 3.1 · 網頁版阿瓦隆多人遊戲</div><div class="small" style="margin-top:10px">by <b class="gold">Amigosparty</b></div><div class="tiny muted">Design by Teddy Design Limited</div><div class="tiny muted" style="margin-top:8px">原創美術 · 角色立繪、動物頭像、掛件皆為本作原創</div></div><button class="btn" id="ok">關閉</button>`, el2 => $('#ok', el2).onclick = closeModal);
+    case 'cfg': cfgOpen = true; openModal(cfgSheetHtml()); cfgOpen = true; return;
+    case 'cfgclose': return closeModal();
+    case 'vetoinfo': { const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards); return openModal(`<h2>回避卡</h2><div class="center big">🛡️</div><div class="center name">${vc == null ? '–' : vc} / 10</div><p class="small muted center">每贏一局 +1 張（上限 10 張），永久保存在帳號。房間開啟「回避卡」時，投票階段身為隊員可用一張退出隊伍，本次組隊作廢且不計否決。</p><button class="btn" id="ok">知道了</button>`, el2 => $('#ok', el2).onclick = closeModal); }
+    case 'cardback': { const k = el.dataset.k; const c = CARDBACKS.find(x => x[0] === k); if (playedTotal() < c[2]) return toast(`再玩 ${c[2] - playedTotal()} 場即可解鎖`); skinSel._cardback = k; LS.setItem('cc.skins', JSON.stringify(skinSel)); api('/api/me', { method: 'PUT', body: JSON.stringify({ skins: skinSel }) }).catch(() => {}); return render(); }
+    case 'sharecard': return shareSheet(window.__lastRecord);
+    case 'savecard': return saveCard(window.__lastRecord);
     case 'create': return ensureName(createRoom);
     case 'join': return ensureName(joinDialog);
     case 'toroom': return go('room');
@@ -726,17 +1018,29 @@ document.addEventListener('click', async (e) => {
           $('#ok', el2).onclick = closeModal;
         });
     }
-    case 'menu': return openModal(`<h2>房間選單</h2>
-      <button class="btn ghost" data-x="rules">查看規則</button>
-      <button class="btn ghost" data-x="ref">刷新房間</button>
-      ${S.isHost?'<button class="btn ghost" data-x="tr">轉讓房主…</button><button class="btn dark" data-x="dis" style="color:#ff8b9c">解散房間</button>':''}
-      <button class="btn" id="ok">關閉</button>`, el2 => {
+    case 'menu': { const live = S.game && S.game.phase !== 'end'; const row = (x, ic, ti, sub, cls = '') => `<button class="mrow ${cls}" data-x="${x}"><span class="mic">${ic}</span><span class="grow"><b>${ti}</b><span>${sub}</span></span><span class="chev">›</span></button>`;
+      return openModal(`<h2>房間選單</h2><div class="mlist">
+      ${row('rules', '📖', '查看規則', '遊戲流程、角色能力、擴展玩法')}
+      ${row('ref', '🔄', '刷新房間', '畫面唔同步或卡住時，重新連線並向伺服器攞最新狀態')}
+      ${S.isHost ? row('tr', '👑', '轉讓房主', '交俾另一位玩家，之後你可以離開') : ''}
+      ${S.isHost && live ? row('early', '🏳️', '提前結束', '即時結束本局並公開所有身份，不計勝負', 'warn') : ''}
+      ${S.isHost && !live ? row('dis', '⛔', '解散房間', '所有玩家會被移出房間', 'danger') : ''}
+      </div><button class="btn ghost" id="ok">關閉</button>`, el2 => {
         el2.querySelector('[data-x=rules]').onclick = () => { closeModal(); go('rules'); };
-        el2.querySelector('[data-x=ref]').onclick = () => { closeModal(); render(); toast('已刷新'); };
-        const tr = el2.querySelector('[data-x=tr]'); if (tr) tr.onclick = () => { closeModal(); toast('請點圓桌上的騎士，從名片轉讓房主'); };
+        el2.querySelector('[data-x=ref]').onclick = () => { closeModal(); refreshRoom(); };
+        const ee = el2.querySelector('[data-x=early]'); if (ee) ee.onclick = () => { if (confirm('確定提前結束本局？\n所有人身份會公開，今局記錄為「提前結束」，不計勝負、不計分、不派回避卡。')) { closeModal(); act('endearly'); } };
+        const tr = el2.querySelector('[data-x=tr]'); if (tr) tr.onclick = () => {
+          const others = (S.seats || []).filter(p => p && !p.empty && p.id !== S.meId);
+          if (!others.length) return toast('還沒有其他已就座的玩家');
+          openModal(`<h2>轉讓房主</h2><div class="small muted center">選擇一位已就座的玩家，房主權限會即時轉移</div><div class="pick">${others.map(p => `<button class="pick-i" data-id="${p.id}">${av(p, 40)}<div><b>${esc(p.name)}</b><div class="tiny muted">${p.seat}號座${p.online ? '' : ' · 離線'}</div></div></button>`).join('')}</div><button class="btn ghost" id="cc">取消</button>`, el3 => {
+            $$('.pick-i', el3).forEach(b => b.onclick = async () => { const p = others.find(o => o.id === b.dataset.id); if (!confirm(`把房主轉讓給 ${p.name}？`)) return; closeModal(); const r = await act('transfer', { id: p.id }); if (r.ok) toast(`已轉讓房主給 ${p.name}`); });
+            $('#cc', el3).onclick = closeModal;
+          });
+        };
         const dis = el2.querySelector('[data-x=dis]'); if (dis) dis.onclick = () => { if (confirm('確定解散房間？所有人將被移出。')) { closeModal(); act('dissolve'); } };
         $('#ok', el2).onclick = closeModal;
       });
+    }
     case 'leave': { const r = await emit('leave'); S = null; if (r.stillSeated) toast('遊戲進行中，你的座位會保留'); return go('home'); }
     case 'veto': if (confirm('使用回避卡退出本支隊伍？本輪否決不增加，且你本輪不能再被選入。')) return act('veto'); return;
     case 'sword': { const id=[...selected][0]; if (id) { const r=await act('sword',{id}); if(r.ok) selected=new Set(); } return; }

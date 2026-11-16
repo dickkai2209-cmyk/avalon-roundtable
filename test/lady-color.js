@@ -1,4 +1,4 @@
-// The private lake result says 壞人陣營 in red. Good text stays white, and others never receive the side.
+// The private evil lake result is a crimson card. Good stays blue, and others never receive the side.
 const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
@@ -131,16 +131,22 @@ function bot(key, name) {
     const color = getComputedStyle(rn).color;
     const align = getComputedStyle(rn).textAlign;
     const border = getComputedStyle(rc).borderTopColor;
+    const bg = getComputedStyle(rc).backgroundImage;
     const filter = getComputedStyle(art).filter;
+    const artBg = getComputedStyle(art).backgroundImage;
     rc.classList.remove('evil'); rc.classList.add('good'); rn.textContent = '好人陣營';
     const good = getComputedStyle(rn).color;
+    const goodBorder = getComputedStyle(rc).borderTopColor;
+    const goodBg = getComputedStyle(rc).backgroundImage;
     rc.classList.remove('good'); rc.classList.add('evil'); rn.textContent = '壞人陣營';
-    return { text: rn.textContent, color, good, border, filter, align };
+    return { text: rn.textContent, color, good, border, bg, filter, artBg, align, goodBorder, goodBg };
   })()`);
   assert(look.text === '壞人陣營', 'the private card says 壞人陣營');
-  assert(look.color === 'rgb(255, 45, 58)', 'evil label is saturated red, not white (' + look.color + ')');
-  assert(look.good === 'rgb(255, 255, 255)', 'good label stays white (' + look.good + ')');
-  assert(look.filter === 'none', 'the illustration is not recolored');
+  assert(look.color === 'rgb(255, 255, 255)', 'evil label is light on the crimson card (' + look.color + ')');
+  assert(look.border === 'rgb(255, 48, 72)', 'evil card border is crimson (' + look.border + ')');
+  assert(/228, 37, 60|e4253c/i.test(look.bg), 'evil card surface is a red gradient');
+  assert(look.good === 'rgb(255, 255, 255)' && look.goodBorder === 'rgb(127, 176, 255)' && look.goodBg === 'none', 'good card keeps its own blue frame');
+  assert(look.filter === 'none' && /lady/.test(look.artBg), 'the illustration stays the lake picture');
   assert(look.align === 'center', 'alignment is unchanged');
   const { data } = await send('Page.captureScreenshot', { format: 'png' });
   fs.writeFileSync(path.join(OUT, 'lady-evil-result.png'), Buffer.from(data, 'base64'));

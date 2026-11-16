@@ -117,10 +117,12 @@ function bot(key, name) {
   await send('Runtime.enable'); await send('Page.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 2, mobile: true });
   async function asUser(person) {
-    for (let i = 0; i < 40; i++) { if (await evalj(`!!document.querySelector('[data-a="create"], .rt')`).catch(() => false)) break; await sleep(100); }
     const profile = JSON.stringify({ name: person.name, avatar: 'fox', bg: '#fff6ea', fx: 'spot', pendant: 'none' });
-    await evalj(`localStorage.setItem('cc.token', ${JSON.stringify(person.token)}); localStorage.setItem('cc.pid', ${JSON.stringify(person.user.id)}); localStorage.setItem('cc.profile', ${JSON.stringify(profile)}); location.replace(${JSON.stringify(APP + '?ac=' + Date.now())})`);
-    for (let i = 0; i < 80; i++) { if (await evalj(`!!document.querySelector('.rt')`).catch(() => false)) return; await sleep(150); }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      for (let i = 0; i < 30; i++) { if (await evalj(`!!document.querySelector('[data-a="create"], .rt')`).catch(() => false)) break; await sleep(100); }
+      await evalj(`localStorage.setItem('cc.token', ${JSON.stringify(person.token)}); localStorage.setItem('cc.pid', ${JSON.stringify(person.user.id)}); localStorage.setItem('cc.profile', ${JSON.stringify(profile)}); location.replace(${JSON.stringify(APP + '?ac=' + person.user.id + attempt)})`);
+      for (let i = 0; i < 40; i++) { if (await evalj(`!!document.querySelector('.rt')`).catch(() => false)) return; await sleep(120); }
+    }
     throw new Error('no table ' + await evalj(`document.body.innerText.replace(/\\s+/g,' ').slice(0,160)`).catch(() => ''));
   }
   async function shot(name) { const { data } = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(OUT, name), Buffer.from(data, 'base64')); }
@@ -170,8 +172,8 @@ function bot(key, name) {
     for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('.rc.lady-reveal')`).catch(() => false)); i++) await sleep(80);
     await evalj(`document.querySelector('#flip').click()`);
     await sleep(200);
-    const color = await evalj(`getComputedStyle(document.querySelector('.rc.evil.lady-reveal .rn')).color`);
-    assert(color === 'rgb(255, 45, 58)', 'revealed evil label is red');
+    const color = await evalj(`(() => { const rc = document.querySelector('.rc.evil.lady-reveal'); return getComputedStyle(rc.querySelector('.rn')).color + '|' + getComputedStyle(rc).borderTopColor; })()`);
+    assert(color === 'rgb(255, 255, 255)|rgb(255, 48, 72)', 'the evil lake card is crimson with light text (' + color + ')');
     assert((holder.st.game.ladyLog || []).filter(l => l.side).length === 1, 'double click inspects once');
     assert(bots.filter(b => b !== holder).every(b => (b.st.game.ladyLog || []).every(l => l.side == null)), 'others still are not told the side');
     await shot('lady-evil-result.png');
@@ -179,7 +181,8 @@ function bot(key, name) {
     await mission();
     await until(() => gme().phase === 'assassin', 'assassin');
     const assassin = bots.find(b => b.st.game.me.role === 'assassin');
-    const victim = gme().seats.find(s => s.id !== assassin.st.meId);
+    const knownEvil = new Set((assassin.st.game.me.knows || []).map(k => k.id));
+    const victim = gme().seats.find(s => s.id !== assassin.st.meId && !knownEvil.has(s.id));
     await asUser(people[bots.indexOf(assassin)]);
     await evalj(`window.__confirms = 0; window.confirm = () => { window.__confirms++; return false; };`);
     await evalj(`document.querySelector('[data-a="sel"][data-id="${victim.id}"]').click()`);

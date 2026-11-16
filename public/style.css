@@ -1034,12 +1034,24 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
   z-index:3;
   background:linear-gradient(transparent,rgba(6,10,24,.5) 36%,rgba(6,10,24,.86));
 }
+/* Private evil lake result only: the card itself is crimson. The picture stays visible. */
+.flip .rc.evil.lady-reveal{
+  background:linear-gradient(165deg,#e4253c 0%,#9d1022 48%,#5c0812 100%);
+  border-color:#ff3048;
+  box-shadow:0 0 0 1px rgba(255,214,218,.85),0 0 22px rgba(214,24,48,.6);
+}
+.flip .rc.evil.lady-reveal::after{border-color:rgba(255,196,202,.8);z-index:2}
+.flip .rc.evil.lady-reveal .art{inset:11px 11px 58px;border-radius:12px}
+.flip .rc.evil.lady-reveal .art::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(160,16,36,.08),rgba(120,10,24,.16) 60%,rgba(90,6,16,.28));
+}
 .flip .rc.evil.lady-reveal .cap{
-  background:linear-gradient(transparent,rgba(6,10,24,.62) 30%,rgba(6,10,24,.94));
+  background:linear-gradient(transparent,rgba(120,10,22,.35) 18%,#8c1020 52%,#5c0812);
 }
 .flip .rc.evil.lady-reveal .cap .rn{
-  color:#ff2d3a !important;
-  text-shadow:0 1px 2px rgba(0,0,0,.96),0 0 8px rgba(40,0,8,.85);
+  color:#fff !important;
+  text-shadow:0 1px 2px rgba(70,0,12,.9);
 }
 .rc .cap .rn{
   color:#fff !important;

@@ -817,6 +817,15 @@ app.get('/api/history', authUser, async (req, res) => {
   }));
 });
 app.get('/api/stats', authUser, async (req, res) => res.json(await db.getStats(req.user.id)));
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const players = await db.leaderboard(100);
+    res.set('Cache-Control', 'no-store').json({ players, limit: 100 });
+  } catch (e) {
+    console.error('leaderboard', e);
+    res.status(500).json({ error: '暫時無法載入排行榜' });
+  }
+});
 app.get('/api/game/:gid', async (req, res) => {
   const g = await db.getGame(req.params.gid); if (!g) return res.status(404).json({ error: 'not found' });
   const viewer = await db.getUserByToken(bearer(req)) || (req.query.pid && await db.getUserByGuestKey(String(req.query.pid))) || (req.query.pid && await db.getUser(String(req.query.pid)));

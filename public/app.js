@@ -161,7 +161,7 @@ socket.on('connect', () => {
       if (!r || !r.room) { S = null; if (view === 'room') go('home'); }
       if (pendingJoin) { const c = pendingJoin; pendingJoin = null; ensureName(() => joinRoom(c)); }
       if (pendingGame) { const gid = pendingGame; pendingGame = null; return go('detail', { gid, from: 'home' }); }
-      if (view === 'skins' || view === 'rules' || view === 'ach') return; // keep selection UI / scroll
+      if (view === 'skins' || view === 'rules' || view === 'ach' || view === 'board') return; // keep selection UI / scroll
       render();
     });
   }).catch(e => toast(e.message || '無法連線至伺服器'));
@@ -1117,7 +1117,7 @@ function render() {
   if (view !== 'skins') app.dataset.v = view || '';
   if (view === 'room' && !inRoom) view = 'home';
   $('#backBtn').classList.toggle('hidden', view === 'home');
-  const titles = { home: '旺角阿瓦隆', room: inRoom ? null : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就' };
+  const titles = { home: '旺角阿瓦隆', room: inRoom ? null : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就', board: '排行榜' };
   const acts = $('#topRoomActs');
   if (acts) {
     const show = !!(view === 'room' && inRoom);
@@ -1147,6 +1147,7 @@ function render() {
   else if (view === 'history') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadHistory(); }
   else if (view === 'stats') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadStats(); }
   else if (view === 'ach') { app.innerHTML = '<div class="card center muted">載入中…</div>'; refreshStats().catch(() => {}).then(() => { if (view === 'ach') app.innerHTML = achHtml(); }); }
+  else if (view === 'board') loadBoard();
   else if (view === 'skins') {
     if (app.dataset.v === 'skins' && app.querySelector('.skinrow')) return; // already mounted — never flash/rebuild
     app.dataset.v = 'skins';
@@ -1175,7 +1176,7 @@ function homeHtml() {
     <div class="item" data-a="go" data-v="history"><span class="ic">📜</span><span class="grow">歷史記錄</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="stats"><span class="ic">📊</span><span class="grow">數據統計</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="skins"><span class="ic">🎴</span><span class="grow">角色皮膚</span><span class="chev">›</span></div>
-    <div class="item" data-a="go" data-v="ach"><span class="ic">🏆</span><span class="grow">成就</span><span class="chev">›</span></div>
+    <div class="item" data-a="go" data-v="board"><span class="ic">🏆</span><span class="grow">排行榜</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="rules"><span class="ic">📖</span><span class="grow">規則介紹</span><span class="chev">›</span></div>
     <div class="item" data-a="about"><span class="ic">ℹ️</span><span class="grow">版本</span><span class="muted small">v3.1</span><span class="chev">›</span></div>
   </div>
@@ -1192,6 +1193,33 @@ const ACHS = [
   ['assassin', '暗影之刃', '以刺客身份獲勝', s => ((s.roles || {}).assassin || {}).won >= 1],
   ['allroles', '千面騎士', '玩過 6 種不同角色', s => Object.keys(s.roles || {}).length >= 6],
 ];
+const BOARD_NOTE = '全球所有玩家，唔係只計呢間房。按已完成對局的精確勝率由高至低，最多 100 人。0 場完成唔會上榜。勝率相同時，完成場數較多優先，然後勝場較多，最後用固定身份編號。畫面上的百分比有四捨五入，排序用精確分數。1 勝 / 1 場會顯示 100%。';
+function boardHtml(data) {
+  const rows = (data && data.players) || [];
+  const note = `<p id="lb-note" class="tiny muted lb-note">${BOARD_NOTE}</p>`;
+  if (!rows.length) return `<div class="card"><h3>排行榜</h3>${note}<div class="center muted lb-empty">暫時未有完成對局可以排名</div></div>`;
+  const items = rows.map(p => {
+    const rate = pct(p.won, p.played);
+    const nick = p.name || '未設定暱稱';
+    const label = `第 ${p.rank} 名，${nick}，勝率 ${rate}%，${p.won} 勝 / ${p.played} 場`;
+    return `<li data-rank="${p.rank}" aria-label="${esc(label)}"><span class="lb-rank" aria-hidden="true">${p.rank}</span>${av(p, 44)}<div class="lb-main"><div class="nm">${esc(nick)}</div></div><div class="lb-rec"><b>${rate}%</b><span>${p.won}勝/${p.played}場</span></div></li>`;
+  }).join('');
+  return `<div class="card"><h3>排行榜</h3>${note}<ol class="lb" aria-describedby="lb-note">${items}</ol></div>`;
+}
+let boardReq = 0;
+async function loadBoard() {
+  const req = ++boardReq;
+  const app = $('#app');
+  app.innerHTML = '<div class="card center muted" role="status">載入中…</div>';
+  try {
+    const data = await api('/api/leaderboard');
+    if (view !== 'board' || req !== boardReq) return;
+    app.innerHTML = boardHtml(data);
+  } catch (e) {
+    if (view !== 'board' || req !== boardReq) return;
+    app.innerHTML = '<div class="card center" role="alert"><div class="muted">排行榜載入失敗</div><button type="button" class="btn sm" data-a="reloadboard" style="margin-top:12px">重試</button></div>';
+  }
+}
 function achHtml() {
   const s = isGM() ? { played: 1e9, won: 1e9, mvp: (myStats.mvp || 0), roles: Object.fromEntries(ROLE_ORDER.map(k => [k, { played: 1e9, won: 1e9 }])) } : (myStats || {}); const got = ACHS.filter(a => a[3](s)).length;
   return `<div class="card"><h3>成就 ${got}/${ACHS.length}</h3><div class="bar"><i style="width:${pct(got, ACHS.length)}%"></i></div></div>` +
@@ -1946,6 +1974,7 @@ document.addEventListener('click', async (e) => {
     case 'join': return ensureName(joinDialog);
     case 'toroom': return go('room');
     case 'go': return go(el.dataset.v);
+    case 'reloadboard': return loadBoard();
     case 'invite': return inviteDialog();
     case 'role': return showRole(false);
     case 'tg': return act('settings', { [el.dataset.k]: !S.settings[el.dataset.k] });

@@ -409,6 +409,70 @@ function flush() {
 const TEST_KEY_SQL = `(guest_key ~ '^(sim|tf|lb|rs|smk|rvb|uibot|demo)[a-z0-9]+$' AND username IS NULL AND google_sub IS NULL)
   OR (guest_key ~ '^acct[a-z0-9]{8}xx$' AND username ~ '^u[a-z0-9]{6}$' AND google_sub IS NULL)`;
 const TEST_KEY_RE = /^(sim|tf|lb|rs|smk|rvb|uibot|demo)[a-z0-9]+$/;
+const ACCT_FIXTURE_KEY_RE = /^acct[a-z0-9]{8}xx$/;
+const ACCT_FIXTURE_NAME_RE = /^u[a-z0-9]{6}$/;
+// Same disposable guests purgeTestData removes. Registered or Google-linked rows stay.
+function isRankFixture(u) {
+  if (!u || u.google_sub) return false;
+  const key = String(u.guest_key || '');
+  if (!u.username && TEST_KEY_RE.test(key)) return true;
+  if (ACCT_FIXTURE_KEY_RE.test(key) && ACCT_FIXTURE_NAME_RE.test(u.username || '')) return true;
+  return false;
+}
+function cmpBoard(a, b) {
+  const cross = BigInt(b.won) * BigInt(a.played) - BigInt(a.won) * BigInt(b.played);
+  if (cross !== 0n) return cross > 0n ? 1 : -1;
+  if (a.played !== b.played) return b.played - a.played;
+  if (a.won !== b.won) return b.won - a.won;
+  if (a.id < b.id) return -1;
+  if (a.id > b.id) return 1;
+  return 0;
+}
+function boardPhoto(u) {
+  if (u.avatar !== 'photo') return false;
+  if (u.has_photo || u.photo) return true;
+  return mode === 'json' && fs.existsSync(path.join(PHOTO_DIR, u.id + '.webp'));
+}
+function publicBoardRow(u, played, won, rank) {
+  const pv = u.updated_at ? new Date(u.updated_at).getTime() : 0;
+  return {
+    rank,
+    pubId: u.pub_id,
+    name: u.name || '',
+    avatar: u.avatar || 'fox',
+    bg: u.bg || '#ffffff',
+    pendant: (u.pendant && u.pendant !== 'lion') ? u.pendant : 'none',
+    photoUrl: boardPhoto(u) ? `/api/avatar/${u.pub_id}?v=${pv}` : null,
+    played,
+    won,
+  };
+}
+async function leaderboard(limit = 100) {
+  const cap = Math.min(100, Math.max(1, Number(limit) || 100));
+  let rows = [];
+  if (mode === 'pg') {
+    const r = await pool.query(`
+      SELECT u.id, u.pub_id, u.name, u.avatar, u.bg, u.pendant, u.guest_key, u.username, u.google_sub,
+             u.updated_at, (u.photo IS NOT NULL) AS has_photo, s.played, s.won
+      FROM user_stats s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.played > 0`);
+    rows = r.rows.map(row => ({
+      id: row.id, u: row, played: Number(row.played) || 0, won: Number(row.won) || 0,
+    }));
+  } else {
+    for (const [id, st] of Object.entries(mem.stats || {})) {
+      const played = st && st.played || 0;
+      if (played <= 0) continue;
+      const u = mem.users.find(x => x.id === id);
+      if (!u) continue;
+      rows.push({ id, u, played: Number(played) || 0, won: Number(st.won) || 0 });
+    }
+  }
+  rows = rows.filter(row => row.played > 0 && row.u && !isRankFixture(row.u));
+  rows.sort(cmpBoard);
+  return rows.slice(0, cap).map((row, i) => publicBoardRow(row.u, row.played, row.won, i + 1));
+}
 async function purgeTestData() {
   if (mode === 'pg') {
     const ids = (await pool.query(`SELECT id FROM users WHERE (${TEST_KEY_SQL}) AND email IS NULL AND google_sub IS NULL`)).rows.map(r => r.id).filter(id => id !== (process.env.GM_USER_ID || '').trim());
@@ -440,6 +504,6 @@ module.exports = {
   getUser, getUserByUsername, getUserByGuestKey, getUserByPubId, getUserByToken,
   createGuest, updateUser, setPhoto, getPhoto,
   validUsername, validPassword, registerOrUpgrade, verifyLogin,
-  createSession, deleteSession, saveGame, listHistory, getGame, getStats,
+  createSession, deleteSession, saveGame, listHistory, getGame, getStats, leaderboard,
   getVetoCards, consumeVeto, getUserByGoogle, linkGoogle,
 };

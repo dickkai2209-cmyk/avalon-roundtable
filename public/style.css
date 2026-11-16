@@ -971,7 +971,16 @@ img,canvas,svg,video{max-width:100%}
 /* Home keeps a small footer gap. The lobby action row is fixed to the viewport. */
 main{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
 body:has(.bottombar) main{padding-bottom:calc(108px + env(safe-area-inset-bottom))}
-body:has(.myrole-fab) main,body:has(.veto-fab) main{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+/* Identity and avoid chips sit in a reserved band. Mission, role, and action content scroll in the area above them. */
+body:has(.myrole-fab),body:has(.veto-fab){overflow:hidden;height:100%}
+body:has(.myrole-fab) main,body:has(.veto-fab) main{
+  position:fixed;z-index:1;
+  top:calc(53px + env(safe-area-inset-top));
+  left:0;right:0;
+  bottom:calc(78px + env(safe-area-inset-bottom));
+  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding-bottom:16px;box-sizing:border-box;
+}
 .bottombar{
   position:fixed;left:50%;bottom:0;transform:translateX(-50%);
   width:min(520px,100%);max-width:100%;margin:0;z-index:8;box-sizing:border-box;

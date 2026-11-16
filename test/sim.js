@@ -19,8 +19,10 @@ async function setup(n, tag, settings) {
   const cs = Array.from({ length: n }, (_, i) => mk(i, tag));
   await Promise.all(cs.map(c => c.ready));
   const r = await cs[0].emit('create'); assert(r.room && r.room.length === 4, 'room code');
+  const cap = await cs[0].act('capacity', { n }); assert(cap && cap.ok, 'capacity ' + JSON.stringify(cap));
   for (const c of cs.slice(1)) { const j = await c.emit('join', { code: r.room.toLowerCase() }); assert(j.room === r.room, 'join ' + JSON.stringify(j)); }
-  await until(() => cs.every(c => c.st && c.st.players.length === n));
+  for (let i = 1; i < n; i++) { const s = await cs[i].act('sit', { seat: i + 1 }); assert(s.ok, 'sit '+i+' '+JSON.stringify(s)); }
+  await until(() => cs.every(c => c.st && c.st.seated === n));
   const bad = await cs[1].act('start'); assert(bad.error, 'non-host cannot start');
   const sr = await cs[0].act('settings', settings); assert(sr.ok, 'settings ' + JSON.stringify(sr));
   const st = await cs[0].act('start'); assert(st.ok, 'start ' + JSON.stringify(st));
@@ -29,13 +31,14 @@ async function setup(n, tag, settings) {
 }
 function checkKnowledge(cs) {
   const roleOf = {}; cs.forEach(c => roleOf[c.st.meId] = c.st.game.me.role);
-  const evil = r => ['assassin', 'morgana', 'mordred', 'oberon', 'minion'].includes(r);
+  const evil = r => ['assassin', 'morgana', 'mordred', 'oberon', 'minion', 'lancelot_evil'].includes(r);
   for (const c of cs) {
     const me = c.st.game.me; const ids = me.knows.map(k => k.id).sort();
     let exp = [];
     for (const [id, r] of Object.entries(roleOf)) { if (id === c.st.meId) continue;
       if (me.role === 'merlin' && evil(r) && r !== 'mordred') exp.push(id);
       else if (me.role === 'percival' && (r === 'merlin' || r === 'morgana')) exp.push(id);
+      else if ((me.role === 'lancelot_good' || me.role === 'lancelot_evil') && (r === 'lancelot_good' || r === 'lancelot_evil')) exp.push(id);
       else if (evil(me.role) && me.role !== 'oberon' && evil(r) && r !== 'oberon') exp.push(id); }
     assert(JSON.stringify(ids) === JSON.stringify(exp.sort()), `knowledge for ${me.role}`);
     // no role leak in public seats
@@ -65,10 +68,19 @@ async function play(cs, strategy, log) {
       const dup = await cs[0].act('vote', { approve }); assert(dup.error, 'double vote blocked');
       await until(() => cs.every(c => c.st.game.phase !== 'vote'));
       const ev = cs[0].st.lastEvent; log.push(`R${g.round + 1} vote ${ev.prev ? 'REJECT(5th)' : (ev.approved ? 'approve' : 'reject')}`);
+    } else if (g.phase === 'sword') {
+      const leader = by(g.leaderId); const other = g.team.find(id => id !== g.leaderId) || g.team[0];
+      const r = await leader.act('sword', { id: other }); assert(r.ok, 'sword ' + JSON.stringify(r));
+      await until(() => cs.every(c => c.st.game.phase !== 'sword'));
+    } else if (g.phase === 'swordflip') {
+      const holder = by(g.sword);
+      const r = await holder.act('swordflip', { skip: true }); assert(r.ok, 'sword skip ' + JSON.stringify(r));
+      await until(() => cs.every(c => c.st.game.phase !== 'swordflip'));
     } else if (g.phase === 'quest') {
       const members = g.team.map(by);
-      await Promise.all(members.map(c => { const evil = c.st.game.me.side === 'evil'; return c.act('quest', { success: strategy === 'evil' ? !evil : (evil ? true : false) }); }));
+      await Promise.all(members.map(c => { const evil = c.st.game.me.side === 'evil'; return c.act('quest', { success: strategy === 'evil' ? !evil : true }); }));
       await until(() => cs.every(c => c.st.game.phase !== 'quest'));
+      if (cs[0].st.game.phase === 'swordflip') continue;
       const q = cs[0].st.game.quests[g.round]; log.push(`R${g.round + 1} quest team=${g.team.length} fails=${q.fails} ${q.success ? 'SUCCESS' : 'FAIL'}`);
     } else if (g.phase === 'lady') {
       const holder = by(g.ladyId); const t = g.seats.find(s => s.id !== g.ladyId && !g.ladyUsed.includes(s.id));
@@ -121,7 +133,8 @@ async function play(cs, strategy, log) {
     assert(g.twoFailRound === 3, 'two fail round'); results.push({ game: '7p all roles', log, reason: g.reason }); cs.forEach(c => c.s.close()); }
   // Settings validation: 5p with morgana+mordred+oberon should fail
   { const { cs } = await (async () => { const cs = Array.from({ length: 5 }, (_, i) => mk(i, 'd')); await Promise.all(cs.map(c => c.ready));
-      const r = await cs[0].emit('create'); for (const c of cs.slice(1)) await c.emit('join', { code: r.room }); return { cs }; })();
+      const r = await cs[0].emit('create'); await cs[0].act('capacity', { n: 5 }); for (const c of cs.slice(1)) await c.emit('join', { code: r.room });
+      for (let i=1;i<5;i++) await cs[i].act('sit', { seat: i+1 }); return { cs }; })();
     await cs[0].act('settings', { morgana: true, mordred: true, oberon: true }); const r = await cs[0].act('start');
     assert(r.error, 'too many evil roles rejected'); results.push({ game: 'validation', error: r.error }); cs.forEach(c => c.s.close()); }
   // 10 players oberon
@@ -133,5 +146,48 @@ async function play(cs, strategy, log) {
     assert(g.scores && g.mvp && g.highlights, 'scores computed');
     const det = await fetch(`${URL}/api/game/${g.gid}?pid=${cs[0].pid}`).then(r => r.json()); assert(det.rounds && det.myId === cs[0].st.meId && det.mvp, 'detail api');
     results.push({ game: '8p lady', log, reason: g.reason, mvp: g.mvp, highlights: g.highlights }); cs.forEach(c => c.s.close()); }
+  // 11 players: Lancelot default on, both Lancelots know each other
+  { const { cs } = await setup(11, 'g', { lady: false, excalibur: false, lancelot: true });
+    const roles = checkKnowledge(cs);
+    const vals = Object.values(roles);
+    assert(vals.includes('lancelot_good') && vals.includes('lancelot_evil'), '11p lancelots');
+    const log = []; const g = await play(cs, 'good', log); assert(g.winner === 'good', '11p good');
+    results.push({ game: '11p lancelot', roles: vals, log, reason: g.reason }); cs.forEach(c => c.s.close()); }
+  // 5p Excalibur: sword given then skipped, game proceeds
+  { const { cs } = await setup(5, 'h', { percival: true, morgana: true, mordred: false, oberon: false, excalibur: true, lady: false });
+    const log = []; const g = await play(cs, 'good', log); assert(g.winner === 'good', '5p excalibur');
+    results.push({ game: '5p excalibur', log, reason: g.reason }); cs.forEach(c => c.s.close()); }
+  // veto card: cancels proposal without incrementing rejects
+  { const cs = Array.from({ length: 5 }, (_, i) => mk(i, 'v')); await Promise.all(cs.map(c => c.ready));
+    const r0 = await cs[0].emit('create'); await cs[0].act('capacity', { n: 5 });
+    for (const c of cs.slice(1)) await c.emit('join', { code: r0.room });
+    for (let i=1;i<5;i++) await cs[i].act('sit', { seat: i+1 });
+    await cs[0].act('settings', { veto: true, percival: true, morgana: true });
+    assert((await cs[0].act('start')).ok, 'veto start'); await until(() => cs.every(c => c.st.game && c.st.game.me));
+    const g0 = cs[0].st.game; const leader = cs.find(c => c.st.meId === g0.leaderId);
+    const team = g0.seats.map(s => s.id).slice(0, g0.teamSizes[0]);
+    assert((await leader.act('propose', { team })).ok, 'veto propose');
+    await until(() => cs[0].st.game.phase === 'vote');
+    const member = cs.find(c => team.includes(c.st.meId) && c.st.meId !== g0.leaderId);
+    const vr = await member.act('veto'); assert(vr.ok, 'veto ' + JSON.stringify(vr));
+    await until(() => cs[0].st.game.phase === 'team');
+    assert(cs[0].st.game.rejects === 0, 'veto does not increment rejects');
+    assert((cs[0].st.game.vetoBlocked || []).includes(member.st.meId), 'veto blocks for the round');
+    results.push({ game: 'veto card' }); cs.forEach(c => c.s.close()); }
+  // accounts: guest upgrade + login
+  { const key = 'acct' + Math.random().toString(36).slice(2, 10) + 'xx';
+    const g = await fetch(URL + '/api/auth/guest', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ guestKey: key, profile: { name: '帳號測' } }) }).then(r=>r.json());
+    assert(g.token && g.user && g.user.guest, 'guest ' + JSON.stringify(g));
+    const uname = 'u' + Math.random().toString(36).slice(2, 8);
+    const reg = await fetch(URL + '/api/auth/register', { method:'POST', headers:{'content-type':'application/json', Authorization:'Bearer '+g.token}, body: JSON.stringify({ username: uname, password: '1234' }) }).then(r=>r.json());
+    assert(reg.token && reg.user && reg.user.username === uname && !reg.user.guest, 'register ' + JSON.stringify(reg));
+    const me = await fetch(URL + '/api/me', { headers: { Authorization: 'Bearer ' + reg.token } }).then(r=>r.json());
+    assert(me.user && me.user.id === g.user.id, 'upgrade keeps id');
+    const login = await fetch(URL + '/api/auth/login', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ username: uname, password: '1234' }) }).then(r=>r.json());
+    assert(login.token && login.user.username === uname, 'login');
+    const bad = await fetch(URL + '/api/auth/login', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ username: uname, password: '0000' }) });
+    assert(bad.status === 401, 'bad pin rejected');
+    results.push({ game: 'accounts', username: uname }); }
+
   console.log(JSON.stringify(results, null, 1)); console.log('ALL TESTS PASSED'); process.exit(0);
 })().catch(e => { console.error('FAILED', e); process.exit(1); });

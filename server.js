@@ -2,219 +2,264 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { Server } = require('socket.io');
+const db = require('./db');
+const {
+  TEAM_SIZES, EVIL_COUNT, ROLE_SIDE, ROLE_NAME,
+  defaultSettings, presetRoles, currentSide, canPlayFail, needTwoFails, knowledge,
+} = require('./rules');
 
 const PORT = process.env.PORT || 3000;
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
-
-// ---------- persistence ----------
-let db = { games: [], stats: {} };
-try { fs.mkdirSync(DATA_DIR, { recursive: true }); db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch (e) { /* fresh */ }
-db.games = db.games || []; db.stats = db.stats || {};
-let saveTimer = null;
-function saveDb() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try { fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db)); fs.renameSync(DB_FILE + '.tmp', DB_FILE); } catch (e) { console.error('save failed', e.message); }
-  }, 200);
-}
-
-// ---------- rules ----------
-const TEAM_SIZES = {
-  5: [2, 3, 2, 3, 3], 6: [2, 3, 4, 3, 4], 7: [2, 3, 3, 4, 4],
-  8: [3, 4, 4, 5, 5], 9: [3, 4, 4, 5, 5], 10: [3, 4, 4, 5, 5],
-};
-const EVIL_COUNT = { 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4 };
-const GOOD_ROLES = ['merlin', 'percival', 'servant'];
-const ROLE_SIDE = { merlin: 'good', percival: 'good', servant: 'good', assassin: 'evil', morgana: 'evil', mordred: 'evil', oberon: 'evil', minion: 'evil' };
-const ROLE_NAME = { merlin: '梅林', percival: '派西維爾', servant: '亞瑟的忠臣', assassin: '刺客', morgana: '莫甘娜', mordred: '莫德雷德', oberon: '奧伯倫', minion: '莫德雷德的爪牙' };
-const needTwoFails = (n, round) => n >= 7 && round === 3;
-
 const pubId = (pid) => crypto.createHash('sha256').update(String(pid)).digest('hex').slice(0, 10);
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const cleanName = (s) => Array.from(String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim()).slice(0, 10).join('') || '騎士';
-const cleanAvatar = (s) => { s = String(s || ''); if (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(s) && s.length <= 16000) return s; return Array.from(s).slice(0, 3).join('') || '🦊'; };
+const ANIMALS = ['fox','panda','duck','squirrel','hedgehog','bunny','bear','redpanda','otter','hamster','shiba','dalmatian','capybara','penguin','koala','cat'];
+const FXS = ['none','spot','gold','spark','petals','fire','lightning'];
+const PENDANTS = ['none','crown','flower','star','sword','moon','wings'];
+const cleanAvatar = (s) => ANIMALS.includes(s) || s === 'photo' ? s : 'fox';
 const cleanBg = (s) => /^#[0-9a-fA-F]{6}$/.test(String(s)) ? s : '#f3d9a4';
-const FX = ['none', 'spot', 'gold', 'spark'];
-const cleanFx = (s) => FX.includes(s) ? s : 'spot';
-const pubPlayer = (p) => ({ id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx });
+const cleanFx = (s) => FXS.includes(s) ? s : 'spot';
+const cleanPendant = (s) => PENDANTS.includes(s) ? s : 'none';
 
-// ---------- rooms ----------
-const rooms = new Map();           // code -> room
-const pidRoom = new Map();         // pid -> code
+const rooms = new Map();
+const pidRoom = new Map();
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function newCode() {
   for (;;) { let c = ''; for (let i = 0; i < 4; i++) c += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)]; if (!rooms.has(c)) return c; }
 }
 
+function pubPlayer(p) {
+  return {
+    id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx, pendant: p.pendant,
+    photoUrl: p.avatar === 'photo' ? `/api/avatar/${p.id}` : `/img/av/${p.avatar || 'fox'}.webp`,
+    ready: !!p.ready, seat: p.seat,
+  };
+}
+function seated(room) { return room.seats.map((p, i) => p && { ...p, seat: i + 1 }).filter(Boolean); }
+function findPlayer(room, pid) { return room.seats.find(p => p && p.pid === pid) || null; }
+function findSeat(room, pid) { return room.seats.findIndex(p => p && p.pid === pid); }
+function newPlayer(pid, d, seat) {
+  return { pid, id: pubId(pid), name: d.name || '騎士', avatar: d.avatar || 'fox', bg: d.bg, fx: d.fx, pendant: d.pendant || 'none', ready: false, seat };
+}
+function applyProfile(p, d) { p.name = d.name; p.avatar = d.avatar; p.bg = d.bg; p.fx = d.fx; p.pendant = d.pendant || 'none'; }
+
 function makeRoom(host) {
   const code = newCode();
+  const capacity = 8;
   const room = {
     code, hostPid: host.pid, createdAt: Date.now(), touched: Date.now(),
-    players: [], // {pid, id, name, avatar}
-    settings: { percival: true, morgana: true, mordred: false, oberon: false, lady: false },
-    game: null, eventSeq: 0,
+    capacity, seats: Array(capacity).fill(null),
+    settings: defaultSettings(capacity),
+    game: null, eventSeq: 0, members: new Set([host.pid]),
   };
+  room.seats[0] = newPlayer(host.pid, host, 1);
   rooms.set(code, room);
   return room;
 }
 
-function findPlayer(room, pid) { return room.players.find(p => p.pid === pid); }
+function standUp(room, pid) {
+  const i = findSeat(room, pid);
+  if (i >= 0) room.seats[i] = null;
+}
 
-function validateSettings(n, s) {
-  const evilSpecial = 1 + (s.morgana ? 1 : 0) + (s.mordred ? 1 : 0) + (s.oberon ? 1 : 0);
-  if (evilSpecial > EVIL_COUNT[n]) return `${n} 人局只有 ${EVIL_COUNT[n]} 個壞人，請減少壞人角色`;
-  const goodSpecial = 1 + (s.percival ? 1 : 0);
-  if (goodSpecial > n - EVIL_COUNT[n]) return '好人角色太多';
-  return null;
+function setCapacity(room, n) {
+  n = Math.max(5, Math.min(12, n | 0));
+  const old = room.seats;
+  const next = Array(n).fill(null);
+  for (let i = 0; i < n; i++) next[i] = old[i] || null;
+  room.seats = next;
+  room.capacity = n;
+  // standing extra seats already dropped
+  room.settings = { ...room.settings, ...defaultSettings(n), excalibur: !!room.settings.excalibur, veto: !!room.settings.veto, lancelot: n >= 11 ? (room.settings.lancelot !== false) : !!room.settings.lancelot };
+  room.seats.forEach(p => { if (p) p.ready = false; });
 }
 
 function buildRoles(n, s) {
-  const evil = ['assassin']; if (s.morgana) evil.push('morgana'); if (s.mordred) evil.push('mordred'); if (s.oberon) evil.push('oberon');
-  while (evil.length < EVIL_COUNT[n]) evil.push('minion');
-  const good = ['merlin']; if (s.percival) good.push('percival');
-  while (good.length < n - EVIL_COUNT[n]) good.push('servant');
-  return shuffle(good.concat(evil));
+  const { good, evil, overflow } = presetRoles(n, s);
+  if (overflow) return { error: `${n} 人局角色數量超出陣營人數，請調整進階設定` };
+  return { roles: shuffle(good.concat(evil)) };
 }
 
 function startGame(room) {
-  const n = room.players.length;
-  if (n < 5 || n > 10) return '需要 5 至 10 位玩家';
-  const err = validateSettings(n, room.settings); if (err) return err;
-  const roles = buildRoles(n, room.settings);
-  const seats = room.players.map((p, i) => ({ pid: p.pid, id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, role: roles[i] }));
+  const n = room.capacity;
+  if (room.seats.some(s => !s)) return `還有空位（${seated(room).length}/${n}）`;
+  const { roles, error } = buildRoles(n, room.settings);
+  if (error) return error;
+  const players = seated(room);
+  const seats = players.map((p, i) => ({ pid: p.pid, id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx, pendant: p.pendant, role: roles[i] }));
   const leader = crypto.randomInt(n);
+  const lance = !!(room.settings.lancelot && seats.some(s => s.role === 'lancelot_good'));
   room.game = {
-    gid: crypto.randomUUID(), startedAt: Date.now(), n, seats,
-    settings: { ...room.settings },
+    gid: crypto.randomUUID(), startedAt: Date.now(), n, seats, settings: { ...room.settings },
     round: 0, leader, rejects: 0,
-    lady: room.settings.lady ? (leader - 1 + n) % n : -1, ladyUsed: room.settings.lady ? [seats[(leader - 1 + n) % n].id] : [], ladyLog: [],
+    lady: room.settings.lady ? (leader - 1 + n) % n : -1,
+    ladyUsed: room.settings.lady ? [seats[(leader - 1 + n) % n].id] : [],
+    ladyLog: [],
     phase: 'team', team: [], votes: {}, questVotes: {},
-    quests: [null, null, null, null, null], // {success, fails, team}
-    rounds: [[], [], [], [], []], // proposals per round
-    questLog: [],
+    quests: [null, null, null, null, null],
+    rounds: [[], [], [], [], []],
     assassinTarget: null, winner: null, reason: '', endedAt: null,
+    sword: null, swordFlipped: null,
+    lance, lanceSwitched: false, lanceDeck: lance ? shuffle(['switch', 'switch', 'stay', 'stay', 'stay']) : [], lanceLog: [],
+    vetoUsed: [], vetoBlocked: {},
   };
   room.lastEvent = { seq: ++room.eventSeq, type: 'start' };
   return null;
 }
 
-function endGame(room, winner, reason) {
-  const g = room.game;
-  g.phase = 'end'; g.winner = winner; g.reason = reason; g.endedAt = Date.now();
-  room.lastEvent = { seq: ++room.eventSeq, type: 'end', winner, reason };
-  const { scores, mvp, runnerUp, highlights } = scoreGame(g);
-  g.scores = scores; g.mvp = mvp; g.runnerUp = runnerUp; g.highlights = highlights;
-  const rec = {
-    gid: g.gid, room: room.code, startedAt: g.startedAt, endedAt: g.endedAt, n: g.n, winner, reason, settings: g.settings,
-    players: g.seats.map((s, i) => ({ id: s.id, name: s.name, avatar: s.avatar.startsWith('data:') ? null : s.avatar, bg: s.bg, role: s.role, seat: i + 1 })),
-    quests: g.quests.map(q => q ? { success: q.success, fails: q.fails, team: q.team } : null),
-    rounds: g.rounds, ladyLog: g.ladyLog, assassinTarget: g.assassinTarget, scores, mvp, runnerUp, highlights,
-    pids: g.seats.map(s => s.pid),
-  };
-  db.games.push(rec);
-  if (db.games.length > 2000) db.games.splice(0, db.games.length - 2000);
-  for (const s of g.seats) {
-    const st = db.stats[s.pid] || (db.stats[s.pid] = { played: 0, won: 0, roles: {} });
-    const r = st.roles[s.role] || (st.roles[s.role] = { played: 0, won: 0 });
-    const won = ROLE_SIDE[s.role] === winner;
-    st.played++; r.played++; if (won) { st.won++; r.won++; }
-    if (s.id === mvp) st.mvp = (st.mvp || 0) + 1;
-  }
-  saveDb();
-}
-
 function scoreGame(g) {
-  const side = {}; const role = {}; g.seats.forEach(s => { side[s.id] = ROLE_SIDE[s.role]; role[s.id] = s.role; });
+  const sideOf = (s) => currentSide(s.role, g.lanceSwitched);
   const scores = {};
   for (const s of g.seats) {
-    const items = []; const my = side[s.id]; const won = my === g.winner;
+    const items = []; const my = sideOf(s); const won = my === g.winner;
     if (won) items.push(['勝利', 12]);
     let correct = 0;
     for (const props of g.rounds) for (const p of props) {
       if (!(s.id in p.votes)) continue;
-      const evilOn = p.team.some(id => side[id] === 'evil');
-      const good = my === 'good' ? (p.votes[s.id] === !evilOn) : (p.votes[s.id] === evilOn);
-      if (good) correct++;
+      const evilOn = p.team.some(id => sideOf(g.seats.find(x => x.id === id)) === 'evil');
+      const goodV = my === 'good' ? (p.votes[s.id] === !evilOn) : (p.votes[s.id] === evilOn);
+      if (goodV) correct++;
     }
     if (correct) items.push([`正確投票 ×${correct}`, correct * 2]);
     let qs = 0; for (const q of g.quests) if (q && q.team.includes(s.id) && (q.success ? 'good' : 'evil') === my) qs++;
     if (qs) items.push([`完成任務 ×${qs}`, qs]);
     if (won && g.n > 5) items.push([`${g.n} 人局加成`, g.n - 5]);
     if (g.assassinTarget) {
-      if (s.role === 'assassin' && role[g.assassinTarget] === 'merlin') items.push(['一擊刺中梅林', 5]);
-      if (s.role === 'merlin' && role[g.assassinTarget] !== 'merlin') items.push(['梅林成功隱藏', 5]);
+      if (s.role === 'assassin' && g.seats.find(x => x.id === g.assassinTarget)?.role === 'merlin') items.push(['一擊刺中梅林', 5]);
+      if (s.role === 'merlin' && g.seats.find(x => x.id === g.assassinTarget)?.role !== 'merlin') items.push(['梅林成功隱藏', 5]);
     }
-    if (g.ladyLog.some(l => l.holder === s.id && side[l.target] !== my)) items.push(['湖中仙女驗出敵人', 1]);
     scores[s.id] = { total: items.reduce((a, x) => a + x[1], 0), items };
   }
-  const order = g.seats.map(s => s.id).sort((a, b) => (scores[b].total - scores[a].total) || ((side[b] === g.winner) - (side[a] === g.winner)));
+  const order = g.seats.map(s => s.id).sort((a, b) => (scores[b].total - scores[a].total) || ((sideOf(g.seats.find(s => s.id === b)) === g.winner) - (sideOf(g.seats.find(s => s.id === a)) === g.winner)));
   order.forEach((id, i) => scores[id].rank = i + 1);
   const hl = [];
   const mordred = g.seats.find(s => s.role === 'mordred');
   if (mordred && g.quests.some(q => q && q.team.includes(mordred.id))) hl.push(`莫德雷德 ${mordred.name} 成功混入任務隊伍`);
   const merlin = g.seats.find(s => s.role === 'merlin');
-  if (g.assassinTarget) hl.push(role[g.assassinTarget] === 'merlin' ? `刺客一擊即中，梅林 ${merlin.name} 倒下` : `梅林 ${merlin.name} 完美隱藏到最後`);
-  const allProps = g.rounds.flat();
+  if (g.assassinTarget) hl.push(g.seats.find(s => s.id === g.assassinTarget)?.role === 'merlin' ? `刺客一擊即中，梅林 ${merlin.name} 倒下` : `梅林 ${merlin.name} 完美隱藏到最後`);
+  if (g.lanceLog.some(l => l.switched)) hl.push('蘭斯洛特的忠誠發生了變化');
   const maxRej = Math.max(0, ...g.rounds.map(r => r.filter(p => !p.approved).length));
-  if (maxRej >= 3) hl.push(`同一輪連續被否決 ${maxRej} 次，圓桌氣氛緊張`);
-  const unanimous = allProps.filter(p => p.yes === g.n).length; if (unanimous) hl.push(`${unanimous} 次全票通過的隊伍`);
+  if (maxRej >= 3) hl.push(`同一輪連續被否決 ${maxRej} 次`);
   const qres = g.quests.filter(Boolean);
   if (qres.length === 3 && qres.every(q => q.success)) hl.push('三連勝！好人任務零失誤');
   if (qres.length === 3 && qres.every(q => !q.success)) hl.push('三連敗！壞人全面滲透');
-  const oberon = g.seats.find(s => s.role === 'oberon'); if (oberon) hl.push(`奧伯倫 ${oberon.name} 孤軍作戰`);
-  const big = qres.find(q => q.fails >= 2); if (big) hl.push(`有任務出現 ${big.fails} 張失敗卡`);
   return { scores, mvp: order[0], runnerUp: order[1], highlights: hl };
 }
 
-function knowledgeFor(g, seat) {
-  const role = seat.role; const out = [];
-  for (const o of g.seats) {
-    if (o.pid === seat.pid) continue;
-    if (role === 'merlin' && ROLE_SIDE[o.role] === 'evil' && o.role !== 'mordred') out.push({ id: o.id, label: '壞人' });
-    else if (role === 'percival' && (o.role === 'merlin' || o.role === 'morgana')) out.push({ id: o.id, label: '梅林或莫甘娜' });
-    else if (ROLE_SIDE[role] === 'evil' && role !== 'oberon' && ROLE_SIDE[o.role] === 'evil' && o.role !== 'oberon') out.push({ id: o.id, label: '壞人同伴' });
-  }
-  return out;
+async function endGame(room, winner, reason) {
+  const g = room.game;
+  g.phase = 'end'; g.winner = winner; g.reason = reason; g.endedAt = Date.now();
+  const { scores, mvp, runnerUp, highlights } = scoreGame(g);
+  g.scores = scores; g.mvp = mvp; g.runnerUp = runnerUp; g.highlights = highlights;
+  room.lastEvent = { seq: ++room.eventSeq, type: 'end', winner, reason };
+  const mvpPid = g.seats.find(s => s.id === mvp)?.pid;
+  const rec = {
+    gid: g.gid, room: room.code, startedAt: g.startedAt, endedAt: g.endedAt, n: g.n, winner, reason,
+    settings: g.settings,
+    players: g.seats.map((s, i) => ({ id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, pendant: s.pendant, role: s.role, side: currentSide(s.role, g.lanceSwitched), seat: i + 1 })),
+    quests: g.quests.map(q => q ? { success: q.success, fails: q.fails, team: q.team, sword: q.sword, flipped: q.flipped } : null),
+    rounds: g.rounds, ladyLog: g.ladyLog, lanceLog: g.lanceLog, assassinTarget: g.assassinTarget,
+    scores, mvp, runnerUp, highlights, pids: g.seats.map(s => s.pid), mvpPid,
+  };
+  try { await db.saveGame(rec); } catch (e) { console.error('saveGame', e); }
 }
 
-// ---------- actions ----------
-function act(room, pid, type, data) {
+function afterQuest(room, qev) {
+  const g = room.game;
+  const goodWins = g.quests.filter(q => q && q.success).length;
+  const evilWins = g.quests.filter(q => q && !q.success).length;
+  if (evilWins >= 3) return endGame(room, 'evil', '三個任務失敗，壞人勝利').then(() => { room.lastEvent = { seq: room.eventSeq, ...qev, then: 'end' }; });
+  if (goodWins >= 3) { g.phase = 'assassin'; return; }
+  // Lancelot card after quests 2–4 (rounds 1,2,3)
+  if (g.lance && g.round >= 1 && g.round <= 3 && g.lanceDeck.length) {
+    const card = g.lanceDeck.shift();
+    const switched = card === 'switch';
+    if (switched) g.lanceSwitched = !g.lanceSwitched;
+    g.lanceLog.push({ round: g.round, card, switched: g.lanceSwitched });
+    qev.lance = { card, switched: g.lanceSwitched };
+    room.lastEvent = { seq: ++room.eventSeq, ...qev };
+    if (g.lady >= 0 && g.round >= 1 && g.round <= 3) g.phase = 'lady';
+    else { g.round++; g.phase = 'team'; g.leader = (g.leader + 1) % g.n; }
+    return;
+  }
+  if (g.lady >= 0 && g.round >= 1 && g.round <= 3) g.phase = 'lady';
+  else { g.round++; g.phase = 'team'; g.leader = (g.leader + 1) % g.n; }
+}
+
+async function act(room, pid, type, data) {
   const g = room.game; const isHost = room.hostPid === pid;
+  const member = room.members.has(pid);
   switch (type) {
+    case 'capacity': {
+      if (!isHost) return '只有房主可以修改人數';
+      if (g && g.phase !== 'end') return '遊戲進行中';
+      setCapacity(room, data.n);
+      return null;
+    }
     case 'settings': {
       if (!isHost) return '只有房主可以修改';
       if (g && g.phase !== 'end') return '遊戲進行中';
-      for (const k of ['percival', 'morgana', 'mordred', 'oberon', 'lady']) if (k in data) room.settings[k] = !!data[k];
+      for (const k of ['lady', 'excalibur', 'lancelot', 'veto', 'advanced', 'percival', 'morgana', 'mordred', 'oberon'])
+        if (k in data) room.settings[k] = !!data[k];
+      if (['percival', 'morgana', 'mordred', 'oberon'].some(k => k in data)) room.settings.advanced = true;
+      return null;
+    }
+    case 'sit': {
+      if (g && g.phase !== 'end') return '遊戲進行中';
+      const i = (data.seat | 0) - 1;
+      if (i < 0 || i >= room.capacity) return '無效座位';
+      if (room.seats[i] && room.seats[i].pid !== pid) return '這個座位已經有人';
+      const cur = findSeat(room, pid);
+      const sock = [...io.sockets.sockets.values()].find(s => s.data.pid === pid);
+      const d = sock ? sock.data : {};
+      if (cur >= 0) { if (cur === i) return null; room.seats[i] = room.seats[cur]; room.seats[cur] = null; room.seats[i].seat = i + 1; room.seats[i].ready = false; }
+      else room.seats[i] = newPlayer(pid, d, i + 1);
+      room.lastEvent = { seq: ++room.eventSeq, type: 'sit', id: pubId(pid), seat: i + 1 };
+      return null;
+    }
+    case 'stand': {
+      if (g && g.phase !== 'end') return '遊戲進行中';
+      const target = data.id ? room.seats.find(p => p && p.id === data.id) : findPlayer(room, pid);
+      if (!target) return '該玩家未就座';
+      if (target.pid !== pid && !isHost) return '只有房主可以請人離座';
+      standUp(room, target.pid);
+      return null;
+    }
+    case 'ready': {
+      const p = findPlayer(room, pid); if (!p) return '請先就座';
+      if (isHost) return '房主無需準備';
+      p.ready = !!data.ready;
       return null;
     }
     case 'kick': {
       if (!isHost) return '只有房主可以踢人';
       if (g && g.phase !== 'end') return '遊戲進行中';
-      const p = room.players.find(x => x.id === data.id); if (!p || p.pid === pid) return '無效玩家';
-      room.players = room.players.filter(x => x !== p); pidRoom.delete(p.pid);
-      for (const [, s] of io.sockets.sockets) if (s.data.pid === p.pid) { s.leave(room.code); s.data.room = null; s.emit('kicked'); }
+      const p = seated(room).find(x => x.id === data.id) || null;
+      // also unseated members? we only track seated + members set
+      const pidK = p ? p.pid : null;
+      if (!pidK || pidK === pid) return '無效玩家';
+      standUp(room, pidK); room.members.delete(pidK); pidRoom.delete(pidK);
+      for (const s of io.sockets.sockets.values()) if (s.data.pid === pidK) { s.leave(room.code); s.data.room = null; s.emit('kicked'); }
       return null;
     }
-    case 'move': { // reorder seat
-      if (!isHost) return '只有房主可以調位';
+    case 'transfer': {
+      if (!isHost) return '只有房主可以轉讓';
       if (g && g.phase !== 'end') return '遊戲進行中';
-      const i = room.players.findIndex(x => x.id === data.id); const j = i + (data.dir < 0 ? -1 : 1);
-      if (i < 0 || j < 0 || j >= room.players.length) return null;
-      [room.players[i], room.players[j]] = [room.players[j], room.players[i]];
+      const p = seated(room).find(x => x.id === data.id);
+      if (!p) return '對方必須已就座';
+      room.hostPid = p.pid; p.ready = false;
       return null;
     }
-    case 'swap': {
-      if (!isHost) return '只有房主可以調位';
-      if (g && g.phase !== 'end') return '遊戲進行中';
-      const i = room.players.findIndex(x => x.id === data.a), j = room.players.findIndex(x => x.id === data.b);
-      if (i < 0 || j < 0) return '無效玩家';
-      [room.players[i], room.players[j]] = [room.players[j], room.players[i]];
-      return null;
+    case 'dissolve': {
+      if (!isHost) return '只有房主可以解散房間';
+      if (g && g.phase !== 'end') return '遊戲進行中，請先結束本局';
+      for (const s of io.sockets.sockets.values()) if (s.data.room === room.code) { s.leave(room.code); s.data.room = null; s.emit('dissolved'); }
+      for (const p of seated(room)) pidRoom.delete(p.pid);
+      for (const mid of room.members) pidRoom.delete(mid);
+      rooms.delete(room.code);
+      return 'dissolved';
     }
     case 'start': {
       if (!isHost) return '只有房主可以開始';
@@ -225,12 +270,14 @@ function act(room, pid, type, data) {
       if (!isHost) return '只有房主可以結束';
       if (!g) return null;
       room.game = null; room.lastEvent = { seq: ++room.eventSeq, type: 'abort' };
+      room.seats.forEach(p => { if (p) p.ready = false; });
       return null;
     }
     case 'lobby': {
       if (!isHost) return '只有房主可以操作';
       if (g && g.phase !== 'end') return '遊戲進行中';
-      room.game = null; return null;
+      room.game = null; room.seats.forEach(p => { if (p) p.ready = false; });
+      return null;
     }
   }
   if (!g) return '遊戲未開始';
@@ -243,7 +290,20 @@ function act(room, pid, type, data) {
       const need = TEAM_SIZES[g.n][g.round];
       const ids = Array.from(new Set(data.team || []));
       if (ids.length !== need || !ids.every(id => g.seats.some(s => s.id === id))) return `需要選擇 ${need} 位隊員`;
+      const blocked = g.vetoBlocked[g.round] || [];
+      if (ids.some(id => blocked.includes(id))) return '本輪被回避的玩家不能再入隊';
       g.team = ids; g.votes = {}; g.phase = 'vote';
+      return null;
+    }
+    case 'veto': {
+      if (!g.settings.veto) return '本局未啟用回避卡';
+      if (g.phase !== 'vote') return '現在不是投票階段';
+      if (!g.team.includes(seat.id)) return '你不在任務隊伍中';
+      if (g.vetoUsed.includes(seat.id)) return '你已經用過回避卡';
+      g.vetoUsed.push(seat.id);
+      g.vetoBlocked[g.round] = (g.vetoBlocked[g.round] || []).concat(seat.id);
+      room.lastEvent = { seq: ++room.eventSeq, type: 'veto', who: seat.id, name: seat.name, round: g.round };
+      g.phase = 'team'; g.team = []; g.votes = {};
       return null;
     }
     case 'vote': {
@@ -256,15 +316,27 @@ function act(room, pid, type, data) {
         const rec = { leader: g.seats[g.leader].id, team: g.team.slice(), votes: { ...g.votes }, approved, yes, no: g.n - yes, attempt: g.rejects + 1 };
         g.rounds[g.round].push(rec);
         room.lastEvent = { seq: ++room.eventSeq, type: 'vote', round: g.round, ...rec };
-        g.leader = (g.leader + 1) % g.n;
-        if (approved) { g.rejects = 0; g.phase = 'quest'; g.questVotes = {}; }
-        else {
+        if (approved) {
+          g.rejects = 0;
+          if (g.settings.excalibur) { g.phase = 'sword'; g.sword = null; }
+          else { g.phase = 'quest'; g.questVotes = {}; }
+        } else {
+          g.leader = (g.leader + 1) % g.n;
           g.rejects++;
-          if (g.rejects >= 5) { g.team = []; endGame(room, 'evil', '連續 5 次組隊被否決，壞人勝利'); room.lastEvent.prev = rec; }
+          if (g.rejects >= 5) { g.team = []; await endGame(room, 'evil', '連續 5 次組隊被否決，壞人勝利'); room.lastEvent = { ...room.lastEvent, prev: rec }; }
           else { g.phase = 'team'; g.team = []; }
         }
         g.votes = {};
       }
+      return null;
+    }
+    case 'sword': {
+      if (g.phase !== 'sword') return '現在不是授予王者之劍的階段';
+      const proposer = g.rounds[g.round][g.rounds[g.round].length - 1];
+      if (seat.id !== proposer.leader) return '只有本輪隊長可以授予王者之劍';
+      const t = g.seats.find(s => s.id === data.id);
+      if (!t || !g.team.includes(t.id) || t.id === seat.id) return '必須交給隊伍中的另一位隊員';
+      g.sword = t.id; g.phase = 'quest'; g.questVotes = {};
       return null;
     }
     case 'quest': {
@@ -272,23 +344,25 @@ function act(room, pid, type, data) {
       if (!g.team.includes(seat.id)) return '你不在任務隊伍中';
       if (seat.id in g.questVotes) return '你已經出過任務卡';
       let success = !!data.success;
-      if (ROLE_SIDE[seat.role] === 'good') success = true; // good can only succeed
+      if (!canPlayFail(seat.role, g.lanceSwitched)) success = true;
       g.questVotes[seat.id] = success;
       if (Object.keys(g.questVotes).length === g.team.length) {
-        const fails = Object.values(g.questVotes).filter(v => !v).length;
-        const ok = fails < (needTwoFails(g.n, g.round) ? 2 : 1);
-        g.quests[g.round] = { success: ok, fails, team: g.team.slice() };
-        const qev = { type: 'quest', round: g.round, success: ok, fails, size: g.team.length };
-        room.lastEvent = { seq: ++room.eventSeq, ...qev };
-        g.questVotes = {}; g.votes = {}; g.team = [];
-        const goodWins = g.quests.filter(q => q && q.success).length;
-        const evilWins = g.quests.filter(q => q && !q.success).length;
-        if (evilWins >= 3) endGame(room, 'evil', '三個任務失敗，壞人勝利');
-        else if (goodWins >= 3) { g.phase = 'assassin'; }
-        else if (g.lady >= 0 && g.round >= 1 && g.round <= 3) { g.phase = 'lady'; }
-        else { g.round++; g.phase = 'team'; }
-        if (g.phase === 'end') room.lastEvent = { ...room.lastEvent, ...qev, then: 'end' };
+        if (g.sword) { g.phase = 'swordflip'; }
+        else await finishQuest(room);
       }
+      return null;
+    }
+    case 'swordflip': {
+      if (g.phase !== 'swordflip') return '現在不是使用王者之劍的階段';
+      if (seat.id !== g.sword) return '只有持劍者可以操作';
+      if (data.skip) { g.swordFlipped = null; await finishQuest(room); return null; }
+      const t = g.seats.find(s => s.id === data.id);
+      if (!t || !g.team.includes(t.id) || t.id === seat.id) return '必須選擇隊伍中的另一位隊員';
+      const original = g.questVotes[t.id];
+      g.questVotes[t.id] = !original;
+      g.swordFlipped = t.id;
+      await finishQuest(room);
+      if (room.lastEvent) room.lastEvent.swordPrivate = { holder: seat.id, target: t.id, original };
       return null;
     }
     case 'lady': {
@@ -297,10 +371,10 @@ function act(room, pid, type, data) {
       const ti = g.seats.findIndex(s => s.id === data.id); const t = g.seats[ti];
       if (!t || t.pid === pid) return '無效目標';
       if (g.ladyUsed.includes(t.id)) return '此玩家已持有過湖中仙女，不能被查驗';
-      g.ladyLog.push({ round: g.round, holder: seat.id, target: t.id, side: ROLE_SIDE[t.role] });
+      g.ladyLog.push({ round: g.round, holder: seat.id, target: t.id, side: currentSide(t.role, g.lanceSwitched) });
       g.ladyUsed.push(t.id); g.lady = ti;
       room.lastEvent = { seq: ++room.eventSeq, type: 'lady', holder: seat.id, target: t.id };
-      g.round++; g.phase = 'team';
+      g.round++; g.phase = 'team'; g.leader = (g.leader + 1) % g.n;
       return null;
     }
     case 'assassinate': {
@@ -309,24 +383,38 @@ function act(room, pid, type, data) {
       const t = g.seats.find(s => s.id === data.id);
       if (!t || t.pid === pid) return '無效目標';
       g.assassinTarget = t.id;
-      if (t.role === 'merlin') endGame(room, 'evil', `刺客刺中梅林（${t.name}），壞人逆轉勝利`);
-      else endGame(room, 'good', `刺客刺錯了（${t.name} 不是梅林），好人勝利`);
+      if (t.role === 'merlin') await endGame(room, 'evil', `刺客刺中梅林（${t.name}），壞人逆轉勝利`);
+      else await endGame(room, 'good', `刺客刺錯了（${t.name} 不是梅林），好人勝利`);
       return null;
     }
   }
   return '未知操作';
 }
 
-// ---------- views ----------
+async function finishQuest(room) {
+  const g = room.game;
+  const fails = Object.values(g.questVotes).filter(v => !v).length;
+  const ok = fails < (needTwoFails(g.n, g.round) ? 2 : 1);
+  g.quests[g.round] = { success: ok, fails, team: g.team.slice(), sword: g.sword, flipped: g.swordFlipped };
+  const qev = { type: 'quest', round: g.round, success: ok, fails, size: g.team.length, flipped: g.swordFlipped };
+  room.lastEvent = { seq: ++room.eventSeq, ...qev };
+  g.questVotes = {}; g.votes = {}; g.team = []; g.sword = null; g.swordFlipped = null;
+  await afterQuest(room, qev);
+}
+
 function viewFor(room, pid) {
   const online = new Set();
-  for (const [, s] of io.sockets.sockets) if (s.data.room === room.code && s.data.pid) online.add(s.data.pid);
-  const me = findPlayer(room, pid);
+  for (const s of io.sockets.sockets.values()) if (s.data.room === room.code && s.data.pid) online.add(s.data.pid);
+  const meSeated = findPlayer(room, pid);
+  const preset = presetRoles(room.capacity, room.settings);
+  const readyN = seated(room).filter(p => p.ready || p.pid === room.hostPid).length;
   const v = {
-    code: room.code, hostId: pubId(room.hostPid), meId: me ? me.id : null, isHost: room.hostPid === pid,
-    settings: room.settings, lastEvent: room.lastEvent || null,
-    players: room.players.map(p => ({ ...pubPlayer(p), online: online.has(p.pid) })),
-    teamSizes: TEAM_SIZES[room.players.length] || null, evilCount: EVIL_COUNT[room.players.length] || null,
+    code: room.code, hostId: pubId(room.hostPid), meId: pubId(pid), isHost: room.hostPid === pid,
+    settings: room.settings, lastEvent: room.lastEvent ? (({ swordPrivate, ...rest }) => rest)(room.lastEvent) : null,
+    capacity: room.capacity, seated: seated(room).length, readyCount: readyN,
+    mySeat: meSeated ? findSeat(room, pid) + 1 : null,
+    seats: room.seats.map((p, i) => p ? { ...pubPlayer({ ...p, seat: i + 1 }), online: online.has(p.pid), isHost: p.pid === room.hostPid } : { empty: true, seat: i + 1 }),
+    preset, teamSizes: TEAM_SIZES[room.capacity], evilCount: EVIL_COUNT[room.capacity],
     game: null,
   };
   const g = room.game;
@@ -337,98 +425,237 @@ function viewFor(room, pid) {
     v.game = {
       gid: g.gid, n: g.n, phase: g.phase, round: g.round, leaderId: g.seats[g.leader].id, rejects: g.rejects,
       teamSizes: TEAM_SIZES[g.n], twoFailRound: g.n >= 7 ? 3 : -1, settings: g.settings,
-      seats: g.seats.map(s => ({ id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, online: online.has(s.pid),
+      seats: g.seats.map(s => ({
+        id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, fx: s.fx, pendant: s.pendant,
+        photoUrl: s.avatar === 'photo' ? `/api/avatar/${s.id}` : `/img/av/${s.avatar || 'fox'}.webp`,
+        online: online.has(s.pid),
         role: ended ? s.role : undefined,
-        evil: (revealEvil && ROLE_SIDE[s.role] === 'evil' && s.role !== 'oberon') ? true : undefined,
-        assassin: revealEvil && s.role === 'assassin' ? true : undefined })),
+        side: ended ? currentSide(s.role, g.lanceSwitched) : undefined,
+        evil: (revealEvil && currentSide(s.role, g.lanceSwitched) === 'evil' && s.role !== 'oberon') ? true : undefined,
+        assassin: revealEvil && s.role === 'assassin' ? true : undefined,
+      })),
       team: g.team, voted: Object.keys(g.votes), questDone: Object.keys(g.questVotes).length,
-      quests: g.quests.map(q => q ? { success: q.success, fails: q.fails, team: q.team } : null),
+      quests: g.quests.map(q => q ? { success: q.success, fails: q.fails, team: q.team, sword: q.sword } : null),
       rounds: g.rounds, winner: g.winner, reason: g.reason, assassinTarget: g.assassinTarget,
       ladyId: g.lady >= 0 ? g.seats[g.lady].id : null, ladyUsed: g.ladyUsed,
       ladyLog: g.ladyLog.map(l => ({ round: l.round, holder: l.holder, target: l.target, side: (ended || (seat && l.holder === seat.id)) ? l.side : undefined })),
+      sword: g.sword, lanceSwitched: ended ? g.lanceSwitched : undefined, lanceLog: g.lanceLog,
       scores: ended ? g.scores : undefined, mvp: ended ? g.mvp : undefined, runnerUp: ended ? g.runnerUp : undefined, highlights: ended ? g.highlights : undefined,
-      me: seat ? { role: seat.role, side: ROLE_SIDE[seat.role], roleName: ROLE_NAME[seat.role], knows: knowledgeFor(g, seat),
-        voted: seat.id in g.votes, myVote: g.votes[seat.id], questSubmitted: seat.id in g.questVotes } : null,
+      vetoUsed: g.vetoUsed, vetoBlocked: g.vetoBlocked[g.round] || [],
+      me: seat ? {
+        role: seat.role, side: currentSide(seat.role, g.lanceSwitched), roleName: ROLE_NAME[seat.role],
+        knows: knowledge(g.seats, seat, g.lanceSwitched),
+        voted: seat.id in g.votes, myVote: g.votes[seat.id], questSubmitted: seat.id in g.questVotes,
+        canFail: canPlayFail(seat.role, g.lanceSwitched),
+        hasVeto: !!(g.settings.veto && !g.vetoUsed.includes(seat.id)),
+        swordPrivate: room.lastEvent && room.lastEvent.swordPrivate && room.lastEvent.swordPrivate.holder === seat.id ? room.lastEvent.swordPrivate : undefined,
+      } : null,
     };
   }
   return v;
 }
 
 function broadcast(room) {
+  if (!rooms.has(room.code)) return;
   room.touched = Date.now();
-  for (const [, s] of io.sockets.sockets) if (s.data.room === room.code) s.emit('state', viewFor(room, s.data.pid));
+  for (const s of io.sockets.sockets.values()) if (s.data.room === room.code) s.emit('state', viewFor(room, s.data.pid));
 }
-
-// ---------- server ----------
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' }, pingInterval: 20000, pingTimeout: 25000 });
-
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '10m' }));
-app.get('/healthz', (req, res) => res.json({ ok: true, rooms: rooms.size }));
-app.get('/api/qr', async (req, res) => {
-  try {
-    const svg = await QRCode.toString(String(req.query.text || '').slice(0, 300), { type: 'svg', margin: 1, width: 240, color: { dark: '#1f2937', light: '#ffffff' } });
-    res.type('image/svg+xml').send(svg);
-  } catch (e) { res.status(400).end(); }
-});
-app.get('/api/history', (req, res) => {
-  const pid = String(req.query.pid || '');
-  const list = db.games.filter(g => g.pids.includes(pid)).slice(-50).reverse().map(g => {
-    const { pids, ...rest } = g; const idx = pids.indexOf(pid);
-    return { ...rest, myId: rest.players[idx] && rest.players[idx].id, myRole: rest.players[idx] && rest.players[idx].role };
-  });
-  res.json(list);
-});
-app.get('/api/game/:gid', (req, res) => {
-  const g = db.games.find(x => x.gid === req.params.gid); if (!g) return res.status(404).json({ error: 'not found' });
-  const { pids, ...rest } = g; const idx = pids.indexOf(String(req.query.pid || ''));
-  res.json({ ...rest, myId: idx >= 0 ? rest.players[idx].id : null });
-});
-app.get('/api/stats', (req, res) => res.json(db.stats[String(req.query.pid || '')] || { played: 0, won: 0, roles: {} }));
-app.get(['/r/:code', '/room/:code'], (req, res) => res.redirect('/?room=' + encodeURIComponent(req.params.code.toUpperCase())));
-
-function applyProfile(p, d) { p.name = d.name; p.avatar = d.avatar; p.bg = d.bg; p.fx = d.fx; }
-function newPlayer(pid, d) { const p = { pid, id: pubId(pid) }; applyProfile(p, d); return p; }
 
 function leaveCurrent(socket, pid, removeFromLobby) {
   const code = pidRoom.get(pid); if (!code) return;
   const room = rooms.get(code);
   if (!room) { pidRoom.delete(pid); return; }
   if (removeFromLobby && (!room.game || room.game.phase === 'end')) {
-    room.players = room.players.filter(p => p.pid !== pid); pidRoom.delete(pid);
-    if (room.hostPid === pid && room.players.length) room.hostPid = room.players[0].pid;
-    if (!room.players.length) rooms.delete(code);
+    standUp(room, pid); room.members.delete(pid); pidRoom.delete(pid);
+    if (room.hostPid === pid) {
+      const left = seated(room);
+      if (left.length) room.hostPid = left[0].pid;
+    }
+    if (!room.members.size && !seated(room).length) rooms.delete(code);
   }
   socket.leave(code); socket.data.room = null;
   if (rooms.has(code)) broadcast(room);
 }
 
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: '*' }, pingInterval: 20000, pingTimeout: 25000 });
+app.use(express.json({ limit: '2mb' }));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '10m' }));
+
+function bearer(req) {
+  const h = req.headers.authorization || '';
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  if (m) return m[1].trim();
+  return req.query.token || req.body && req.body.token || '';
+}
+async function authUser(req, res, next) {
+  const u = await db.getUserByToken(bearer(req)) || (req.query.pid && (await db.getUser(req.query.pid) || await db.getUserByGuestKey(String(req.query.pid))));
+  if (!u) return res.status(401).json({ error: '請先登入' });
+  req.user = u; next();
+}
+
+app.get('/healthz', (req, res) => res.json({ ok: true, rooms: rooms.size, db: db.mode() }));
+app.get('/api/qr', async (req, res) => {
+  try {
+    const svg = await QRCode.toString(String(req.query.text || '').slice(0, 300), { type: 'svg', margin: 1, width: 240, color: { dark: '#1f2937', light: '#ffffff' } });
+    res.type('image/svg+xml').send(svg);
+  } catch (e) { res.status(400).end(); }
+});
+
+app.post('/api/auth/guest', async (req, res) => {
+  try {
+    const guestKey = String(req.body.guestKey || '');
+    if (guestKey.length < 8 || guestKey.length > 80) return res.status(400).json({ error: '無效身份' });
+    const profile = req.body.profile || {};
+    const u = await db.createGuest({
+      guestKey, name: cleanName(profile.name), avatar: cleanAvatar(profile.avatar),
+      bg: cleanBg(profile.bg), fx: cleanFx(profile.fx), pendant: cleanPendant(profile.pendant), skins: profile.skins || {},
+    });
+    const token = await db.createSession(u.id);
+    const stats = await db.getStats(u.id);
+    res.json({ token, user: db.pubUser(u), stats });
+  } catch (e) { console.error(e); res.status(500).json({ error: '伺服器錯誤' }); }
+});
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    let u = await db.getUserByToken(bearer(req));
+    if (!u) {
+      const guestKey = String(req.body.guestKey || crypto.randomUUID());
+      u = await db.createGuest({ guestKey, name: cleanName(req.body.name) });
+    }
+    const upd = await db.registerOrUpgrade(u, req.body.username, req.body.password);
+    const token = await db.createSession(upd.id);
+    res.json({ token, user: db.pubUser(upd), stats: await db.getStats(upd.id) });
+  } catch (e) { res.status(400).json({ error: e.message || '註冊失敗' }); }
+});
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const u = await db.verifyLogin(req.body.username, req.body.password);
+    if (!u) return res.status(401).json({ error: '帳號或密碼不正確' });
+    const token = await db.createSession(u.id);
+    res.json({ token, user: db.pubUser(u), stats: await db.getStats(u.id) });
+  } catch (e) { res.status(400).json({ error: e.message || '登入失敗' }); }
+});
+app.post('/api/auth/logout', async (req, res) => { await db.deleteSession(bearer(req)); res.json({ ok: true }); });
+app.get('/api/me', authUser, async (req, res) => {
+  res.json({ user: db.pubUser(req.user), stats: await db.getStats(req.user.id) });
+});
+app.put('/api/me', authUser, async (req, res) => {
+  try {
+    const f = {};
+    if ('name' in req.body) f.name = cleanName(req.body.name);
+    if ('avatar' in req.body && req.body.avatar !== 'photo') f.avatar = cleanAvatar(req.body.avatar);
+    if ('bg' in req.body) f.bg = cleanBg(req.body.bg);
+    if ('fx' in req.body) f.fx = cleanFx(req.body.fx);
+    if ('pendant' in req.body) f.pendant = cleanPendant(req.body.pendant);
+    if ('skins' in req.body && typeof req.body.skins === 'object') f.skins = req.body.skins;
+    if (req.body.photo) {
+      const raw = String(req.body.photo);
+      const m = raw.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+=*)$/);
+      if (!m) return res.status(400).json({ error: '相片格式無效' });
+      const buf = Buffer.from(m[2], 'base64');
+      if (buf.length > 1_500_000) return res.status(400).json({ error: '相片太大' });
+      const sharpOk = false;
+      // resize with sharp if present, else accept already-resized webp from client
+      let out = buf;
+      try {
+        const { spawnSync } = require('child_process');
+        // use python pillow if available for conversion
+        const fs = require('fs'); const tmp = path.join(require('os').tmpdir(), 'av' + Date.now());
+        fs.writeFileSync(tmp, buf);
+        const py = `from PIL import Image,io;import sys;im=Image.open(${JSON.stringify(tmp)});im=im.convert('RGB');s=min(im.size);im=im.crop(((im.width-s)//2,(im.height-s)//2,(im.width+s)//2,(im.height+s)//2)).resize((256,256));im.save(sys.stdout.buffer,'WEBP',quality=80)`;
+        const r = spawnSync('python3', ['-c', py], { encoding: 'buffer', maxBuffer: 2e6 });
+        if (r.status === 0 && r.stdout && r.stdout.length > 100) out = r.stdout;
+        try { fs.unlinkSync(tmp); } catch (e) {}
+      } catch (e) { /* keep buf */ }
+      await db.setPhoto(req.user.id, out);
+      f.avatar = 'photo';
+    }
+    const u = await db.updateUser(req.user.id, f);
+    res.json({ user: db.pubUser(u) });
+  } catch (e) { console.error(e); res.status(500).json({ error: '儲存失敗' }); }
+});
+app.get('/api/avatar/:id', async (req, res) => {
+  const id = req.params.id;
+  let u = await db.getUser(id) || await db.getUserByPubId(id);
+  if (!u) {
+    // try pubId match among recent rooms / not efficient; scan not available. History players use pub id.
+    // fallback: look at seated rooms
+    for (const room of rooms.values()) {
+      const p = seated(room).find(x => x.id === id);
+      if (p) { u = await db.getUser(p.pid); break; }
+    }
+  }
+  if (!u) {
+    // search all? skip
+  }
+  const uid = u ? u.id : id;
+  const buf = await db.getPhoto(uid);
+  if (!buf) return res.status(404).end();
+  res.type('image/webp').set('Cache-Control', 'public, max-age=3600').send(buf);
+});
+app.get('/api/history', authUser, async (req, res) => {
+  const list = await db.listHistory(req.user.id);
+  res.json(list.map(g => {
+    const { pids, ...rest } = g; const idx = (pids || []).indexOf(req.user.id);
+    const me = rest.players && rest.players[idx];
+    const players = (rest.players || []).map((pl, i) => ({ ...pl, photoUrl: pl.avatar === 'photo' ? `/api/avatar/${(pids||[])[i]}` : `/img/av/${pl.avatar||'fox'}.webp` }));
+    return { ...rest, players, myId: me && me.id, myRole: me && me.role };
+  }));
+});
+app.get('/api/stats', authUser, async (req, res) => res.json(await db.getStats(req.user.id)));
+app.get('/api/game/:gid', authUser, async (req, res) => {
+  const g = await db.getGame(req.params.gid); if (!g) return res.status(404).json({ error: 'not found' });
+  const idx = (g.pids || []).indexOf(req.user.id);
+  const { pids, ...rest } = g;
+  res.json({ ...rest, myId: idx >= 0 && rest.players[idx] ? rest.players[idx].id : null });
+});
+app.get(['/r/:code', '/room/:code'], (req, res) => res.redirect('/?room=' + encodeURIComponent(req.params.code.toUpperCase())));
+
+async function bindSocketUser(socket, token, guestKey, profile) {
+  let u = token ? await db.getUserByToken(token) : null;
+  if (!u && guestKey) u = await db.getUserByGuestKey(guestKey) || await db.createGuest({ guestKey, name: cleanName(profile && profile.name), avatar: cleanAvatar(profile && profile.avatar), bg: cleanBg(profile && profile.bg), fx: cleanFx(profile && profile.fx), pendant: cleanPendant(profile && profile.pendant) });
+  if (!u) return null;
+  socket.data.pid = u.id;
+  socket.data.name = u.name || cleanName(profile && profile.name);
+  socket.data.avatar = u.avatar;
+  socket.data.bg = u.bg;
+  socket.data.fx = u.fx;
+  socket.data.pendant = u.pendant || 'none';
+  return u;
+}
+
 io.on('connection', (socket) => {
-  socket.on('hello', ({ pid, name, avatar, bg, fx } = {}, cb = () => {}) => {
-    if (typeof pid !== 'string' || pid.length < 8 || pid.length > 64) return cb({ error: 'bad pid' });
-    socket.data.pid = pid; Object.assign(socket.data, { name: cleanName(name), avatar: cleanAvatar(avatar), bg: cleanBg(bg), fx: cleanFx(fx) });
+  socket.on('hello', async ({ token, guestKey, pid: rawPid, name, avatar, bg, fx, pendant } = {}, cb = () => {}) => {
+    const u = await bindSocketUser(socket, token, guestKey || rawPid, { name, avatar, bg, fx, pendant });
+    if (!u) return cb({ error: '請先登入或建立訪客' });
+    const pid = u.id;
     const code = pidRoom.get(pid); const room = code && rooms.get(code);
-    if (room) {
+    if (room && room.members.has(pid)) {
       const p = findPlayer(room, pid);
       if (p && (!room.game || room.game.phase === 'end')) applyProfile(p, socket.data);
       socket.join(code); socket.data.room = code; broadcast(room);
-      return cb({ room: code });
+      return cb({ room: code, user: db.pubUser(u) });
     }
-    cb({ room: null });
+    cb({ room: null, user: db.pubUser(u) });
   });
-  socket.on('profile', ({ name, avatar, bg, fx } = {}) => {
-    Object.assign(socket.data, { name: cleanName(name), avatar: cleanAvatar(avatar), bg: cleanBg(bg), fx: cleanFx(fx) });
+  socket.on('profile', async (prof = {}) => {
+    const pid = socket.data.pid; if (!pid) return;
+    // prefer server copy; optional live tweaks while socket is connected
+    const u = await db.getUser(pid);
+    if (u) {
+      socket.data.name = u.name; socket.data.avatar = u.avatar; socket.data.bg = u.bg; socket.data.fx = u.fx; socket.data.pendant = u.pendant;
+    }
     const room = socket.data.room && rooms.get(socket.data.room);
-    if (room && (!room.game || room.game.phase === 'end')) { const p = findPlayer(room, socket.data.pid); if (p) { applyProfile(p, socket.data); broadcast(room); } }
+    if (room && (!room.game || room.game.phase === 'end')) { const p = findPlayer(room, pid); if (p) { applyProfile(p, socket.data); broadcast(room); } }
   });
-  socket.on('create', (_, cb = () => {}) => {
+  socket.on('create', async (_, cb = () => {}) => {
     const pid = socket.data.pid; if (!pid) return cb({ error: '請先設定暱稱' });
     const cur = pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
     if (cur && cur.game && cur.game.phase !== 'end') return cb({ error: '你正在另一局遊戲中' });
     leaveCurrent(socket, pid, true);
-    const room = makeRoom({ pid });
-    room.players.push(newPlayer(pid, socket.data));
+    const room = makeRoom(socket.data);
     pidRoom.set(pid, room.code); socket.join(room.code); socket.data.room = room.code;
     broadcast(room); cb({ room: room.code });
   });
@@ -436,15 +663,12 @@ io.on('connection', (socket) => {
     const pid = socket.data.pid; if (!pid) return cb({ error: '請先設定暱稱' });
     code = String(code || '').toUpperCase().trim();
     const room = rooms.get(code); if (!room) return cb({ error: `找不到房間 ${code}` });
-    if (!findPlayer(room, pid)) {
-      if (room.game && room.game.phase !== 'end') return cb({ error: '遊戲已開始，無法加入' });
-      if (room.players.length >= 10) return cb({ error: '房間已滿（最多 10 人）' });
-      const cur = pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
-      if (cur && cur !== room && cur.game && cur.game.phase !== 'end') return cb({ error: '你正在另一局遊戲中' });
-      if (cur !== room) leaveCurrent(socket, pid, true);
-      room.players.push(newPlayer(pid, socket.data));
-      pidRoom.set(pid, code);
-    }
+    if (room.game && room.game.phase !== 'end' && !findPlayer(room, pid) && !room.game.seats.some(s => s.pid === pid))
+      return cb({ error: '遊戲已開始，無法加入' });
+    const cur = pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
+    if (cur && cur !== room && cur.game && cur.game.phase !== 'end') return cb({ error: '你正在另一局遊戲中' });
+    if (cur !== room) leaveCurrent(socket, pid, true);
+    room.members.add(pid); pidRoom.set(pid, code);
     socket.join(code); socket.data.room = code; broadcast(room); cb({ room: code });
   });
   socket.on('leave', (_, cb = () => {}) => {
@@ -452,22 +676,26 @@ io.on('connection', (socket) => {
     if (room && room.game && room.game.phase !== 'end') { socket.leave(room.code); socket.data.room = null; return cb({ ok: true, stillSeated: true }); }
     leaveCurrent(socket, pid, true); cb({ ok: true });
   });
-  socket.on('act', ({ type, data } = {}, cb = () => {}) => {
+  socket.on('act', async ({ type, data } = {}, cb = () => {}) => {
     const pid = socket.data.pid; const room = socket.data.room && rooms.get(socket.data.room);
-    if (!room || !findPlayer(room, pid)) return cb({ error: '你不在房間中' });
+    if (!room || !room.members.has(pid) && !findPlayer(room, pid) && room.hostPid !== pid) return cb({ error: '你不在房間中' });
+    room.members.add(pid);
     let err;
-    try { err = act(room, pid, String(type), data || {}); } catch (e) { console.error(e); err = '伺服器錯誤'; }
+    try { err = await act(room, pid, String(type), data || {}); } catch (e) { console.error(e); err = '伺服器錯誤'; }
+    if (err === 'dissolved') return cb({ ok: true, dissolved: true });
     if (err) return cb({ error: err });
     broadcast(room); cb({ ok: true });
   });
   socket.on('disconnect', () => { const room = socket.data.room && rooms.get(socket.data.room); if (room) setTimeout(() => rooms.has(room.code) && broadcast(room), 100); });
 });
 
-// cleanup idle rooms (12h)
 setInterval(() => {
   const cutoff = Date.now() - 12 * 3600 * 1000;
-  for (const [code, r] of rooms) if (r.touched < cutoff) { for (const p of r.players) pidRoom.delete(p.pid); rooms.delete(code); }
+  for (const [code, r] of rooms) if (r.touched < cutoff) { for (const p of seated(r)) pidRoom.delete(p.pid); rooms.delete(code); }
 }, 30 * 60 * 1000).unref();
 
-server.listen(PORT, () => console.log('Avalon server on :' + PORT));
+db.init().then(() => {
+  server.listen(PORT, () => console.log('Camelot Cipher on :' + PORT, 'db=' + db.mode()));
+}).catch(e => { console.error('DB init failed', e); process.exit(1); });
+
 module.exports = { server, TEAM_SIZES, EVIL_COUNT };

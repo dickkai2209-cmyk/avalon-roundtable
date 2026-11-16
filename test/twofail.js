@@ -9,7 +9,8 @@ async function until(fn, ms = 15000) { const t = Date.now(); while (Date.now() -
     const c = { s, st: null, emit: (e, d) => new Promise(r => s.emit(e, d, r)) }; c.act = (t, d) => c.emit('act', { type: t, data: d });
     s.on('state', st => c.st = st); s.on('connect', async () => { await c.emit('hello', { pid, name: 'P' + i }); res(c); });
   })));
-  const { room } = await cs[0].emit('create'); for (const c of cs.slice(1)) await c.emit('join', { code: room });
+  const { room } = await cs[0].emit('create'); await cs[0].act('capacity', { n: 7 }); for (const c of cs.slice(1)) await c.emit('join', { code: room });
+  for (let i=1;i<7;i++) await cs[i].act('sit', { seat: i+1 });
   await cs[0].act('start'); await until(() => cs.every(c => c.st.game && c.st.game.me));
   const by = id => cs.find(c => c.st.meId === id); const side = c => c.st.game.me.side;
   const evils = cs.filter(c => side(c) === 'evil').map(c => c.st.meId), goods = cs.filter(c => side(c) === 'good').map(c => c.st.meId);

@@ -15,6 +15,8 @@ const ROLE = {
   mordred:  { n: '莫德雷德', en: 'MORDRED', side: 'evil', d: '梅林看不見你。利用這份隱形，混入任務隊伍。' },
   oberon:   { n: '奧伯倫', en: 'OBERON', side: 'evil', d: '你屬於壞人，但你不知道同伴是誰，他們也不知道你。孤身作戰。' },
   minion:   { n: '莫德雷德的爪牙', en: 'MINION OF MORDRED', side: 'evil', d: '你知道你的壞人同伴。互相掩護，讓 3 個任務失敗。' },
+  lancelot_good: { n: '蘭斯洛特（正）', en: 'LANCELOT (LOYAL)', side: 'good', d: '你知道邪惡蘭斯洛特是誰。你即使是好人也可以出失敗卡。忠誠牌可能讓你們互換陣營。' },
+  lancelot_evil: { n: '蘭斯洛特（邪）', en: 'LANCELOT (EVIL)', side: 'evil', d: '你知道正義蘭斯洛特是誰。忠誠牌可能讓你們互換陣營。' },
 };
 const ROLE_ORDER = ['merlin', 'percival', 'servant', 'assassin', 'morgana', 'mordred', 'oberon', 'minion'];
 const img = (r) => `/img/${r}.webp`, thumb = (r) => `/img/${r}_t.webp`;
@@ -24,25 +26,55 @@ const SKINS = [
   { id: 'gold', n: '鎏金', need: 3 },
   { id: 'blood', n: '血月', need: 6 },
 ];
-const ANIMALS = ['🦊', '🐼', '🦆', '🐿️', '🦔', '🐰', '🐻', '🦝', '🦦', '🐹', '🐕', '🐶', '🦫', '🐧', '🐨', '🐱', '🐯', '🦁', '🐸', '🦉', '🐺', '🦄', '🐲', '🐙'];
+const ANIMALS = [
+  ['fox','狐狸'],['panda','熊貓'],['duck','小鴨'],['squirrel','松鼠'],['hedgehog','刺蝟'],['bunny','兔子'],
+  ['bear','棕熊'],['redpanda','小熊貓'],['otter','水獺'],['hamster','倉鼠'],['shiba','柴犬'],['dalmatian','斑點狗'],
+  ['capybara','水豚'],['penguin','企鵝'],['koala','無尾熊'],['cat','貓咪']
+];
+const EMOJI_MAP = {'🦊':'fox','🐼':'panda','🦆':'duck','🐿️':'squirrel','🦔':'hedgehog','🐰':'bunny','🐻':'bear','🦝':'redpanda','🦦':'otter','🐹':'hamster','🐕':'shiba','🐶':'shiba','🦫':'capybara','🐧':'penguin','🐨':'koala','🐱':'cat'};
 const BGS = ['#f3d9a4', '#f7c1c8', '#bfe3c9', '#bcd6ff', '#d9c6ff', '#ffe08a', '#c8eef0', '#ffcfa6', '#2b3a6e', '#3a2a1c'];
-const FXS = [['none', '無'], ['spot', '聚光燈'], ['gold', '金光'], ['spark', '星火']];
-const PHASE = { team: '組隊', vote: '投票', quest: '任務', lady: '湖中仙女', assassin: '刺殺梅林', end: '遊戲結束' };
-const TEAM_SIZES = { 5: [2, 3, 2, 3, 3], 6: [2, 3, 4, 3, 4], 7: [2, 3, 3, 4, 4], 8: [3, 4, 4, 5, 5], 9: [3, 4, 4, 5, 5], 10: [3, 4, 4, 5, 5] };
+const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['spark','星火',1],['petals','花瓣',3],['fire','火焰圈',6],['lightning','閃電',10]];
+const PENDANTS = [['none','無',0],['crown','王冠',0],['flower','花環',1],['star','星星',3],['sword','短劍',3],['moon','新月',6],['wings','雙翼',10]];
+const PENDANT_ICON = { none:'', crown:'👑', flower:'🌸', star:'⭐', sword:'⚔️', moon:'🌙', wings:'🕊️' };
+const PHASE = { team: '組隊', vote: '投票', sword: '授予王者之劍', quest: '任務', swordflip: '王者之劍', lady: '湖中仙女', assassin: '刺殺梅林', end: '遊戲結束' };
+const TEAM_SIZES = { 5: [2, 3, 2, 3, 3], 6: [2, 3, 4, 3, 4], 7: [2, 3, 3, 4, 4], 8: [3, 4, 4, 5, 5], 9: [3, 4, 4, 5, 5], 10: [3, 4, 4, 5, 5], 11: [3, 4, 4, 5, 5], 12: [3, 4, 5, 5, 5] };
 const LOGO = `<svg class="logo" viewBox="0 0 64 64"><defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0c0"/><stop offset="1" stop-color="#b8892f"/></linearGradient></defs><path d="M32 4l22 7v17c0 16-10 27-22 32C20 55 10 44 10 28V11z" fill="#16224a" stroke="url(#lg)" stroke-width="3"/><path d="M32 13v38M24 21h16" stroke="url(#lg)" stroke-width="3.6" stroke-linecap="round"/><circle cx="32" cy="12" r="3" fill="url(#lg)"/><path d="M20 40c4 4 8 6 12 6s8-2 12-6" stroke="url(#lg)" stroke-width="2" fill="none" opacity=".6"/></svg>`;
+const ROLE_ART = { lancelot_good: 'percival', lancelot_evil: 'assassin' };
+const RN = { merlin:'梅林', percival:'派西維爾', servant:'忠臣', lancelot_good:'蘭斯洛特（正）', assassin:'刺客', morgana:'莫甘娜', mordred:'莫德雷德', oberon:'奧伯倫', minion:'爪牙', lancelot_evil:'蘭斯洛特（邪）' };
 
 // ================= identity =================
 const LS = window.localStorage;
 let pid = LS.getItem('cc.pid') || LS.getItem('avalon.pid');
 if (!pid) pid = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2))).replace(/-/g, '');
 LS.setItem('cc.pid', pid);
-let profile = JSON.parse(LS.getItem('cc.profile') || 'null') || { name: LS.getItem('avalon.name') || '', avatar: ANIMALS[Math.floor(Math.random() * 15)], bg: BGS[Math.floor(Math.random() * 8)], fx: 'spot' };
+let token = LS.getItem('cc.token') || '';
+let account = null; // {username, guest}
+function migrateAvatar(a) { if (!a) return 'fox'; if (EMOJI_MAP[a]) return EMOJI_MAP[a]; if (a === 'photo' || ANIMALS.some(([k]) => k === a) || String(a).startsWith('data:')) return a; return 'fox'; }
+let profile = JSON.parse(LS.getItem('cc.profile') || 'null') || { name: LS.getItem('avalon.name') || '', avatar: 'fox', bg: BGS[Math.floor(Math.random() * 8)], fx: 'spot', pendant: 'none' };
+profile.avatar = migrateAvatar(profile.avatar);
+profile.pendant = profile.pendant || 'none';
 const saveProfile = () => LS.setItem('cc.profile', JSON.stringify(profile));
 let skinSel = JSON.parse(LS.getItem('cc.skins') || '{}');
-let myStats = { played: 0, won: 0, roles: {} };
-const refreshStats = () => fetch('/api/stats?pid=' + encodeURIComponent(pid)).then(r => r.json()).then(s => { myStats = s; return s; }).catch(() => myStats);
-refreshStats();
+let myStats = { played: 0, won: 0, roles: {}, mvp: 0 };
+const authHdr = () => token ? { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+const api = (url, opt = {}) => fetch(url, { ...opt, headers: { ...authHdr(), ...(opt.headers || {}) } }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || '請求失敗'); return j; });
+const refreshStats = () => api('/api/stats').then(s => { myStats = s; if (s && account) { /* skins may live on account */ } return s; }).catch(() => myStats);
 const skinOf = (role) => { const s = SKINS.find(k => k.id === skinSel[role]); const played = (myStats.roles[role] || {}).played || 0; return s && played >= s.need ? s.id : 'classic'; };
+function applyUser(u, stats) {
+  if (!u) return;
+  account = u; pid = u.id; LS.setItem('cc.pid', pid);
+  profile = { name: u.name || profile.name, avatar: u.avatar || profile.avatar, bg: u.bg || profile.bg, fx: u.fx || profile.fx, pendant: u.pendant || 'none' };
+  if (u.skins) skinSel = { ...skinSel, ...u.skins };
+  if (stats) myStats = stats;
+  saveProfile(); LS.setItem('cc.skins', JSON.stringify(skinSel));
+}
+async function ensureSession() {
+  try {
+    if (token) { const r = await api('/api/me'); applyUser(r.user, r.stats); return r.user; }
+  } catch (e) { token = ''; LS.removeItem('cc.token'); }
+  const r = await api('/api/auth/guest', { method: 'POST', body: JSON.stringify({ guestKey: LS.getItem('cc.pid'), profile }) });
+  token = r.token; LS.setItem('cc.token', token); applyUser(r.user, r.stats); return r.user;
+}
 
 // ================= state & socket =================
 let S = null, view = 'home', viewArg = null;
@@ -55,27 +87,35 @@ let autoRoom = true;
 const socket = io({ transports: ['websocket', 'polling'] });
 socket.on('connect', () => {
   $('#conn').classList.add('on');
-  socket.emit('hello', { pid, ...profile }, (r) => {
-    if (!r || !r.room) { S = null; if (view === 'room') go('home'); }
-    if (pendingJoin) { const c = pendingJoin; pendingJoin = null; ensureName(() => joinRoom(c)); }
-    render();
-  });
+  ensureSession().then(() => {
+    socket.emit('hello', { token, guestKey: LS.getItem('cc.pid'), ...profile }, (r) => {
+      if (r && r.user) applyUser(r.user);
+      if (!r || !r.room) { S = null; if (view === 'room') go('home'); }
+      if (pendingJoin) { const c = pendingJoin; pendingJoin = null; ensureName(() => joinRoom(c)); }
+      render();
+    });
+  }).catch(e => toast(e.message || '無法連線至伺服器'));
 });
 socket.on('disconnect', () => $('#conn').classList.remove('on'));
 socket.on('state', (st) => {
   const prev = S;
-  if (prev && prev.code === st.code && !st.game) { const old = new Set(lastSeatIds); st.players.forEach(p => { if (!old.has(p.id)) { enterIds.add(p.id); setTimeout(() => enterIds.delete(p.id), 2500); } }); }
-  lastSeatIds = st.players.map(p => p.id);
+  const occ = (st.seats || []).filter(s => !s.empty);
+  if (prev && prev.code === st.code && !st.game) {
+    const old = new Set(lastSeatIds);
+    occ.forEach(p => { if (!old.has(p.id)) { enterIds.add(p.id); setTimeout(() => enterIds.delete(p.id), 2800); } });
+  }
+  lastSeatIds = occ.map(p => p.id);
   if (!prev || !!prev.game !== !!st.game || (prev.game && st.game && prev.game.gid !== st.game.gid)) selected = new Set();
   if (st.game && ['vote', 'quest', 'end'].includes(st.game.phase)) selected = new Set();
   if (st.game && prev && prev.game && prev.game.phase !== st.game.phase) selected = new Set();
   S = st;
-  if (autoRoom && view === 'home') { autoRoom = false; view = 'room'; }
+  if (autoRoom && view === 'home' && st.code) { autoRoom = false; view = 'room'; }
   handleEvent(st);
   if (view === 'room' || view === 'home') render();
 });
 socket.on('kicked', () => { S = null; toast('你已被房主移出房間'); go('home'); });
-const emit = (ev, data) => new Promise((res) => socket.emit(ev, data, (r) => { if (r && r.error) toast(r.error); res(r || {}); }));
+socket.on('dissolved', () => { S = null; toast('房間已解散'); go('home'); });
+const emit = (ev, data) => new Promise((res) => socket.emit(ev, data, (r) => { if (r && r.error) toast(r.error); if (r && r.dissolved) { S = null; go('home'); } res(r || {}); }));
 const act = (type, data) => emit('act', { type, data });
 
 // ================= helpers =================
@@ -90,52 +130,97 @@ function queueModal(fn) { if ($('#modal').classList.contains('hidden')) fn(); el
 function modalQueueNext() { const f = modalQueue.shift(); if (f) setTimeout(f, 120); }
 $('#backBtn').onclick = () => go(view === 'detail' && viewArg && viewArg.from ? viewArg.from : 'home');
 function go(v, arg) { view = v; viewArg = arg || null; window.scrollTo(0, 0); render(); }
-const people = () => (S && S.game ? S.game.seats : (S ? S.players : []));
-const P = (id, list) => (list || people()).find(x => x.id === id) || { name: '?', avatar: '❔', bg: '#555' };
+const people = () => (S && S.game ? S.game.seats : (S ? (S.seats || []).filter(s => !s.empty) : []));
+const P = (id, list) => (list || people()).find(x => x && x.id === id) || { name: '?', avatar: 'fox', bg: '#555' };
+function photoSrc(p) {
+  if (!p) return '/img/av/fox.webp';
+  if (p.photoUrl) return p.photoUrl;
+  if (p.avatar === 'photo' || (p.avatar && String(p.avatar).startsWith('data:'))) return p.avatar.startsWith('data:') ? p.avatar : '/api/avatar/' + (p.id || '');
+  const key = migrateAvatar(p.avatar);
+  return key === 'photo' ? (p.photoUrl || '') : `/img/av/${key}.webp`;
+}
+function pendantHtml(p) {
+  const k = (p && p.pendant) || 'none'; if (k === 'none') return '';
+  if (k === 'wings') return `<span class="pendant wings">✨<span></span>✨</span>`;
+  return `<span class="pendant ${k}">${PENDANT_ICON[k] || ''}</span>`;
+}
 function av(p, size = 36) {
-  const a = p && p.avatar; const inner = a && String(a).startsWith('data:') ? `<img src="${a}" alt="">` : esc(a || '🛡️');
-  return `<span class="av s${size}" style="background:${esc((p && p.bg) || '#f3d9a4')}">${inner}</span>`;
+  return `<span class="av-wrap"><span class="av s${size}" style="background:${esc((p && p.bg) || '#f3d9a4')}"><img src="${esc(photoSrc(p))}" alt=""></span>${pendantHtml(p)}</span>`;
 }
 const chip = (id, list) => { const p = P(id, list); return `<span class="chip">${av(p, 22)}${esc(p.name)}</span>`; };
 const fmtTime = (t) => { const d = new Date(t); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const inviteUrl = (code) => `${location.origin}/r/${code}`;
 const pct = (w, p) => p ? Math.round(w * 100 / p) : 0;
+const playedTotal = () => myStats.played || 0;
 
 // ================= profile =================
+function fxUnlocked(k) { const item = FXS.find(x => x[0] === k); return playedTotal() >= (item ? item[2] : 0); }
+function pdUnlocked(k) { const item = PENDANTS.find(x => x[0] === k); return playedTotal() >= (item ? item[2] : 0); }
+function previewHtml(d) {
+  return `<div class="preview-stage ${d.fx && d.fx !== 'none' ? 'enter fx-' + d.fx : ''}">${av(d, 56)}<div class="nm gold" style="position:absolute;bottom:10px">${esc(d.name || '騎士')}</div></div>`;
+}
 function editProfile(after) {
-  const d = { ...profile }; let tab = d.avatar && d.avatar.startsWith('data:') ? 'photo' : 'animal';
+  const d = { ...profile }; let tab = 'avatar';
   const draw = (el) => {
+    const sub = d._forceSub || ((d.avatar === 'photo' || (d.avatar && String(d.avatar).startsWith('data:'))) ? 'photo' : 'animal');
     el.innerHTML = `<h2>個人檔案</h2>
-      <div class="center">${av(d, 56)}</div>
-      <div class="small muted" style="margin:12px 0 4px">暱稱（最多 10 字）</div>
+      ${previewHtml(d)}
+      <div class="small muted" style="margin:4px 0">暱稱（最多 10 字）</div>
       <input class="inp" id="nm" maxlength="10" placeholder="輸入暱稱" value="${esc(d.name)}">
-      <div class="seg"><button data-t="animal" class="${tab === 'animal' ? 'sel' : ''}">動物頭像</button><button data-t="photo" class="${tab === 'photo' ? 'sel' : ''}">上載相片</button></div>
-      ${tab === 'animal' ? `<div class="grid-av">${ANIMALS.map(e => `<button data-e="${e}" class="${e === d.avatar ? 'sel' : ''}" style="background:${d.bg}">${e}</button>`).join('')}</div>
-        <div class="small muted" style="margin-top:12px">背景顏色</div><div class="swatches">${BGS.map(c => `<button data-c="${c}" class="${c === d.bg ? 'sel' : ''}" style="background:${c}"></button>`).join('')}</div>`
-      : `<div class="center" style="margin-top:12px"><label class="btn ghost" style="display:inline-block;width:auto;padding:10px 20px">選擇相片<input id="file" type="file" accept="image/*" hidden></label><div class="small muted" style="margin-top:6px">相片只會壓縮成小頭像，同房玩家可見</div></div>`}
-      <div class="small muted" style="margin-top:14px">入場特效（入房時在圓桌上顯示）</div>
-      <div class="seg">${FXS.map(([k, n]) => `<button data-fx="${k}" class="${d.fx === k ? 'sel' : ''}">${n}</button>`).join('')}</div>
-      <button class="btn" id="ok">儲存</button>`;
-    const nm = $('#nm', el); nm.oninput = () => d.name = nm.value;
+      <div class="seg" style="margin-top:12px"><button data-t="avatar" class="${tab==='avatar'?'sel':''}">頭像</button><button data-t="pendant" class="${tab==='pendant'?'sel':''}">掛件</button><button data-t="fx" class="${tab==='fx'?'sel':''}">入場特效</button></div>
+      ${tab==='avatar' ? `
+        <div class="seg"><button data-sub="animal" class="${sub==='animal'?'sel':''}">動物頭像</button><button data-sub="photo" class="${sub==='photo'?'sel':''}">上載相片</button></div>
+        ${sub==='animal' ? `<div class="agrid">${ANIMALS.map(([k,n]) => `<button data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div></button>`).join('')}</div>
+          <div class="small muted" style="margin-top:12px">背景顏色</div><div class="swatches">${BGS.map(c => `<button data-c="${c}" class="${c===d.bg?'sel':''}" style="background:${c}"></button>`).join('')}</div>`
+        : `<div class="center" style="margin-top:12px"><label class="btn ghost" style="display:inline-block;width:auto;padding:10px 20px">選擇相片<input id="file" type="file" accept="image/*" hidden></label><div class="small muted" style="margin-top:6px">相片會壓縮保存到你的帳號，歷史記錄也看得到</div></div>`}
+      ` : tab==='pendant' ? `<div class="agrid">${PENDANTS.map(([k,n,need]) => `<button data-pd="${k}" class="${d.pendant===k?'sel':''} ${pdUnlocked(k)?'':'off'}"><div class="cell" style="background:${d.bg}">${k==='none'?'—':PENDANT_ICON[k]}</div><div class="lb">${n}${pdUnlocked(k)?'':` 🔒${need}場`}</div></button>`).join('')}</div>`
+      : `<div class="agrid">${FXS.map(([k,n,need]) => `<button data-fx="${k}" class="${d.fx===k?'sel':''} ${fxUnlocked(k)?'':'off'}"><div class="cell" style="background:#1a2550">${k==='none'?'—':({spot:'💡',gold:'✨',spark:'🌟',petals:'🌸',fire:'🔥',lightning:'⚡'}[k]||'')}</div><div class="lb">${n}${fxUnlocked(k)?'':` 🔒${need}場`}</div></button>`).join('')}</div><div class="small muted center" style="margin-top:8px">選擇後可在上方預覽，入座時所有人會看見</div>`}
+      <button class="btn" id="ok">儲存到帳號</button>`;
+    const nm = $('#nm', el); if (nm) nm.oninput = () => d.name = nm.value;
     $$('[data-t]', el).forEach(b => b.onclick = () => { tab = b.dataset.t; draw(el); });
-    $$('[data-e]', el).forEach(b => b.onclick = () => { d.avatar = b.dataset.e; draw(el); });
+    $$('[data-sub]', el).forEach(b => b.onclick = () => { if (b.dataset.sub==='animal' && (d.avatar==='photo' || String(d.avatar).startsWith('data:'))) d.avatar='fox'; draw.sub=b.dataset.sub; if (b.dataset.sub==='animal') d._sub='animal'; else d._sub='photo'; tab='avatar'; if (b.dataset.sub==='photo') { /* keep */ } d.__sub=b.dataset.sub; /* redraw with photo tab */ 
+      // use closure
+    });
+    // sub tab: reuse draw by setting d._sub
+    $$('[data-sub]', el).forEach(b => b.onclick = () => { d._forceSub = b.dataset.sub; if (b.dataset.sub==='animal' && (d.avatar==='photo'||String(d.avatar||'').startsWith('data:'))) d.avatar='fox'; draw(el); });
+    $$('[data-e]', el).forEach(b => b.onclick = () => { d.avatar = b.dataset.e; d._forceSub='animal'; draw(el); });
     $$('[data-c]', el).forEach(b => b.onclick = () => { d.bg = b.dataset.c; draw(el); });
-    $$('[data-fx]', el).forEach(b => b.onclick = () => { d.fx = b.dataset.fx; draw(el); });
+    $$('[data-fx]', el).forEach(b => b.onclick = () => { if (!fxUnlocked(b.dataset.fx)) return toast('再玩多幾場即可解鎖此外觀'); d.fx = b.dataset.fx; draw(el); });
+    $$('[data-pd]', el).forEach(b => b.onclick = () => { if (!pdUnlocked(b.dataset.pd)) return toast('再玩多幾場即可解鎖此掛件'); d.pendant = b.dataset.pd; draw(el); });
     const f = $('#file', el); if (f) f.onchange = () => { const file = f.files[0]; if (!file) return; const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => {
-      const c = document.createElement('canvas'); c.width = c.height = 96; const x = c.getContext('2d'); const s = Math.min(im.width, im.height);
-      x.drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, 96, 96); d.avatar = c.toDataURL('image/jpeg', 0.72); draw(el); }; im.src = r.result; }; r.readAsDataURL(file); };
-    $('#ok', el).onclick = () => {
+      const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); const s = Math.min(im.width, im.height);
+      x.drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, 256, 256); d.avatar = 'photo'; d._photo = c.toDataURL('image/jpeg', 0.8); d._forceSub='photo'; draw(el);
+      // show preview using data url
+      profile._tmp = d._photo;
+    }; im.src = r.result; }; r.readAsDataURL(file); };
+    if (d._photo && (d.avatar==='photo')) { const img = el.querySelector('.preview-stage img'); if (img) img.src = d._photo; }
+    $('#ok', el).onclick = async () => {
       const n = Array.from((d.name || '').trim()).slice(0, 10).join(''); if (!n) return toast('請輸入暱稱');
-      if (tab === 'photo' && !(d.avatar || '').startsWith('data:')) return toast('請選擇相片');
-      if (tab === 'animal' && (d.avatar || '').startsWith('data:')) d.avatar = ANIMALS[0];
-      profile = { ...d, name: n }; saveProfile(); socket.emit('profile', profile); closeModal(); render(); after && after();
+      if ((d._forceSub==='photo' || d.avatar==='photo') && !d._photo && d.avatar!=='photo') return toast('請選擇相片');
+      try {
+        await ensureSession();
+        const body = { name: n, bg: d.bg, fx: d.fx, pendant: d.pendant, skins: skinSel };
+        if (d._photo) body.photo = d._photo;
+        else body.avatar = migrateAvatar(d.avatar) === 'photo' ? undefined : migrateAvatar(d.avatar);
+        const r = await api('/api/me', { method: 'PUT', body: JSON.stringify(body) });
+        applyUser(r.user); socket.emit('profile', {}); closeModal(); render(); after && after(); toast('已永久保存');
+      } catch (e) { toast(e.message || '儲存失敗'); }
     };
+  };
+  // fix sub tab detection
+  const _draw = draw;
+  const wrapped = (el) => {
+    const orig = d._forceSub;
+    // monkeypatch photoSrc for preview of data url
+    const prevPhotoSrc = photoSrc;
+    if (d._photo) { const p = photoSrc; window.__tmpPhoto = d._photo; }
+    _draw(el);
   };
   openModal('', draw);
 }
 function ensureName(fn) { if (profile.name) fn(); else editProfile(fn); }
-async function createRoom() { const r = await emit('create'); if (r.room) go('room'); }
-async function joinRoom(code) { const r = await emit('join', { code }); if (r.room) { closeModal(); go('room'); } }
+async function createRoom() { await ensureSession(); const r = await emit('create'); if (r.room) go('room'); }
+async function joinRoom(code) { await ensureSession(); const r = await emit('join', { code }); if (r.room) { closeModal(); go('room'); } }
 function joinDialog() {
   openModal(`<h2>加入房間</h2><input class="inp code-inp" id="cd" maxlength="4" placeholder="····" autocomplete="off">
   <p class="muted small center">輸入同枱朋友的 4 位房間號，或用相機掃描他們的二維碼</p><button class="btn" id="ok">進入圓桌</button>`, (el) => {
@@ -155,22 +240,71 @@ function inviteDialog() {
     const sh = $('#sh', el); if (sh) sh.onclick = () => navigator.share({ title: '卡美洛密令 · 阿瓦隆', text: `入房玩阿瓦隆！房間號 ${S.code}`, url }).catch(() => {});
   });
 }
+function authDialog(mode) {
+  openModal(`<h2>${mode==='login'?'登入帳號':'註冊帳號'}</h2>
+    <div class="small muted">帳號 2–10 字，密碼或 4–6 位 PIN。登入後換機也能找回頭像、戰績與皮膚。</div>
+    <input class="inp" id="un" maxlength="10" placeholder="帳號" style="margin-top:10px">
+    <input class="inp" id="pw" type="password" maxlength="64" placeholder="密碼或 PIN" style="margin-top:8px">
+    <button class="btn" id="ok">${mode==='login'?'登入':'註冊並綁定此訪客資料'}</button>
+    <button class="btn ghost" id="sw">${mode==='login'?'沒有帳號？改為註冊':'已有帳號？改為登入'}</button>`, (el) => {
+    $('#ok', el).onclick = async () => {
+      try {
+        await ensureSession();
+        const r = await api(mode==='login'?'/api/auth/login':'/api/auth/register', { method:'POST', body: JSON.stringify({ username: $('#un',el).value, password: $('#pw',el).value, guestKey: LS.getItem('cc.pid') }) });
+        token = r.token; LS.setItem('cc.token', token); applyUser(r.user, r.stats);
+        socket.emit('hello', { token, guestKey: LS.getItem('cc.pid'), ...profile }, () => {});
+        closeModal(); render(); toast(mode==='login'?'歡迎回來':'帳號已建立，資料會永久保存');
+      } catch (e) { toast(e.message); }
+    };
+    $('#sw', el).onclick = () => authDialog(mode==='login'?'register':'login');
+  });
+}
+async function doLogout() { try { await api('/api/auth/logout', { method:'POST' }); } catch(e){} token=''; LS.removeItem('cc.token'); account=null; await ensureSession(); socket.emit('hello', { token, guestKey: LS.getItem('cc.pid'), ...profile }, ()=>{}); render(); toast('已登出，現為訪客'); }
 
 // ================= components =================
-function roundTable(seats, o = {}) {
-  const n = seats.length; const R = n > 8 ? 42 : 40;
-  const st = seats.map((s, i) => {
-    const a = (-90 + i * 360 / n) * Math.PI / 180; const x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a);
-    const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '');
-    return `<div class="st ${cls}" style="left:${x}%;top:${y}%" ${o.click && o.click(s, i) ? `data-a="${o.action || 'sel'}" data-id="${s.id}"` : ''}>
-      <span class="no">${i + 1}</span><div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, 44)}${o.label ? o.label(s, i) : ''}<div class="nm">${esc(s.name)}</div></div>`;
-  }).join('');
-  return `<div class="rt"><div class="table"><div class="ctr">${o.center || ''}</div></div>${st}</div>`;
+function roomHead() {
+  if (!S) return '';
+  const n = S.capacity, x = S.seated, r = S.readyCount;
+  return `<div class="room-head">
+    <div class="row between">
+      <div><span class="code" data-a="copycode">${S.code}</span> <button class="btn sm ghost" data-a="copycode">複製</button></div>
+      <div><button class="btn sm" data-a="invite">邀請</button> <button class="btn sm dark" data-a="menu">•••</button></div>
+    </div>
+    <div class="room-status">等待開局 · 就座 ${x}/${n} · 準備 ${r}/${Math.max(0,x-(S.isHost?1:0) || x)}</div>
+    <div class="center small">${S.mySeat ? `座位 ${S.mySeat}` : '尚未就座'}${S.isHost ? ' <span class="badge">房主</span>' : ''}</div>
+  </div>`;
+}
+function presetCard(pr) {
+  if (!pr) return '';
+  const g = (pr.good||[]).map(k => RN[k]||k);
+  const e = (pr.evil||[]).map(k => RN[k]||k);
+  const gc = g.filter(x=>x==='忠臣').length, ec = e.filter(x=>x==='爪牙').length;
+  const gl = g.filter(x=>x!=='忠臣'); if (gc) gl.push(`忠臣×${gc}`);
+  const el = e.filter(x=>x!=='爪牙'); if (ec) el.push(`爪牙×${ec}`);
+  return `<div class="preset"><div class="blue"><b>藍方 ${pr.good.length}</b>${gl.join('、')}</div><div class="red"><b>紅方 ${pr.evil.length}</b>${el.join('、')}</div></div>`;
 }
 function roleFace(role, skin = 'classic', small) {
-  const r = ROLE[role];
-  return `<div class="rc ${r.side} sk-${skin}"><div class="art" style="background-image:url(${img(role)})"></div>
-    <div class="cap">${small ? `<div class="rn" style="font-size:13px;letter-spacing:1px">${r.n}</div>` : `<div class="side">${r.side === 'good' ? '亞瑟的忠誠陣營' : '莫德雷德的爪牙陣營'}</div><div class="rn">${r.n}</div><div class="en">${r.en}</div>`}</div></div>`;
+  const r = ROLE[role] || { n: RN[role], side: (role||'').includes('evil')?'evil':'good', en: '' };
+  const art = ROLE_ART[role] || role;
+  return `<div class="rc ${r.side||'good'} sk-${skin}"><div class="art" style="background-image:url(${img(art)})"></div>
+    <div class="cap">${small ? `<div class="rn" style="font-size:13px;letter-spacing:1px">${r.n||RN[role]}</div>` : `<div class="side">${(r.side==='good') ? '亞瑟的忠誠陣營' : '莫德雷德的爪牙陣營'}</div><div class="rn">${r.n||RN[role]||''}</div><div class="en">${r.en||''}</div>`}</div></div>`;
+}
+
+function roundTable(seats, o = {}) {
+  const n = seats.length; const R = n > 8 ? 42 : n > 10 ? 40 : 40;
+  const st = seats.map((s, i) => {
+    const a = (-90 + i * 360 / n) * Math.PI / 180; const x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a);
+    const seatNo = (s && s.seat) || (i + 1);
+    if (!s || s.empty) {
+      return `<div class="st empty click" style="left:${x}%;top:${y}%" data-a="sit" data-seat="${seatNo}"><span class="no">${seatNo}</span><div class="av-empty">+</div><div class="nm">空位</div></div>`;
+    }
+    const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '') + (enterIds.has(s.id) ? ` enter fx-${s.fx || 'spot'}` : '');
+    const action = o.action || 'sel';
+    const extra = o.click && o.click(s, i) ? `data-a="${action}" data-id="${s.id}"` : (o.seatClick ? `data-a="${o.seatClick}" data-id="${s.id}" data-seat="${seatNo}"` : '');
+    return `<div class="st ${cls}" style="left:${x}%;top:${y}%" ${extra}>
+      <span class="no">${seatNo}</span><div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, 44)}${o.label ? o.label(s, i) : ''}<div class="nm">${esc(s.name)}</div></div>`;
+  }).join('');
+  return `<div class="rt"><div class="table"><div class="ctr">${o.center || ''}</div></div>${st}</div>`;
 }
 function trackHtml(g) {
   return `<div class="track">${g.teamSizes.map((sz, i) => {
@@ -207,11 +341,23 @@ function handleEvent(st) {
   if (!fresh) return;
   if (ev.type === 'start') queueModal(() => showRole(true));
   else if (ev.type === 'vote') queueModal(() => showVote(ev));
-  else if (ev.type === 'quest') queueModal(() => showQuest(ev));
+  else if (ev.type === 'quest') {
+    queueModal(() => showQuest(ev));
+    const sp = st.game && st.game.me && st.game.me.swordPrivate;
+    if (sp) queueModal(() => openModal(`<h2>王者之劍（僅你可見）</h2><p class="center">${esc(P(sp.target).name)} 原本出的是 <b>${sp.original?'成功':'失敗'}</b>，已被你翻轉。</p><button class="btn" id="ok">知道了</button>`, el => $('#ok',el).onclick=closeModal));
+    if (ev.lance) queueModal(() => showLance(ev.lance));
+  }
   else if (ev.type === 'lady') queueModal(() => showLady(ev));
+  else if (ev.type === 'veto') queueModal(() => openModal(`<h2>回避卡</h2><p class="center">${esc(ev.name||'一位騎士')} 使用回避卡退出隊伍，本輪否決不增加，隊長需重新組隊。</p><button class="btn" id="ok">知道了</button>`, el => $('#ok',el).onclick=closeModal));
   else if (ev.type === 'end') { if (ev.prev) queueModal(() => showVote(ev.prev)); queueModal(showEnd); }
   else if (ev.type === 'abort') toast('房主已結束本局');
   if (ev.type === 'quest' && ev.then === 'end') queueModal(showEnd);
+}
+function showLance(L) {
+  openModal(`<h2>蘭斯洛特忠誠牌</h2><div class="big">${L.card==='switch'?'🔄':'🛡️'}</div>
+    <h2 class="${L.card==='switch'?'result-evil':'result-good'}">${L.card==='switch'?'陣營互換！':'本輪不變'}</h2>
+    <p class="center muted small">兩位蘭斯洛特${L.switched?'此刻已互換陣營':'維持原先陣營'}。這個資訊對所有人公開。</p>
+    <button class="btn" id="ok">繼續</button>`, el => $('#ok',el).onclick=closeModal);
 }
 function showRole(first) {
   const g = S && S.game; const me = g && g.me; if (!me) return;
@@ -282,8 +428,9 @@ function homeHtml() {
   const inRoom = S && S.code;
   return `<div class="hero">${LOGO}<h1>卡美洛密令</h1><div class="en">CAMELOT CIPHER</div><div class="small muted" style="margin-top:6px">免安裝 · 手機瀏覽器即玩的阿瓦隆</div></div>
   <div class="card row" data-a="profile" style="cursor:pointer">${av(profile, 56)}
-    <div class="grow"><div class="name">${profile.name ? esc(profile.name) : '未設定暱稱'}</div><div class="muted small">${myStats.played} 場 · 勝率 ${pct(myStats.won, myStats.played)}%　點擊編輯檔案</div></div><span class="gold">✎</span></div>
-  ${inRoom ? `<div class="card"><h3>我的圓桌</h3><div class="row between"><div><span class="code">${S.code}</span>${S.isHost ? '<span class="badge">👑 房主</span>' : ''}<div class="muted small">${S.players.length} 位騎士 · ${S.game ? (S.game.phase === 'end' ? '已結束' : '遊戲中') : '等待開始'}</div></div><button class="btn sm" data-a="toroom">回到房間</button></div></div>` : ''}
+    <div class="grow"><div class="name">${profile.name ? esc(profile.name) : '未設定暱稱'}</div><div class="muted small">${myStats.played||0} 場 · 勝率 ${pct(myStats.won, myStats.played)}%　點擊編輯檔案</div></div><span class="gold">✎</span></div>
+  <div class="card">${account && account.username ? `<div class="row between"><div>已登入 <b>${esc(account.username)}</b></div><button class="btn sm dark" data-a="logout">登出</button></div><div class="tiny muted">換一部手機登入同一個帳號，頭像、戰績與皮膚都會在。</div>` : `<div class="small muted">目前是訪客。註冊帳號後，暱稱、頭像、戰績會永久保存，換機也能登入。</div><div class="btns"><button class="btn" data-a="register">註冊帳號</button><button class="btn ghost" data-a="login">登入</button></div>`}</div>
+  ${inRoom ? `<div class="card"><h3>我的圓桌</h3><div class="row between"><div><span class="code">${S.code}</span>${S.isHost ? '<span class="badge">👑 房主</span>' : ''}<div class="muted small">就座 ${S.seated}/${S.capacity} · ${S.game ? (S.game.phase === 'end' ? '已結束' : '遊戲中') : '等待開局'}</div></div><button class="btn sm" data-a="toroom">回到房間</button></div></div>` : ''}
   <div class="btns"><button class="btn" data-a="create">⚔️ 建立房間</button><button class="btn ghost" data-a="join">🛡️ 加入房間</button></div>
   <div class="card menu" style="margin-top:16px">
     <div class="item" data-a="go" data-v="history"><span class="ic">📜</span><span class="grow">歷史記錄</span><span class="chev">›</span></div>
@@ -291,31 +438,29 @@ function homeHtml() {
     <div class="item" data-a="go" data-v="skins"><span class="ic">🎴</span><span class="grow">角色皮膚</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="rules"><span class="ic">📖</span><span class="grow">規則介紹</span><span class="chev">›</span></div>
   </div>
-  <div class="footer">一人開房，同枱朋友掃碼入座<br>5–10 人 · 繁體中文 · 無需微信</div>`;
+  <div class="footer">一人開房，同枱朋友掃碼入座<br>5–12 人 · 繁體中文 · 無需微信</div>`;
 }
 function lobbyHtml() {
-  const n = S.players.length; const s = S.settings; const host = S.isHost; const evilCount = S.evilCount;
-  const toggles = [['percival', '派西維爾', '好人：看到梅林與莫甘娜'], ['morgana', '莫甘娜', '壞人：在派西維爾眼中像梅林'], ['mordred', '莫德雷德', '壞人：梅林看不見他'], ['oberon', '奧伯倫', '壞人：與其他壞人互不相識']];
-  let comp;
-  if (evilCount) {
-    const evil = ['刺客'].concat(s.morgana ? ['莫甘娜'] : [], s.mordred ? ['莫德雷德'] : [], s.oberon ? ['奧伯倫'] : []); const good = ['梅林'].concat(s.percival ? ['派西維爾'] : []);
-    const over = evil.length > evilCount; while (evil.length < evilCount) evil.push('爪牙'); while (good.length < n - evilCount) good.push('忠臣');
-    comp = `<div class="small" style="margin-top:10px;line-height:1.9"><span class="badge good">好人 ${n - evilCount}</span> ${good.join('、')}<br><span class="badge evil">壞人 ${evilCount}</span> ${evil.join('、')}${over ? '<br><span class="result-evil">⚠️ 壞人角色多於壞人人數</span>' : ''}<br><span class="muted">任務人數：${S.teamSizes.join(' / ')}${n >= 7 ? '（第 4 輪需 2 張失敗）' : ''}</span></div>`;
-  } else comp = `<div class="muted small" style="margin-top:8px">需要 5–10 位玩家（現在 ${n} 位）</div>`;
-  const swapSel = [...selected];
-  return `<div class="card center"><div class="tiny muted">房間號</div><div class="code">${S.code}</div><button class="btn" data-a="invite">📯 召集騎士（二維碼 / 連結）</button></div>
-  <div class="card"><h3>圓桌座位 ${n}/10</h3>
-    ${roundTable(S.players, { cls: p => (enterIds.has(p.id) ? `enter fx-${p.fx || 'spot'}` : '') + (selected.has(p.id) ? ' sel' : '') + (p.online ? '' : ' off'), marker: p => (p.id === S.hostId ? '👑' : '') + (p.id === S.meId ? '⭐' : ''), click: () => host, action: 'swap',
-      center: `<b>${n} 位騎士</b>${host ? (swapSel.length ? '再點一位交換座位' : '點兩位騎士交換座位') : '座位次序＝隊長輪替次序'}` })}
-    ${host ? `<div class="plist">${S.players.filter(p => p.id !== S.meId).map(p => `<div class="p">${av(p, 28)}<span class="grow">${esc(p.name)}${p.online ? '' : '<span class="badge grey">離線</span>'}</span><button class="btn sm dark" data-a="kick" data-id="${p.id}">移除</button></div>`).join('')}</div>` : ''}
+  const n = S.capacity, x = S.seated, s = S.settings, host = S.isHost;
+  const me = (S.seats||[]).find(p => p && p.id === S.meId);
+  return `<div class="card">${roomHead()}</div>
+  <div class="card" style="padding:10px">${roundTable(S.seats, { seatClick: 'seat', marker: p => (p.isHost||p.id===S.hostId?'👑':'')+(p.id===S.meId?'⭐':'')+(p.ready?'✅':''), center: `<b>${x}/${n} 已就座</b>${S.mySeat?'點頭像看名片或離座':'點空位就座'}` })}</div>
+  <div class="card"><h3>人數與陣容${host?'':'（由房主設定，即時同步）'}</h3>
+    <div class="nums">${[5,6,7,8,9,10,11,12].map(k=>`<button data-a="cap" data-n="${k}" class="${k===n?'sel':''}" ${host?'':'disabled'}>${k}</button>`).join('')}</div>
+    ${presetCard(S.preset)}
+    <div class="small muted" style="margin-top:6px">任務人數：${(S.teamSizes||[]).join(' / ')}${n>=7?'（第 4 輪需 2 張失敗）':''}</div>
+    <div class="toggle"><img src="${thumb('lady')}" alt=""><div class="grow"><b>湖中仙女</b><div class="muted small">第 2–4 個任務後查驗一人陣營（8 人以上預設開啟）</div></div><button class="sw ${s.lady?'on':''}" data-a="tg" data-k="lady" ${host?'':'disabled'}></button></div>
+    <div class="toggle"><div class="grow"><b>王者之劍</b><div class="muted small">隊長把劍交給一位隊員，任務後可翻轉一張任務卡</div></div><button class="sw ${s.excalibur?'on':''}" data-a="tg" data-k="excalibur" ${host?'':'disabled'}></button></div>
+    <div class="toggle"><div class="grow"><b>蘭斯洛特</b><div class="muted small">正邪各一，忠誠牌可能互換陣營（11 人以上預設開啟）</div></div><button class="sw ${s.lancelot?'on':''}" data-a="tg" data-k="lancelot" ${host?'':'disabled'}></button></div>
+    <div class="toggle"><div class="grow"><b>回避卡</b><div class="muted small">每人一張，投票階段可退出隊伍且不計否決</div></div><button class="sw ${s.veto?'on':''}" data-a="tg" data-k="veto" ${host?'':'disabled'}></button></div>
+    <div class="adv"><button class="btn ghost sm" data-a="adv">${s.advanced?'收起進階角色調整':'進階：自行調整角色（選用）'}</button></div>
+    ${s.advanced?`<div class="small muted" style="margin-top:8px">進階模式會改寫上方預設陣容</div>
+      ${[['percival','派西維爾'],['morgana','莫甘娜'],['mordred','莫德雷德'],['oberon','奧伯倫']].map(([k,nm])=>`<div class="toggle"><div class="grow"><b>${nm}</b></div><button class="sw ${s[k]?'on':''}" data-a="tg" data-k="${k}" ${host?'':'disabled'}></button></div>`).join('')}`:''}
   </div>
-  <div class="card"><h3>角色配置${host ? '' : '（由房主設定）'}</h3>
-    <div class="toggle"><img src="${thumb('merlin')}" alt=""><div class="grow"><b>梅林</b>、<b>刺客</b><div class="muted small">必選</div></div><button class="sw on" disabled></button></div>
-    ${toggles.map(([k, nm, d]) => `<div class="toggle"><img src="${thumb(k)}" alt=""><div class="grow"><b>${nm}</b><div class="muted small">${d}</div></div><button class="sw ${s[k] ? 'on' : ''}" data-a="tg" data-k="${k}" ${host ? '' : 'disabled'}></button></div>`).join('')}
-    <div class="toggle"><img src="${thumb('lady')}" alt=""><div class="grow"><b>湖中仙女</b> <span class="badge">擴展</span><div class="muted small">第 2–4 個任務後查驗一人陣營（建議 8 人以上）</div></div><button class="sw ${s.lady ? 'on' : ''}" data-a="tg" data-k="lady" ${host ? '' : 'disabled'}></button></div>
-    ${comp}</div>
-  ${host ? `<button class="btn" data-a="start" ${n < 5 ? 'disabled' : ''}>⚔️ 開始遊戲${n < 5 ? `（還差 ${5 - n} 人）` : ''}</button>` : '<div class="card center muted">等待房主開始遊戲…</div>'}
-  <button class="btn dark" data-a="leave">離開房間</button>`;
+  <div class="bottombar"><div class="thumb" data-a="role"></div>
+    ${host?`<button class="btn" data-a="start" ${x===n?'':'disabled'}>開始遊戲（${x}/${n}）</button>`:
+      S.mySeat?`<button class="btn ${me&&me.ready?'ghost':''}" data-a="ready">${me&&me.ready?'已準備 ✓':'準備'}</button>`:`<button class="btn ghost" disabled>請先就座</button>`}
+  </div>`;
 }
 function gameHtml() {
   const g = S.game; const me = g.me; const meId = S.meId;
@@ -329,12 +474,23 @@ function gameHtml() {
   } else if (g.phase === 'vote') {
     center = `<b>投票中</b>${g.voted.length}/${g.n} 已投`;
     panel = `<div class="phase">是否同意此隊伍出任務？</div><div>${g.team.map(id => chip(id)).join('')}</div><div class="small muted" style="margin-top:6px">全員投完後同時公開</div>` +
-      (me && !me.voted ? `<div class="btns"><button class="btn good" data-a="vote" data-v="1">✓ 贊成</button><button class="btn evil" data-a="vote" data-v="0">✕ 反對</button></div>` : `<div class="center muted" style="margin-top:10px">你已投${me && me.myVote ? '「贊成」' : '「反對」'}，等待其他騎士…</div>`);
+      (me && !me.voted ? `<div class="btns"><button class="btn good" data-a="vote" data-v="1">✓ 贊成</button><button class="btn evil" data-a="vote" data-v="0">✕ 反對</button></div>${me.hasVeto && g.team.includes(meId) ? '<button class="btn ghost" data-a="veto">使用回避卡（退出隊伍）</button>' : ''}` : `<div class="center muted" style="margin-top:10px">你已投${me && me.myVote ? '「贊成」' : '「反對」'}，等待其他騎士…</div>`);
+  } else if (g.phase === 'sword') {
+    const proposer = (g.rounds[g.round]||[]).slice(-1)[0];
+    const amL = proposer && proposer.leader === meId;
+    center = `<b>王者之劍</b>隊長授予中`;
+    panel = amL ? `<div class="phase">⚔️ 授予王者之劍</div><div class="small muted">點選隊伍中除自己以外的一位隊員持劍。已選：${selCount?esc(P([...selected][0]).name):'無'}</div><button class="btn" data-a="sword" ${selCount===1?'':'disabled'}>交給他</button>`
+      : `<div class="phase">⚔️ 王者之劍</div><div class="small muted">等待隊長把劍交給一位隊員</div>`;
+  } else if (g.phase === 'swordflip') {
+    const amS = g.sword === meId;
+    center = `<b>王者之劍</b>持劍者行動`;
+    panel = amS ? `<div class="phase">⚔️ 你持有王者之劍</div><div class="small muted">可翻轉另一位隊員的任務卡（你會看到原本是什麼），或不使用。</div><button class="btn" data-a="swordflip" ${selCount===1?'':'disabled'}>翻轉此卡</button><button class="btn ghost" data-a="swordskip">不使用</button>`
+      : `<div class="phase">⚔️ 王者之劍</div><div class="small muted">等待 ${chip(g.sword)} 決定是否翻轉一張任務卡</div>`;
   } else if (g.phase === 'quest') {
     const onTeam = g.team.includes(meId);
     center = `<b>任務進行中</b>${g.questDone}/${g.team.length} 已出卡`;
     panel = `<div class="phase">任務進行中</div><div>${g.team.map(id => chip(id)).join('')}</div>${g.twoFailRound === g.round ? '<div class="small result-evil" style="margin-top:6px">本輪需 2 張失敗才算任務失敗</div>' : ''}` +
-      (onTeam && !me.questSubmitted ? `<div class="small muted" style="margin-top:6px">秘密選擇你的任務卡：</div><div class="btns"><button class="btn good" data-a="quest" data-v="1">🛡️ 成功</button><button class="btn evil" data-a="quest" data-v="0" ${me.side === 'good' ? 'disabled' : ''}>🗡️ 失敗</button></div>${me.side === 'good' ? '<div class="small muted center" style="margin-top:6px">好人只能出「成功」</div>' : ''}`
+      (onTeam && !me.questSubmitted ? `<div class="small muted" style="margin-top:6px">秘密選擇你的任務卡：</div><div class="btns"><button class="btn good" data-a="quest" data-v="1">🛡️ 成功</button><button class="btn evil" data-a="quest" data-v="0" ${me.canFail ? '' : 'disabled'}>🗡️ 失敗</button></div>${me.canFail ? '' : '<div class="small muted center" style="margin-top:6px">你只能出「成功」</div>'}`
         : `<div class="center muted" style="margin-top:10px">${onTeam ? '你已交卡，等待其他隊員…' : '等待隊員秘密出卡…'}</div>`);
   } else if (g.phase === 'lady') {
     center = `<b>湖中仙女</b>${esc(P(g.ladyId).name)} 查驗中`;
@@ -349,7 +505,7 @@ function gameHtml() {
     center = `<b>${g.winner === 'good' ? '好人勝' : '壞人勝'}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}`;
     panel = `${S.isHost ? '<button class="btn" data-a="lobby" style="margin-top:0">🔁 再來一局（保留座位）</button>' : '<div class="center muted small">等待房主開新一局（座位保留）</div>'}`;
   }
-  const selectable = (s) => (g.phase === 'team' && isLeader) || (g.phase === 'assassin' && me && me.role === 'assassin' && s.id !== meId && !s.evil) || (g.phase === 'lady' && isLady && s.id !== meId && !g.ladyUsed.includes(s.id));
+  const selectable = (s) => (g.phase === 'team' && isLeader) || (g.phase === 'assassin' && me && me.role === 'assassin' && s.id !== meId && !s.evil) || (g.phase === 'lady' && isLady && s.id !== meId && !g.ladyUsed.includes(s.id)) || (g.phase === 'sword' && isLeader && g.team.includes(s.id) && s.id !== meId) || (g.phase === 'swordflip' && g.sword === meId && g.team.includes(s.id) && s.id !== meId);
   const ended = g.phase === 'end';
   const table = roundTable(g.seats, {
     click: selectable,
@@ -391,12 +547,12 @@ function detailHtml(r) {
   <button class="btn ghost" data-a="poster">🖼️ 生成戰報海報</button>`;
 }
 async function loadDetail(gid) {
-  const r = await fetch(`/api/game/${encodeURIComponent(gid)}?pid=${encodeURIComponent(pid)}`).then(x => x.json()).catch(() => null);
+  const r = await api(`/api/game/${encodeURIComponent(gid)}`).catch(() => null);
   if (view !== 'detail') return;
   $('#app').innerHTML = r && !r.error ? detailHtml(r) : '<div class="card center muted">找不到此對局</div>';
 }
 async function loadHistory() {
-  const list = await fetch('/api/history?pid=' + encodeURIComponent(pid)).then(r => r.json()).catch(() => []);
+  const list = await api('/api/history').catch(() => []);
   if (view !== 'history') return;
   $('#app').innerHTML = list.length ? list.map(g => {
     const r = ROLE[g.myRole] || ROLE.servant; const won = r.side === g.winner; const me = g.players.find(p => p.id === g.myId) || {};
@@ -405,7 +561,7 @@ async function loadHistory() {
   }).join('') : '<div class="card center muted">還未有完成的對局<br><span class="small">完成一局後會自動記錄</span></div>';
 }
 async function loadStats() {
-  const st = await refreshStats(); if (view !== 'stats') return;
+  let st; try { st = await refreshStats(); } catch(e) { st = myStats; } if (view !== 'stats') return;
   let gw = 0, gp = 0, ew = 0, ep = 0; for (const [k, v] of Object.entries(st.roles || {})) { if (ROLE[k].side === 'good') { gw += v.won; gp += v.played; } else { ew += v.won; ep += v.played; } }
   $('#app').innerHTML = `<div class="card row">${av(profile, 56)}<div><div class="name">${esc(profile.name || '騎士')}</div><div class="small muted">MVP ${st.mvp || 0} 次</div></div></div>
   <div class="card"><div class="kpis"><div class="kpi"><b>${st.played}</b><span>總場數</span></div><div class="kpi"><b>${pct(st.won, st.played)}%</b><span>勝率</span></div><div class="kpi"><b>${st.won}</b><span>勝場</span></div></div>
@@ -435,7 +591,7 @@ function rulesBody() {
   const P_ = (h) => `<div class="card parch rules">${h}</div>`;
   switch (rulesTab) {
     case 'overview': return P_(`<h4>🏰 遊戲目標</h4><p>圓桌旁坐著<b>亞瑟的忠臣（好人）</b>與<b>莫德雷德的爪牙（壞人）</b>。好人要完成 3 個任務；壞人要令 3 個任務失敗，或在最後刺殺梅林。</p>
-      <h4>👥 人數配置</h4><table><tr><th>人數</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th></tr><tr><td>好人</td><td>3</td><td>4</td><td>4</td><td>5</td><td>6</td><td>6</td></tr><tr><td>壞人</td><td>2</td><td>2</td><td>3</td><td>3</td><td>3</td><td>4</td></tr></table>
+      <h4>👥 人數配置</h4><table><tr><th>人數</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th></tr><tr><td>好人</td><td>3</td><td>4</td><td>4</td><td>5</td><td>6</td><td>6</td><td>7</td><td>8</td></tr><tr><td>壞人</td><td>2</td><td>2</td><td>3</td><td>3</td><td>3</td><td>4</td><td>4</td><td>5</td></tr></table>
       <h4>📱 使用方法</h4><p>一人建立房間，其他人掃二維碼或輸入 4 位房間號入座。每人手機只顯示自己的身份。重新整理或斷線會自動回到原座位（同一部手機同一瀏覽器）。</p>`);
     case 'sides': return `<div class="rolegrid">${ROLE_ORDER.map(k => `<div class="rolecell ${ROLE[k].side}" style="background-image:url(${img(k)})" data-a="rolepeek" data-r="${k}"><div class="t"><b>${ROLE[k].n}</b><span class="tiny">${ROLE[k].side === 'good' ? '好人陣營' : '壞人陣營'}</span></div></div>`).join('')}</div><div class="small muted center" style="margin-top:8px">點擊角色查看能力</div>`;
     case 'knows': {
@@ -472,9 +628,9 @@ function rulesBody() {
       <h4>⚔️ 派西維爾</h4><ul><li>觀察兩位「梅林?」的投票與發言，找出真梅林並替他擋刀。</li><li>可以假裝自己是梅林，吸引刺客。</li></ul>
       <h4>🔴 壞人思路</h4><ul><li>不要每次都出失敗卡，早期可以「潛伏」建立信任。</li><li>兩個壞人同隊時，協調好誰出失敗。</li><li>莫甘娜要模仿梅林的行為，混淆派西維爾。</li><li>刺客全程觀察：誰最清楚壞人是誰？</li></ul>`);
     case 'ext': return P_(`<h4>🌊 湖中仙女 Lady of the Lake <span class="badge ok">本 App 已支援</span></h4><p>開局時交給隊長右手邊（上一位）玩家。第 2、3、4 個任務結束後，持有者查驗一位玩家的陣營（只有自己看到），然後把仙女交給被查驗者。曾持有仙女的人不能被查驗。建議 8 人以上使用，可在房間設定開啟。</p>
-      <h4>⚔️ 王者之劍 Excalibur <span class="badge grey">規則說明</span></h4><p>隊長組隊時把王者之劍交給一位隊員（不可給自己）。任務卡交出後，持劍者可以選擇翻轉另一位隊員的任務卡（成功↔失敗），並私下看到原本的卡。為任務結果增加變數。</p>
-      <h4>🗡️ 蘭斯洛特 Lancelot <span class="badge grey">規則說明</span></h4><p>好人與壞人各有一位蘭斯洛特。遊戲中可能因「忠誠牌」而互換陣營，增加不確定性。可配合 11–12 人擴展局使用。</p>
-      <p class="small">王者之劍與蘭斯洛特目前只提供規則說明，日後版本可加入。</p>`);
+      <h4>⚔️ 王者之劍 Excalibur <span class="badge grey">已實作</span></h4><p>隊長組隊時把王者之劍交給一位隊員（不可給自己）。任務卡交出後，持劍者可以選擇翻轉另一位隊員的任務卡（成功↔失敗），並私下看到原本的卡。為任務結果增加變數。</p>
+      <h4>🗡️ 蘭斯洛特 Lancelot <span class="badge grey">已實作</span></h4><p>好人與壞人各有一位蘭斯洛特，開局時互相認識。第 2–4 個任務後公開抽一張忠誠牌（五張牌中有兩張「互換」），可能讓兩人陣營對調。正義蘭斯洛特即使是好人也可以出失敗卡。湖中仙女看到的是當下陣營。11 人以上預設開啟。</p>
+      <p class="small">本版本已實作王者之劍、蘭斯洛特與 11–12 人局，可在開局前於房間設定開啟。</p>`);
   }
   return '';
 }
@@ -543,7 +699,49 @@ document.addEventListener('click', async (e) => {
     case 'swap': { const id = el.dataset.id; if (selected.has(id)) selected.delete(id); else selected.add(id);
       if (selected.size === 2) { const [x, y] = [...selected]; selected = new Set(); await act('swap', { a: x, b: y }); } return render(); }
     case 'start': return act('start');
+    case 'copycode': try { await navigator.clipboard.writeText(S.code); toast('已複製房間號 '+S.code); } catch { prompt('房間號', S.code); } return;
+    case 'register': return authDialog('register');
+    case 'login': return authDialog('login');
+    case 'logout': return doLogout();
+    case 'cap': return act('capacity', { n: Number(el.dataset.n) });
+    case 'sit': return act('sit', { seat: Number(el.dataset.seat) });
+    case 'ready': { const me = (S.seats||[]).find(p => p && p.id === S.meId); return act('ready', { ready: !(me && me.ready) }); }
+    case 'adv': return act('settings', { advanced: !S.settings.advanced });
+    case 'seat': {
+      const id = el.dataset.id;
+      if (id === S.meId) {
+        return openModal(`<h2>我的座位</h2><div class="center">${av(people().find(p=>p.id===id)||profile,56)}<div class="name">${esc(profile.name)}</div></div><button class="btn ghost" data-x="stand">離座</button><button class="btn" id="ok">關閉</button>`, el2 => {
+          el2.querySelector('[data-x=stand]').onclick = () => { closeModal(); act('stand', {}); };
+          $('#ok', el2).onclick = closeModal;
+        });
+      }
+      const p = (S.seats||[]).find(x => x && x.id === id); if (!p) return;
+      return openModal(`<h2>騎士名片</h2><div class="center namecard">${av(p,56)}<div class="name">${esc(p.name)}</div><div class="small muted">座位 ${p.seat}${p.isHost?' · 房主':''}${p.online?'':' · 離線'}</div></div>
+        ${S.isHost?`<div class="btns"><button class="btn ghost" data-x="stand">請他離座</button><button class="btn ghost" data-x="tr">轉讓房主</button></div><button class="btn dark" data-x="kick" style="color:#ff8b9c">移出房間</button>`:''}
+        <button class="btn" id="ok">關閉</button>`, el2 => {
+          const bind = (sel, fn) => { const b=el2.querySelector(sel); if (b) b.onclick = fn; };
+          bind('[data-x=stand]', () => { closeModal(); act('stand', { id }); });
+          bind('[data-x=tr]', () => { if (confirm('把房主轉讓給 '+p.name+'？')) { closeModal(); act('transfer', { id }); } });
+          bind('[data-x=kick]', () => { if (confirm('移出 '+p.name+'？')) { closeModal(); act('kick', { id }); } });
+          $('#ok', el2).onclick = closeModal;
+        });
+    }
+    case 'menu': return openModal(`<h2>房間選單</h2>
+      <button class="btn ghost" data-x="rules">查看規則</button>
+      <button class="btn ghost" data-x="ref">刷新房間</button>
+      ${S.isHost?'<button class="btn ghost" data-x="tr">轉讓房主…</button><button class="btn dark" data-x="dis" style="color:#ff8b9c">解散房間</button>':''}
+      <button class="btn" id="ok">關閉</button>`, el2 => {
+        el2.querySelector('[data-x=rules]').onclick = () => { closeModal(); go('rules'); };
+        el2.querySelector('[data-x=ref]').onclick = () => { closeModal(); render(); toast('已刷新'); };
+        const tr = el2.querySelector('[data-x=tr]'); if (tr) tr.onclick = () => { closeModal(); toast('請點圓桌上的騎士，從名片轉讓房主'); };
+        const dis = el2.querySelector('[data-x=dis]'); if (dis) dis.onclick = () => { if (confirm('確定解散房間？所有人將被移出。')) { closeModal(); act('dissolve'); } };
+        $('#ok', el2).onclick = closeModal;
+      });
     case 'leave': { const r = await emit('leave'); S = null; if (r.stillSeated) toast('遊戲進行中，你的座位會保留'); return go('home'); }
+    case 'veto': if (confirm('使用回避卡退出本支隊伍？本輪否決不增加，且你本輪不能再被選入。')) return act('veto'); return;
+    case 'sword': { const id=[...selected][0]; if (id) { const r=await act('sword',{id}); if(r.ok) selected=new Set(); } return; }
+    case 'swordflip': { const id=[...selected][0]; if (id && confirm('翻轉 '+P(id).name+' 的任務卡？')) { const r=await act('swordflip',{id}); if(r.ok) selected=new Set(); } return; }
+    case 'swordskip': return act('swordflip', { skip: true });
     case 'abort': if (confirm('確定強制結束本局？（不會計入記錄）')) act('abort'); return;
     case 'lobby': return act('lobby');
     case 'sel': {
@@ -560,7 +758,7 @@ document.addEventListener('click', async (e) => {
     case 'detail': return go('detail', { gid: el.dataset.g, from: 'history' });
     case 'poster': return posterDialog();
     case 'skin': { const r = el.dataset.r, s = el.dataset.s; const need = SKINS.find(k => k.id === s).need; const played = (myStats.roles[r] || {}).played || 0;
-      if (played < need) return toast(`再玩 ${need - played} 場${ROLE[r].n}即可解鎖`); skinSel[r] = s; LS.setItem('cc.skins', JSON.stringify(skinSel)); return render(); }
+      if (played < need) return toast(`再玩 ${need - played} 場${(ROLE[r]||{}).n||r}即可解鎖`); skinSel[r] = s; LS.setItem('cc.skins', JSON.stringify(skinSel)); api('/api/me',{method:'PUT',body:JSON.stringify({skins:skinSel})}).catch(()=>{}); return render(); }
     case 'rtab': rulesTab = el.dataset.v; if (rulesTab === 'round') demoStep = 0; return mountRules();
     case 'wk': wkRole = el.dataset.r; return mountRules();
     case 'wkrev': wkReveal = !wkReveal; return mountRules();

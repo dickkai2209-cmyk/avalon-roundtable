@@ -21,7 +21,7 @@ const FXS = ['none','spot','gold','snow','spark','petals','howl','fire','lightni
 const EMOTES = ['1f602','1f62d','1f631','1f914','1f60e','1f621','1f64f','1f44d','1f44f','1f525','2764_fe0f','1f608','1f92b','1f440','1f389'];
 const emoteAt = new Map();
 // cosmetic unlock rules, enforced server-side (GM bypasses all)
-const PD_RULE = { wolf: ['free', 0], pumpkin: ['free', 0], devil: ['free', 0], crown: ['free', 0], bow: ['free', 0], halo: ['games', 2], egg: ['games', 3], ghost: ['games', 4], witch: ['games', 5], bolo: ['games', 6], tram: ['games', 7], bat: ['games', 8], vampire: ['games', 12], plume: ['wins', 1], taxi: ['wins', 2], merlinhat: ['wins', 3], lion: ['wins', 4], lotus: ['wins', 5], neon: ['wins', 6], excal: ['wins', 10], laurel: ['mvp', 10] };
+const PD_RULE = { wolf: ['free', 0], pumpkin: ['free', 0], devil: ['free', 0], crown: ['free', 0], bow: ['free', 0], santa: ['free', 0], holly: ['free', 0], newmoon: ['games', 1], halo: ['games', 2], egg: ['games', 3], ghost: ['games', 4], witch: ['games', 5], bolo: ['games', 6], tram: ['games', 7], bat: ['games', 8], vampire: ['games', 12], plume: ['wins', 1], taxi: ['wins', 2], merlinhat: ['wins', 3], lotus: ['wins', 5], neon: ['wins', 6], excal: ['wins', 10], laurel: ['mvp', 10] };
 const CB_RULE = { cardback: ['free', 0], cardback_xmas: ['free', 0], cardback_sakura: ['games', 2], cardback_halloween: ['games', 3], cardback_lny: ['games', 6], cardback_starry: ['wins', 3], cardback_neon: ['wins', 5], cardback_amigos: ['wins', 10] };
 const FX_NEED = { none: 0, spot: 0, gold: 0, snow: 0, spark: 1, petals: 3, howl: 4, fire: 6, lightning: 10 };
 function unlockedBy(rule, st) { if (!rule) return false; const [k, n] = rule; return k === 'free' || (k === 'games' ? st.played : k === 'wins' ? st.won : st.mvp) >= n; }
@@ -38,7 +38,7 @@ async function enforceUnlocks(user, f) {
   }
   return null;
 }
-const PENDANTS = ['none','wolf','pumpkin','devil','crown','bow','halo','egg','ghost','witch','bolo','tram','bat','vampire','plume','taxi','merlinhat','lion','lotus','neon','excal','laurel'];
+const PENDANTS = ['none','wolf','pumpkin','devil','crown','bow','santa','holly','newmoon','halo','egg','ghost','witch','bolo','tram','bat','vampire','plume','taxi','merlinhat','lotus','neon','excal','laurel'];
 const cleanAvatar = (s) => ANIMALS.includes(s) || s === 'photo' ? s : 'fox';
 const cleanBg = (s) => /^#[0-9a-fA-F]{6}$/.test(String(s)) ? s : '#f3d9a4';
 const cleanFx = (s) => FXS.includes(s) ? s : 'spot';

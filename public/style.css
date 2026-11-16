@@ -823,3 +823,82 @@ img,canvas,svg,video{max-width:100%}
 @media (prefers-reduced-motion: reduce){
   .crop-img{will-change:auto}
 }
+
+
+/* ---- t113-t117 layout patch ---- */
+
+/* Sticky topbar: back | title+code | 邀請 ⋯ conn; no horizontal scroll at 375/390 */
+.topbar{display:grid;grid-template-columns:minmax(36px,auto) minmax(0,1fr) minmax(36px,auto);align-items:center;gap:4px;height:52px;padding:env(safe-area-inset-top) 6px 0;box-sizing:content-box;max-width:100vw;overflow:hidden}
+.topbar .icon-btn{position:relative;left:auto;flex-shrink:0;padding:2px 8px}
+.top-left,.top-right{display:flex;align-items:center;min-width:0}
+.top-left{justify-content:flex-start}
+.top-right{justify-content:flex-end;gap:6px}
+.topbar .title{min-width:0;justify-content:center;overflow:hidden;font-size:16px;letter-spacing:.4px;white-space:nowrap}
+.topbar .tlogo{height:24px;width:auto;flex-shrink:0}
+#topTitle{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.top-code{border:0;background:none;font:inherit;font-weight:800;letter-spacing:1px;cursor:pointer;color:inherit;padding:0 1px;font-family:ui-monospace,Menlo,monospace}
+.top-room-acts{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.top-room-acts.hidden{display:none}
+.top-room-acts .rbtn{padding:4px 10px;font-size:13px;white-space:nowrap;line-height:1.2}
+.topbar .conn{position:static;margin:0 2px 0 2px;flex-shrink:0}
+@media (max-width:389px){
+  .topbar .title{font-size:15px;gap:5px;letter-spacing:0}
+  .top-room-acts .rbtn{padding:4px 8px;font-size:12px}
+  .topbar .tlogo{height:22px}
+}
+
+/* Compact lobby meta: no code pill, no waiting copy, no seated-count duplicate */
+.rhead.compact{background:transparent;border:0;padding:2px 4px 0;margin:2px 0 0;border-radius:0}
+.rhead.compact .rh-sub{margin-top:0;font-size:12.5px}
+
+/* Table centre seated counter: two stacked lines (1/10 then 已就座) */
+.rt .table .ctr .seatcount{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.1;text-align:center}
+.rt .table .ctr .seatcount b{display:block;font-size:26px;font-weight:800;letter-spacing:0;line-height:1;color:#1d2333;font-family:inherit;margin:0}
+.rt .table .ctr .seatcount span{display:block;font-size:12px;font-weight:600;color:#6b7286;margin:2px 0 0}
+
+/* Larger seat icons; numbers on the INNER ring, never a top-left badge */
+.rt .st{width:84px;margin:-42px 0 0 -42px;overflow:visible}
+.rt .st .av-empty,.rt .st.empty .av-empty{width:60px;height:60px;font-size:28px;margin:0 auto}
+.rt .st .av{/* size comes from inline av() */}
+.rt .st .no{
+  position:absolute;left:50%;top:30px;z-index:2;pointer-events:none;
+  transform:translate(-50%,-50%) translate(calc(var(--inx,0) * var(--inoff,48px)), calc(var(--iny,0) * var(--inoff,48px)));
+  width:auto;height:auto;min-width:0;padding:0;margin:0;line-height:1;
+  background:none!important;border:none!important;border-radius:0;box-shadow:none;
+  font-size:15px;font-weight:700;color:#8a909c!important;
+}
+.rt .st.unk .no{background:none!important;color:#8a909c!important}
+.st-meta{margin-top:3px}
+.st-pills{margin-top:2px}
+
+/* Pendant picker: wrapping grid, vertical scroll only; last column not clipped */
+.pdgrid,.pe-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  width:100%;max-width:100%;
+  box-sizing:border-box;
+  padding:10px 8px 6px;
+  margin-top:10px;
+  overflow-x:hidden;
+  min-width:0;
+}
+.pdgrid>*,.pe-grid>*{min-width:0;max-width:100%;box-sizing:border-box}
+.pdc b,.pe-grid b,.pe-grid .lb{
+  display:block;text-align:center;max-width:100%;
+  overflow-wrap:anywhere;word-break:break-word;white-space:normal;line-height:1.25;
+}
+.pe-body{
+  overflow-x:hidden;overflow-y:auto;
+  touch-action:pan-y;
+  overscroll-behavior-x:none;
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+  min-width:0;max-width:100%;
+}
+.sheet:has(.pe){overflow-x:hidden;overflow-y:hidden;max-width:min(520px,100vw);box-sizing:border-box}
+.modal,.sheet{overflow-x:hidden;max-width:100vw}
+/* Crop editor pinch/pan stays isolated on the stage — do not inherit pan-y */
+.crop-stage{touch-action:none;overscroll-behavior:contain}
+
+.rt{aspect-ratio:1;overflow:visible;margin:4px auto 8px}

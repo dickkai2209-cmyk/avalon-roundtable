@@ -17,13 +17,16 @@
 <link rel="apple-touch-icon" href="/img/icon-192.png">
 <meta property="og:image" content="/img/icon-512.png">
 <meta property="og:description" content="旺角阿瓦隆 MONGKOK AVALON · by Amigosparty">
-<link rel="stylesheet" href="/style.css?v=11">
+<link rel="stylesheet" href="/style.css?v=12">
 </head>
 <body>
 <header class="topbar">
-  <button id="backBtn" class="icon-btn hidden" aria-label="返回">‹</button>
+  <div class="top-left"><button id="backBtn" class="icon-btn hidden" aria-label="返回">‹</button></div>
   <div class="title"><img class="tlogo" src="/img/amigos.webp" alt="Amigos' Party" width="35" height="28"><span id="topTitle">旺角阿瓦隆</span></div>
-  <div class="conn" id="conn" title="連線狀態"></div>
+  <div class="top-right">
+    <div id="topRoomActs" class="top-room-acts hidden"></div>
+    <div class="conn" id="conn" title="連線狀態"></div>
+  </div>
 </header>
 <main id="app"><div class="splash"><img src="/img/amigos.webp" alt="" width="120" height="96"><b>旺角阿瓦隆</b><span>MONGKOK AVALON</span><i></i></div></main>
 <div id="wake" class="wake hidden">伺服器喚醒中，請稍候（最多約 30 秒）…</div>
@@ -31,6 +34,6 @@
 <div id="toast" class="toast hidden"></div>
 <script defer src="/vendor/socket.io.min.js"></script>
 <script defer src="/review.js?v=1"></script>
-  <script defer src="/app.js?v=15"></script>
+  <script defer src="/app.js?v=16"></script>
 </body>
 </html>

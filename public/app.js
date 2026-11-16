@@ -50,13 +50,15 @@ const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['snow'
 const PENDANTS = [
   ['wolf', '滿月狼人', 'free', 0], ['pumpkin', '南瓜燈先知', 'free', 0], ['devil', '搗蛋小惡魔', 'free', 0],
   ['crown', '小王冠', 'free', 0], ['bow', '花花蝴蝶結', 'free', 0],
+  ['santa', '聖誕小帽', 'free', 0], ['holly', '冬青花環', 'free', 0],
+  ['newmoon', '新月狼人', 'games', 1],
   ['halo', '星星光環', 'games', 2], ['egg', '雞蛋仔', 'games', 3], ['ghost', '床單幽靈', 'games', 4], ['witch', '月夜女巫', 'games', 5],
   ['bolo', '菠蘿油', 'games', 6], ['tram', '叮叮電車', 'games', 7], ['bat', '孤影蝙蝠', 'games', 8, 1], ['vampire', '午夜血族', 'games', 12, 1],
-  ['plume', '圓桌騎士羽飾', 'wins', 1], ['taxi', '紅色的士', 'wins', 2], ['merlinhat', '梅林法師帽', 'wins', 3, 1], ['lion', '獅子山', 'wins', 4],
+  ['plume', '圓桌騎士羽飾', 'wins', 1], ['taxi', '紅色的士', 'wins', 2], ['merlinhat', '梅林法師帽', 'wins', 3, 1],
   ['lotus', '湖中仙女蓮花', 'wins', 5, 1], ['neon', '港式霓虹', 'wins', 6], ['excal', '王者之劍徽章', 'wins', 10, 1],
   ['laurel', 'MVP金桂冠', 'mvp', 10, 1],
 ];
-const PD_V = 3;
+const PD_V = 4;
 const pdSrc = (k, back) => `/img/pd/${k}${back ? '_b' : ''}.webp?v=${PD_V}`;
 const BADGE_LEAD = `<span class="sbadge lead" title="本輪隊長"><svg viewBox="0 0 24 24" width="100%" height="100%"><circle cx="12" cy="12" r="11" fill="#fff4cf" stroke="#e0a412" stroke-width="1.6"/><path d="M8 18.5V5.5" stroke="#9a6b10" stroke-width="1.6" stroke-linecap="round"/><path d="M8.6 6h8.2l-2 3 2 3H8.6z" fill="#f4b623" stroke="#c8880a" stroke-width=".8" stroke-linejoin="round"/><path d="M10.6 8.2l.9.9.9-1.3.9 1.3.9-.9-.4 2h-2.8z" fill="#fff"/></svg></span>`;
 const BADGE_LADY = `<span class="sbadge lady" title="湖中仙女"><svg viewBox="0 0 24 24" width="100%" height="100%"><circle cx="12" cy="12" r="11" fill="#e6f4ff" stroke="#4aa3e8" stroke-width="1.6"/><path d="M12 6c1.6 1.6 1.9 4 0 6.4C10.1 10 10.4 7.6 12 6z" fill="#f59ac4"/><path d="M12 12.4c-1.4-2-3.5-2.8-5.3-2.3.3 2.2 2.4 3.4 5.3 2.3zm0 0c1.4-2 3.5-2.8 5.3-2.3-.3 2.2-2.4 3.4-5.3 2.3z" fill="#f7b6d4"/><path d="M6 15.2c2 1.2 4 1.2 6 0s4-1.2 6 0" fill="none" stroke="#3b93db" stroke-width="1.5" stroke-linecap="round"/><path d="M7.5 18c1.5.8 3 .8 4.5 0s3-.8 4.5 0" fill="none" stroke="#7dbdf0" stroke-width="1.2" stroke-linecap="round"/></svg></span>`;
@@ -78,7 +80,8 @@ let account = null; // {username, guest}
 function migrateAvatar(a) { if (!a) return 'fox'; if (EMOJI_MAP[a]) return EMOJI_MAP[a]; if (a === 'photo' || ANIMALS.some(([k]) => k === a) || String(a).startsWith('data:')) return a; return 'fox'; }
 let profile = JSON.parse(LS.getItem('cc.profile') || 'null') || { name: LS.getItem('avalon.name') || '', avatar: 'fox', bg: '#ffffff', fx: 'spot', pendant: 'none' };
 profile.avatar = migrateAvatar(profile.avatar);
-profile.pendant = profile.pendant || 'none';
+profile.pendant = (profile.pendant && profile.pendant !== 'lion') ? profile.pendant : 'none';
+if (profile.pendant && profile.pendant !== 'none' && !PENDANTS.some(x => x[0] === profile.pendant)) profile.pendant = 'none';
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const saveProfile = () => LS.setItem('cc.profile', JSON.stringify(profile));
 let skinSel = JSON.parse(LS.getItem('cc.skins') || '{}');
@@ -96,7 +99,7 @@ const skinOf = (role) => { const s = SKINS.find(k => k.id === skinSel[role]); co
 function applyUser(u, stats) {
   if (!u) return;
   account = u; pid = u.id; LS.setItem('cc.pid', pid);
-  profile = { id: u.id, name: u.name || profile.name, avatar: u.avatar || profile.avatar, photoUrl: u.photoUrl || null, bg: u.bg || profile.bg, fx: u.fx || profile.fx, pendant: u.pendant || 'none' };
+  profile = { id: u.id, name: u.name || profile.name, avatar: u.avatar || profile.avatar, photoUrl: u.photoUrl || null, bg: u.bg || profile.bg, fx: u.fx || profile.fx, pendant: (u.pendant && u.pendant !== 'lion') ? u.pendant : 'none' };
   if (u.skins) skinSel = { ...skinSel, ...u.skins };
   if (stats) { myStats = stats; setTimeout(checkAch, 600); }
   saveProfile(); LS.setItem('cc.skins', JSON.stringify(skinSel));
@@ -706,12 +709,13 @@ async function doLogout() { try { await api('/api/auth/logout', { method:'POST' 
 // ================= components =================
 function roomHead() {
   if (!S) return '';
-  const n = S.capacity, x = S.seated, r = S.readyCount;
-  return `<div class="rhead">
-    <div class="rh-row"><button class="rpill" data-a="copycode">房間 <b>${S.code}</b> <span class="cpy">⧉</span></button><span class="grow"></span>
-      <button class="rbtn" data-a="invite">邀請</button><button class="rbtn" data-a="menu" aria-label="更多">•••</button></div>
-    <div class="rh-sub">等待開局 · 就座 ${x}/${n} · 準備 ${r}/${x}<span class="grow"></span>${S.mySeat ? `${S.mySeat}號座` : '未就座'}${S.isHost ? ' · 房主' : ''}</div>
-  </div>`;
+  // Invite / ⋯ live in the sticky topbar. Seated count lives in the table centre only.
+  const left = [];
+  if (!S.game && S.readyCount != null) left.push(`準備 ${S.readyCount}/${S.seated || 0}`);
+  const rightBits = [S.mySeat ? `${S.mySeat}號座` : (!S.game ? '未就座' : ''), S.isHost ? '房主' : ''].filter(Boolean);
+  const right = rightBits.join(' · ');
+  if (!left.length && !right) return '';
+  return `<div class="rhead compact"><div class="rh-sub">${left.join(' · ')}${(left.length || right) && right ? '<span class="grow"></span>' : ''}${right}</div></div>`;
 }
 function presetCard(pr) {
   if (!pr) return '';
@@ -744,19 +748,27 @@ function knowRing(items, o) {
   }).join('');
   return `<div class="kring"><div class="kcen"><span class="tiny">你係</span><b class="${o.side}">${esc(o.role)}</b><span class="tiny">睇到 ${o.n} 人</span></div>${seats}</div>`;
 }
+function seatInwardStyle(x, y, a) {
+  const inx = -Math.cos(a), iny = -Math.sin(a);
+  // Extra offset when inward is downward (clear name/host pills) or upward (clear wolf-ear pendants)
+  const extra = iny > 0.35 ? 30 : (iny < -0.35 ? 18 : 0);
+  return `left:${x}%;top:${y}%;--inx:${inx.toFixed(3)};--iny:${iny.toFixed(3)};--inoff:${48 + extra}px`;
+}
 function roundTable(seats, o = {}) {
-  const n = seats.length; const R = n > 8 ? 42 : n > 10 ? 40 : 40;
+  const n = seats.length; const R = 35;
+  const avSize = o.avSize || (n >= 10 ? 56 : 60);
   const st = seats.map((s, i) => {
     const a = (-90 + i * 360 / n) * Math.PI / 180; const x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a);
     const seatNo = (s && s.seat) || (i + 1);
+    const pos = seatInwardStyle(x, y, a);
     if (!s || s.empty) {
-      return `<div class="st empty click" style="left:${x}%;top:${y}%" data-a="sit" data-seat="${seatNo}"><span class="no">${seatNo}</span><div class="av-empty">+</div><div class="nm">空位</div></div>`;
+      return `<div class="st empty click" style="${pos}" data-a="sit" data-seat="${seatNo}"><span class="no">${seatNo}</span><div class="av-empty">+</div><div class="nm">空位</div></div>`;
     }
     const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '') + (enterIds.has(s.id) ? ` enter fx-${s.fx || 'spot'}` : '');
     const action = o.action || 'sel';
     const extra = o.click && o.click(s, i) ? `data-a="${action}" data-id="${s.id}"` : (o.seatClick ? `data-a="${o.seatClick}" data-id="${s.id}" data-seat="${seatNo}"` : '');
-    return `<div class="st ${cls}" style="left:${x}%;top:${y}%" data-sid="${s.id}" ${extra}>
-      <span class="no">${seatNo}</span><div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, 44)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
+    return `<div class="st ${cls}" style="${pos}" data-sid="${s.id}" ${extra}>
+      <span class="no">${seatNo}</span><div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, avSize)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
   }).join('');
   return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="#7a5200" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="#7a5200"/><circle cx="13.8" cy="10.3" r="1.2" fill="#7a5200"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="#7a5200" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="#7a5200" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${st}</div>`;
 }
@@ -967,7 +979,20 @@ function render() {
   if (view !== 'skins') app.dataset.v = view || '';
   if (view === 'room' && !inRoom) view = 'home';
   $('#backBtn').classList.toggle('hidden', view === 'home');
-  $('#topTitle').textContent = { home: '旺角阿瓦隆', room: inRoom ? `圓桌 ${S.code}` : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就' }[view];
+  const titles = { home: '旺角阿瓦隆', room: inRoom ? null : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就' };
+  const acts = $('#topRoomActs');
+  if (acts) {
+    const show = !!(view === 'room' && inRoom);
+    acts.classList.toggle('hidden', !show);
+    if (show) acts.innerHTML = `<button type="button" class="rbtn top-inv" data-a="invite">邀請</button><button type="button" class="rbtn top-more" data-a="menu" aria-label="更多">⋯</button>`;
+    else acts.innerHTML = '';
+  }
+  const titleEl = $('#topTitle');
+  if (view === 'room' && inRoom) {
+    titleEl.innerHTML = `圓桌 <button type="button" class="top-code" data-a="copycode" title="複製房間號">${esc(S.code)}</button>`;
+  } else {
+    titleEl.textContent = titles[view] || '旺角阿瓦隆';
+  }
   if (view !== 'home' && view !== 'room') app._html = null;
   if (view === 'home') setHTML(app, homeHtml());
   else if (view === 'room') {
@@ -1066,7 +1091,7 @@ function lobbyHtml() {
       marker: p => (p.ready ? '✅' : ''),
       cls: p => (p.isHost || p.id === S.hostId ? 'host' : ''),
       sub: p => (p.isHost || p.id === S.hostId ? '<span class="hostpill">房主</span>' : '') + (p.id === S.meId ? '<span class="mepill">我</span>' : ''),
-      center: `<b>${x}/${n} 已就座</b>` })}
+      center: `<div class="seatcount"><b>${x}/${n}</b><span>已就座</span></div>` })}
     </div>
   <div class="card cfgcard" data-a="cfg">
     <div class="row between"><h3 style="margin:0">${n} 人局</h3><span class="small gold">${host ? '調整 ›' : '查看 ›'}</span></div>

@@ -524,7 +524,8 @@ function viewFor(room, pid) {
     v.game = {
       gid: g.gid, n: g.n, phase: g.phase, earlyAssassin: !!g.earlyAssassin, round: g.round, leaderId: g.seats[g.leader].id, rejects: g.rejects,
       teamSizes: TEAM_SIZES[g.n], twoFailRound: g.n >= 7 ? 3 : -1, settings: g.settings,
-      seats: g.seats.map(s => ({
+      seats: g.seats.map((s, i) => ({
+        seat: i + 1,
         id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, fx: s.fx, pendant: s.pendant,
         photoUrl: s.avatar === 'photo' ? `/api/avatar/${s.id}?v=${s.pv || 0}` : `/img/av/${s.avatar || 'fox'}.webp`,
         online: online.has(s.pid),

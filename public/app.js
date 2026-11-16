@@ -781,11 +781,17 @@ function knowRing(items, o) {
   }).join('');
   return `<div class="kring"><div class="kcen"><span class="tiny">你係</span><b class="${o.side}">${esc(o.role)}</b><span class="tiny">睇到 ${o.n} 人</span></div>${seats}</div>`;
 }
-function seatInwardStyle(x, y, a, av, seatR, numR) {
-  // Same inward vector for every seat. The pixel distance is (seatR-numR)% of the table,
-  // so the numerals land on one concentric circle. No name or avatar-height offset.
-  const inx = -Math.cos(a), iny = -Math.sin(a);
-  return `left:${x}%;top:${y}%;--av:${av}px;--inx:${inx.toFixed(4)};--iny:${iny.toFixed(4)};--seat-r:${seatR};--num-r:${numR}`;
+function canonicalSlots(seats) {
+  // Seat 1 is always index 0 (top of the table), then clockwise. Placement uses the
+  // seat id, never the viewer's own seat and never the order of occupied players.
+  const n = seats.length;
+  const slots = Array.from({ length: n }, (_, i) => ({ empty: true, seat: i + 1 }));
+  seats.forEach((s, i) => {
+    const seatNo = Math.round((s && s.seat) || (i + 1));
+    if (seatNo < 1 || seatNo > n) return;
+    slots[seatNo - 1] = (s && !s.empty && s.id) ? { ...s, seat: seatNo } : { empty: true, seat: seatNo };
+  });
+  return slots;
 }
 function roundTable(seats, o = {}) {
   const n = seats.length;
@@ -795,20 +801,26 @@ function roundTable(seats, o = {}) {
   // Same angle as the icon, so avatar-centre to number-centre distance is identical.
   const numR = Math.round(R * 0.55 * 10) / 10;
   const avSize = o.avSize || (n >= 12 ? 46 : n >= 10 ? 52 : 58);
-  const st = seats.map((s, i) => {
-    const a = (-90 + i * 360 / n) * Math.PI / 180; const x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a);
-    const seatNo = (s && s.seat) || (i + 1);
-    const pos = seatInwardStyle(x, y, a, avSize, R, numR);
+  const nums = [];
+  const st = canonicalSlots(seats).map((s, i) => {
+    const seatNo = i + 1;
+    const a = (-90 + i * 360 / n) * Math.PI / 180;
+    const x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a);
+    const nx = 50 + numR * Math.cos(a), ny = 50 + numR * Math.sin(a);
+    // Numbers are siblings of the seats, fixed to the physical slot. The seat node
+    // is what the move animation translates, so the numeral must not live inside it.
+    nums.push(`<span class="no" data-seat="${seatNo}" style="left:${nx}%;top:${ny}%">${seatNo}</span>`);
+    const pos = `left:${x}%;top:${y}%;--av:${avSize}px`;
     if (!s || s.empty) {
-      return `<div class="st empty click" style="${pos}" data-a="sit" data-seat="${seatNo}"><span class="no">${seatNo}</span><div class="av-empty">+</div><div class="nm">空位</div></div>`;
+      return `<div class="st empty click" style="${pos}" data-a="sit" data-seat="${seatNo}"><div class="av-empty">+</div><div class="nm">空位</div></div>`;
     }
     const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '') + (enterIds.has(s.id) ? ` enter fx-${s.fx || 'spot'}` : '');
     const action = o.action || 'sel';
     const extra = o.click && o.click(s, i) ? `data-a="${action}" data-id="${s.id}"` : (o.seatClick ? `data-a="${o.seatClick}" data-id="${s.id}" data-seat="${seatNo}"` : '');
     return `<div class="st ${cls}" style="${pos}" data-sid="${s.id}" ${extra}>
-      <span class="no">${seatNo}</span><div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, avSize)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
+      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, avSize)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
   }).join('');
-  return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="currentColor"/><circle cx="13.8" cy="10.3" r="1.2" fill="currentColor"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${st}</div>`;
+  return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="currentColor"/><circle cx="13.8" cy="10.3" r="1.2" fill="currentColor"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${nums.join('')}${st}</div>`;
 }
 function trackHtml(g) {
   return `<div class="track">${g.teamSizes.map((sz, i) => {

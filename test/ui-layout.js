@@ -233,18 +233,21 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
       const b = center.querySelector('b');
       const small = b.querySelector('small');
       const bcs = getComputedStyle(b), scs = getComputedStyle(small), lab = getComputedStyle(center.querySelector('span'));
+      const byNo = {};
+      document.querySelectorAll('.rt > .no').forEach(n => { byNo[n.dataset.seat] = n; });
       const seats = [...document.querySelectorAll('.rt .st')].map(s => {
         const icon = (s.querySelector('.av') || s.querySelector('.av-empty')).getBoundingClientRect();
-        const no = s.querySelector('.no').getBoundingClientRect();
+        const noEl = byNo[s.dataset.seat];
+        const no = noEl.getBoundingClientRect();
         const nm = (s.querySelector('.nm') || s.querySelector('.st-meta')).getBoundingClientRect();
         const pills = [...s.querySelectorAll('.hostpill, .mepill')].map(el => el.getBoundingClientRect());
         const pr = pills.length ? {
           left: Math.min(...pills.map(r => r.left)), top: Math.min(...pills.map(r => r.top)),
           right: Math.max(...pills.map(r => r.right)), bottom: Math.max(...pills.map(r => r.bottom))
         } : null;
-        const ncs = getComputedStyle(s.querySelector('.no'));
+        const ncs = getComputedStyle(noEl);
         return {
-          seat: s.querySelector('.no').textContent,
+          seat: s.dataset.seat,
           icon: { l:icon.left,t:icon.top,r:icon.right,b:icon.bottom,w:icon.width,h:icon.height },
           no: { l:no.left,t:no.top,r:no.right,b:no.bottom,w:no.width,h:no.height },
           nm: { l:nm.left,t:nm.top,r:nm.right,b:nm.bottom },
@@ -356,6 +359,101 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         if (n === 12 && tag === '375') await cdp.shot('lobby-after-12-375');
       }
     }
+
+    // t140: numbers stay on the physical seats when occupants move. 10-seat room, self 1→9→6,
+    // then a second player moves. Angles come from the clockwise index (seat 1 at the top),
+    // not from a hardcoded screen side for seat 9 or 6.
+    await setSize(375, 812);
+    await setCap(10);
+    const settled = () => cdp.eval(`new Promise(r => { const t = setInterval(() => { if (![...document.querySelectorAll('.rt .st')].some(e => e.style.transform || e.style.transition)) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 2500); })`);
+    const ringExpr = `(() => {
+      const rt = document.querySelector('.rt').getBoundingClientRect();
+      const nums = [...document.querySelectorAll('.rt > .no')].map(n => {
+        const r = n.getBoundingClientRect();
+        return { seat: n.dataset.seat, label: n.textContent.trim(), x: r.left + r.width / 2, y: r.top + r.height / 2, inside: !!n.closest('.st'), moved: !!n.style.transform };
+      });
+      const host = document.querySelector('.rt .hostpill');
+      const seat = host ? host.closest('.st') : null;
+      const icon = seat && (seat.querySelector('.av') || seat.querySelector('.av-empty'));
+      const ir = icon ? icon.getBoundingClientRect() : null;
+      return {
+        cx: rt.left + rt.width / 2, cy: rt.top + rt.height / 2,
+        head: (document.querySelector('.rhead') || {}).textContent || '',
+        hostSeat: seat ? seat.dataset.seat : '',
+        hostName: seat ? (seat.querySelector('.nm') || {}).textContent || '' : '',
+        icon: ir ? { x: ir.left + ir.width / 2, y: ir.top + ir.height / 2 } : null,
+        nums
+      };
+    })()`;
+    await settled();
+    await sleep(80);
+    const ring = await cdp.eval(ringExpr);
+    assert(ring.nums.length === 10 && ring.nums.every(n => !n.inside && !n.moved && n.label === n.seat), 'numbers are fixed labels on the table, not inside a seat');
+    const canon = (seat, count) => (-90 + (seat - 1) * 360 / count) * Math.PI / 180;
+    const norm = (d) => { while (d <= -Math.PI) d += Math.PI * 2; while (d > Math.PI) d -= Math.PI * 2; return d; };
+    const seen = (snap, label) => {
+      assert(snap.nums.length === ring.nums.length, label + ' still has every seat number');
+      for (const n of snap.nums) {
+        const was = ring.nums.find(w => w.seat === n.seat);
+        assert(was && n.label === was.label, label + ' label ' + n.seat + ' stayed ' + (was && was.label));
+        assert(Math.hypot(n.x - was.x, n.y - was.y) <= 1.5, label + ' number ' + n.seat + ' stayed put (' + Math.hypot(n.x - was.x, n.y - was.y).toFixed(2) + 'px)');
+        const ang = Math.atan2(n.y - snap.cy, n.x - snap.cx);
+        assert(Math.abs(norm(ang - canon(Number(n.seat), 10))) < 0.12, label + ' number ' + n.seat + ' is on its canonical angle');
+      }
+      const one = snap.nums.find(n => n.seat === '1');
+      assert(one && one.y < snap.cy - 8 && Math.abs(one.x - snap.cx) < 8, label + ' number 1 is still at the top');
+    };
+    const atSeat = (snap, seat, who) => {
+      assert(snap.hostSeat === String(seat), who + ' own-seat indicator is seat ' + seat + ' (got ' + snap.hostSeat + ')');
+      assert(snap.head.includes(seat + '號座'), who + ' header shows ' + seat + '號座');
+      const ang = Math.atan2(snap.icon.y - snap.cy, snap.icon.x - snap.cx);
+      assert(Math.abs(norm(ang - canon(seat, 10))) < 0.15, who + ' avatar is on canonical seat ' + seat);
+    };
+    seen(ring, 'start');
+    atSeat(ring, 1, 'host');
+    const sit = async (seat) => {
+      const ok = await cdp.eval(`(() => { const el = document.querySelector('.rt .st.empty[data-seat="${seat}"]'); if (!el) return 0; el.click(); return 1; })()`);
+      assert(ok, 'clicked empty seat ' + seat);
+      const shown = await cdp.eval(`new Promise(r => { const t = setInterval(() => { const h = document.querySelector('.rhead'); if (h && h.textContent.includes('${seat}號座')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 4000); })`);
+      assert(shown, 'header updated to seat ' + seat);
+      await settled();
+      await sleep(80);
+    };
+    await sit(9);
+    const at9 = await cdp.eval(ringExpr);
+    seen(at9, 'after 1→9');
+    atSeat(at9, 9, 'host');
+    await sit(6);
+    const at6 = await cdp.eval(ringExpr);
+    seen(at6, 'after 9→6');
+    atSeat(at6, 6, 'host');
+    const { io } = require('socket.io-client');
+    const code = await cdp.eval(`document.querySelector('.top-code').textContent.trim()`);
+    const bot = io(APP, { transports: ['websocket'], forceNew: true });
+    const bst = { st: null };
+    bot.on('state', st => { bst.st = st; });
+    const bemit = (e, d) => new Promise(r => bot.emit(e, d, r));
+    await new Promise(r => bot.on('connect', r));
+    await bemit('hello', { pid: 'mvB' + Math.random().toString(36).slice(2, 7), name: '乙座' });
+    await bemit('join', { code });
+    assert((await bemit('act', { type: 'sit', data: { seat: 3 } })).ok, 'second player sits seat 3');
+    await cdp.eval(`new Promise(r => { const t = setInterval(() => { if ([...document.querySelectorAll('.rt .nm')].some(n => n.textContent === '乙座')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 4000); })`);
+    await settled();
+    await sleep(80);
+    const withB = await cdp.eval(ringExpr);
+    seen(withB, 'second player seated');
+    atSeat(withB, 6, 'host');
+    assert((await cdp.eval(`document.querySelector('.rt .st[data-seat="3"] .nm').textContent`)) === '乙座', 'second player avatar is on seat 3');
+    assert((await bemit('act', { type: 'sit', data: { seat: 8 } })).ok, 'second player moves to seat 8');
+    await cdp.eval(`new Promise(r => { const t = setInterval(() => { const s = document.querySelector('.rt .st[data-seat="8"] .nm'); if (s && s.textContent === '乙座') { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 4000); })`);
+    await settled();
+    await sleep(80);
+    const movedB = await cdp.eval(ringExpr);
+    seen(movedB, 'second player moved');
+    atSeat(movedB, 6, 'host');
+    assert((await cdp.eval(`document.querySelector('.rt .st[data-seat="8"] .nm').textContent`)) === '乙座', 'second player avatar arrived on seat 8');
+    assert((await cdp.eval(`document.querySelector('.rt .st[data-seat="3"] .nm').textContent`)) === '空位', 'seat 3 is empty again');
+    bot.close();
     console.log('ALL UI LAYOUT CHECKS PASSED');
   } finally {
     chrome.kill('SIGKILL');

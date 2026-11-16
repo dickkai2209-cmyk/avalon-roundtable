@@ -928,13 +928,13 @@ img,canvas,svg,video{max-width:100%}
 .rt .st{width:84px;margin-left:-42px;margin-top:calc(var(--av, 58px) / -2);overflow:visible}
 .rt .st .av-empty,.rt .st.empty .av-empty{width:var(--av, 58px);height:var(--av, 58px);font-size:calc(var(--av, 58px) * .48);margin:0 auto}
 .rt{container-type:inline-size}
-.rt .st .no{
-  top:calc(var(--av, 58px) / 2);
+/* Numerals are fixed to the physical slot, not children of the moving occupant. */
+.rt > .no{
+  position:absolute;z-index:2;pointer-events:none;margin:0;padding:0;
+  width:auto;height:auto;line-height:1;border-radius:0;box-shadow:none;
+  background:none !important;border:0 !important;
   font-size:12px;font-weight:500;color:#c5c9d4 !important;
-  transform:translate(-50%,-50%) translate(
-    calc(var(--inx) * (var(--seat-r) - var(--num-r)) * 1cqi),
-    calc(var(--iny) * (var(--seat-r) - var(--num-r)) * 1cqi)
-  );
+  transform:translate(-50%,-50%);
 }
 /* Name box hugs the glyphs and stays centred, so the shared number ring is not blocked by an 84px label slab. */
 .rt .st .nm,.st-meta .nm{width:max-content;max-width:76px;margin-left:auto;margin-right:auto;line-height:1}

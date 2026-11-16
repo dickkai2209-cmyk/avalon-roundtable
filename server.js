@@ -878,6 +878,7 @@ async function flushRooms() {
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { flushRooms().finally(() => process.exit(0)); setTimeout(() => process.exit(0), 4000).unref(); });
 
 db.init().then(async () => {
+  try { const c = await db.findGMCandidates(); console.log('GM config: email=' + (process.env.GM_EMAIL || '-') + ' id=' + (process.env.GM_USER_ID || '-') + ' candidates=' + JSON.stringify(c.map(u => ({ id: u.id, username: u.username, name: u.name, email: u.email, google: u.google, gm: db.isGM({ ...u, google_sub: u.google ? 1 : null }) })))); } catch (e) { console.error('gm', e.message); }
   if (process.env.PURGE_TEST_DATA !== '0') { try { const r = await db.purgeTestData(); if (r.users) console.log('purged test data', JSON.stringify(r)); } catch (e) { console.error('purge', e.message); } }
 }).then(restoreRooms).then(() => {
   server.listen(PORT, () => console.log('旺角阿瓦隆 on :' + PORT, 'db=' + db.mode()));

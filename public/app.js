@@ -123,7 +123,8 @@ if (pendingJoin) history.replaceState(null, '', '/');
 let autoRoom = true;
 
 ensureSession().then(() => { if (view === 'home') render(); }).catch(() => {}); // start auth in parallel with the socket handshake
-const socket = io({ transports: ['websocket', 'polling'], query: { diff: '1' } });
+// polling-first then upgrade: measured faster first connect through Render/Cloudflare (≈2 RTT vs ≈4 RTT for a direct WS handshake)
+const socket = io({ transports: ['polling', 'websocket'], query: { diff: '1' } });
 const helloProfile = () => ({ name: profile.name, avatar: profile.avatar, bg: profile.bg, fx: profile.fx, pendant: profile.pendant });
 socket.on('connect', () => {
   $('#conn').classList.add('on');

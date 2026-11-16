@@ -199,6 +199,17 @@ socket.on('state', (st) => {
   if (st.game && ['vote', 'quest', 'end'].includes(st.game.phase)) selected = new Set();
   if (st.game && prev && prev.game && prev.game.phase !== st.game.phase) selected = new Set();
   S = st;
+  if (st && st.myAvoidResult && st.myAvoidResult.gid) {
+    const prevR = prev && prev.myAvoidResult;
+    if (!prevR || prevR.gid !== st.myAvoidResult.gid) {
+      const r = st.myAvoidResult;
+      const nm = (ROLE[r.role] && ROLE[r.role].n) || '';
+      if (r.status === 'applied') toast(isGM() ? `已避開${nm}（GM 無限，冇扣減）` : `已避開${nm}，開局扣咗 1 張迴避卡`, 'ok');
+      else if (r.status === 'conflict') toast(`今局避開唔到${nm}，冇扣卡`);
+      else if (r.status === 'inactive') toast(`${nm}唔喺本局陣容，冇扣卡`);
+      else if (r.status === 'insufficient') toast('冇迴避卡，今局冇套用');
+    }
+  }
   if (autoRoom && view === 'home' && st.code) { autoRoom = false; view = 'room'; }
   handleEvent(st);
   if (view === 'room' || view === 'home') render();
@@ -534,6 +545,24 @@ function editProfile(after, startTab) {
     else avHost.insertAdjacentHTML('afterbegin', avHtml);
     const face = avHost.querySelector('.av img');
     if (face && d._photo && d.avatar === 'photo') face.src = d._photo;
+    replayEntrancePreview(el, d._fxPreview);
+  };
+  const replayEntrancePreview = (root, key) => {
+    const wrap = root.querySelector('.pe-av .av-wrap');
+    if (!wrap) return;
+    const body = root.querySelector('.pe-body');
+    const sheet = root.closest('.sheet');
+    const keep = { b: body ? body.scrollTop : 0, s: sheet ? sheet.scrollTop : 0, x: window.scrollX, y: window.scrollY };
+    const row = root.querySelector('.pe-top');
+    if (row) row.className = 'pe-top';
+    FXS.forEach(([k]) => wrap.classList.remove('fx-' + k));
+    wrap.classList.remove('enter');
+    // Restart the demonstration on the player's own avatar. Do not rebuild the modal.
+    void wrap.offsetWidth;
+    if (key && key !== 'none' && FXS.some(x => x[0] === key)) wrap.classList.add('fx-' + key);
+    if (body) body.scrollTop = keep.b;
+    if (sheet) sheet.scrollTop = keep.s;
+    if (window.scrollX !== keep.x || window.scrollY !== keep.y) window.scrollTo(keep.x, keep.y);
   };
   const markSel = (root, sel, btn) => { $$(sel, root).forEach(x => { x.classList.toggle('sel', x === btn); const ck = x.querySelector('.ck'); if (x === btn) { if (!ck) x.insertAdjacentHTML('beforeend', '<span class="ck">✓</span>'); } else if (ck) ck.remove(); }); };
   const pickMsg = (name) => toast(`已選擇：${name}，按保存套用`);
@@ -626,16 +655,26 @@ function editProfile(after, startTab) {
       const avEl = el.querySelector('.pe-av .av'); if (avEl) avEl.style.background = d.bg;
       pickMsg('背景顏色');
     });
-    $$('[data-fx]', el).forEach(b => b.onclick = () => {
-      if (!fxUnlocked(b.dataset.fx)) return toast('再玩多幾場即可解鎖此外觀');
-      d.fx = b.dataset.fx;
-      $$('[data-fx]', el).forEach(x => x.classList.toggle('sel', x === b));
-      const stage = el.querySelector('.pe-av');
-      // replay preview on top avatar wrap
-      const wrap = el.querySelector('.pe-top');
-      if (wrap) { wrap.className = 'pe-top' + (d.fx && d.fx !== 'none' ? ' enter fx-' + d.fx : ''); }
-      const it = FXS.find(x => x[0] === d.fx);
-      pickMsg(it ? it[1] : '入場特效');
+    $$('[data-fx]', el).forEach(b => {
+      b.onpointerdown = (ev) => { ev.preventDefault(); };
+      b.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const k = b.dataset.fx;
+        const it = FXS.find(x => x[0] === k);
+        if (!it) return;
+        const unlocked = fxUnlocked(k);
+        // Preview never grants the effect. Only an unlocked choice is sent on 保存.
+        if (unlocked) {
+          d.fx = k;
+          $$('[data-fx]', el).forEach(x => x.classList.toggle('sel', x.dataset.fx === k));
+        }
+        d._fxPreview = k;
+        $$('[data-fx]', el).forEach(x => x.classList.toggle('prev', x.dataset.fx === k));
+        replayEntrancePreview(el, k);
+        if (unlocked) pickMsg(it[1]);
+        else toast(`預覽：${it[1]}（未解鎖，不會套用）`);
+      };
     });
     $$('[data-pd]', el).forEach(b => b.onclick = () => {
       const k = b.dataset.pd;
@@ -717,6 +756,61 @@ function roomHead() {
   if (!left.length && !right) return '';
   return `<div class="rhead compact"><div class="rh-sub">${left.join(' · ')}${(left.length || right) && right ? '<span class="grow"></span>' : ''}${right}</div></div>`;
 }
+function avoidFab() {
+  if (!S || (S.game && S.game.phase !== 'end')) return '';
+  const vc = S.myVetoCards == null ? (account && account.vetoCards) : S.myVetoCards;
+  const picked = S.myAvoid && ROLE[S.myAvoid] ? ROLE[S.myAvoid].n : '';
+  return `<button type="button" class="avoid-fab" data-a="avoid" aria-label="迴避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>迴避卡</span><b>${vetoAmt(vc)}</b>${picked ? `<i>${esc(picked)}</i>` : ''}</button>`;
+}
+function openAvoidSheet() {
+  const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards);
+  const broke = !isGM() && !(Number(vc) > 0);
+  const pr = (S && S.preset) || { good: [], evil: [] };
+  const uniq = (arr) => [...new Set(arr || [])].filter(k => ROLE[k]);
+  const groups = { good: uniq(pr.good), evil: uniq(pr.evil) };
+  let pick = (S && S.myAvoid) || '';
+  const tile = (k) => `<button type="button" class="avoid-tile${pick === k ? ' sel' : ''}" data-role="${k}" aria-pressed="${pick === k ? 'true' : 'false'}">${roleFace(k, 'classic', true)}</button>`;
+  openModal(`<div class="avoid-sheet"><h2>這局避開誰？</h2>
+    <div class="avoid-inv">迴避卡 <b>${vetoAmt(vc)}</b>${isGM() ? '' : '<span>/10</span>'}</div>
+    <p class="avoid-note">私人選擇，其他玩家同觀戰者睇唔到。</p>
+    <p class="avoid-note">開局時先扣 1 張。關閉或取消唔會扣。</p>
+    <div class="avoid-side good">藍方</div><div class="avoid-grid">${groups.good.map(tile).join('') || '<div class="avoid-note">沒有可選角色</div>'}</div>
+    <div class="avoid-side evil">紅方</div><div class="avoid-grid">${groups.evil.map(tile).join('') || '<div class="avoid-note">沒有可選角色</div>'}</div>
+    <button type="button" class="btn" id="avoid-ok" ${broke ? 'disabled' : ''}>${broke ? '沒有迴避卡' : '請揀一個角色'}</button>
+    ${pick ? '<button type="button" class="btn ghost" id="avoid-clear">取消今局選擇</button>' : ''}
+    <button type="button" class="btn ghost" id="avoid-x">關閉</button></div>`, (el) => {
+    const paint = () => {
+      el.querySelectorAll('.avoid-tile').forEach(b => {
+        const on = b.dataset.role === pick;
+        b.classList.toggle('sel', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      const ok = $('#avoid-ok', el);
+      if (broke) { ok.disabled = true; ok.textContent = '沒有迴避卡'; return; }
+      ok.disabled = !pick;
+      ok.textContent = pick ? `確認避開${ROLE[pick].n}` : '請揀一個角色';
+    };
+    paint();
+    el.querySelectorAll('.avoid-tile').forEach(b => b.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      pick = b.dataset.role;
+      paint();
+    }));
+    $('#avoid-ok', el).addEventListener('click', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!pick || broke) return;
+      const r = await act('avoid', { role: pick });
+      if (r && r.ok) { closeModal(); toast('已選擇，開局時先扣卡', 'ok'); }
+    });
+    const clr = $('#avoid-clear', el);
+    if (clr) clr.addEventListener('click', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const r = await act('avoid', { role: '' });
+      if (r && r.ok) { closeModal(); toast('已取消選擇'); }
+    });
+    $('#avoid-x', el).addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeModal(); });
+  });
+}
 function presetCard(pr) {
   if (!pr) return '';
   const g = (pr.good||[]).map(k => RN[k]||k);
@@ -726,12 +820,17 @@ function presetCard(pr) {
   const el = e.filter(x=>x!=='爪牙'); if (ec) el.push(`爪牙×${ec}`);
   return `<div class="preset"><div class="blue"><b>藍方 ${pr.good.length}</b>${gl.map(v => `<span class="pill">${v}</span>`).join('')}</div><div class="red"><b>紅方 ${pr.evil.length}</b>${el.map(v => `<span class="pill">${v}</span>`).join('')}</div></div>`;
 }
-function roleFace(role, skin = 'classic', small) {
-  const r = ROLE[role] || { n: RN[role], side: (role||'').includes('evil')?'evil':'good', en: '' };
+function skinArt(role, skin = 'classic') {
   let art = ROLE_ART[role] || role;
   if (OUTFIT_ROLES.includes(role) && (skin === 'casual' || skin === 'festive')) art = `${role}_${skin}`;
-  return `<div class="rc ${r.side||'good'} sk-${skin}"><div class="art" style="background-image:url(${img(art)})"></div>
-    <div class="cap">${small ? `<div class="rn" style="font-size:13px;letter-spacing:1px">${r.n||RN[role]}</div>` : `<div class="side">${(r.side==='good') ? '亞瑟的忠誠陣營' : '莫德雷德的爪牙陣營'}</div><div class="rn">${r.n||RN[role]||''}</div><div class="en">${r.en||''}</div>`}</div></div>`;
+  return art;
+}
+function roleFace(role, skin = 'classic', small) {
+  const r = ROLE[role] || { n: RN[role], side: (role||'').includes('evil')?'evil':'good', en: '' };
+  const cap = small
+    ? `<div class="rn">${r.n || RN[role] || ''}</div>`
+    : `<div class="side">${r.side === 'good' ? '亞瑟的忠誠陣營' : '莫德雷德的爪牙陣營'}</div><div class="rn">${r.n || RN[role] || ''}</div><div class="en">${r.en || ''}</div>`;
+  return `<div class="rc ${r.side || 'good'} sk-${skin}"><div class="art" style="background-image:url(${img(skinArt(role, skin))})"></div><div class="cap">${cap}</div></div>`;
 }
 
 function knowRing(items, o) {
@@ -748,29 +847,46 @@ function knowRing(items, o) {
   }).join('');
   return `<div class="kring"><div class="kcen"><span class="tiny">你係</span><b class="${o.side}">${esc(o.role)}</b><span class="tiny">睇到 ${o.n} 人</span></div>${seats}</div>`;
 }
-function seatInwardStyle(x, y, a) {
-  const inx = -Math.cos(a), iny = -Math.sin(a);
-  // Extra offset when inward is downward (clear name/host pills) or upward (clear wolf-ear pendants)
-  const extra = iny > 0.35 ? 30 : (iny < -0.35 ? 18 : 0);
-  return `left:${x}%;top:${y}%;--inx:${inx.toFixed(3)};--iny:${iny.toFixed(3)};--inoff:${48 + extra}px`;
+function canonicalSlots(seats) {
+  // Seat 1 is always index 0 (top of the table), then clockwise. Placement uses the
+  // seat id, never the viewer's own seat and never the order of occupied players.
+  const n = seats.length;
+  const slots = Array.from({ length: n }, (_, i) => ({ empty: true, seat: i + 1 }));
+  seats.forEach((s, i) => {
+    const seatNo = Math.round((s && s.seat) || (i + 1));
+    if (seatNo < 1 || seatNo > n) return;
+    slots[seatNo - 1] = (s && !s.empty && s.id) ? { ...s, seat: seatNo } : { empty: true, seat: seatNo };
+  });
+  return slots;
 }
 function roundTable(seats, o = {}) {
-  const n = seats.length; const R = 35;
-  const avSize = o.avSize || (n >= 10 ? 56 : 60);
-  const st = seats.map((s, i) => {
-    const a = (-90 + i * 360 / n) * Math.PI / 180; const x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a);
-    const seatNo = (s && s.seat) || (i + 1);
-    const pos = seatInwardStyle(x, y, a);
+  const n = seats.length;
+  // Large ring: icon centres sit near the card edge so the middle stays open (5–12 seats).
+  const R = n >= 12 ? 39 : n >= 10 ? 40 : 42;
+  // One numeral radius for every seat: 0.55 of the avatar-centre ring (target ~190/350).
+  // Same angle as the icon, so avatar-centre to number-centre distance is identical.
+  const numR = Math.round(R * 0.55 * 10) / 10;
+  const avSize = o.avSize || (n >= 12 ? 46 : n >= 10 ? 52 : 58);
+  const nums = [];
+  const st = canonicalSlots(seats).map((s, i) => {
+    const seatNo = i + 1;
+    const a = (-90 + i * 360 / n) * Math.PI / 180;
+    const x = 50 + R * Math.cos(a), y = 50 + R * Math.sin(a);
+    const nx = 50 + numR * Math.cos(a), ny = 50 + numR * Math.sin(a);
+    // Numbers are siblings of the seats, fixed to the physical slot. The seat node
+    // is what the move animation translates, so the numeral must not live inside it.
+    nums.push(`<span class="no" data-seat="${seatNo}" style="left:${nx}%;top:${ny}%">${seatNo}</span>`);
+    const pos = `left:${x}%;top:${y}%;--av:${avSize}px`;
     if (!s || s.empty) {
-      return `<div class="st empty click" style="${pos}" data-a="sit" data-seat="${seatNo}"><span class="no">${seatNo}</span><div class="av-empty">+</div><div class="nm">空位</div></div>`;
+      return `<div class="st empty click" style="${pos}" data-a="sit" data-seat="${seatNo}"><div class="av-empty">+</div><div class="nm">空位</div></div>`;
     }
     const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '') + (enterIds.has(s.id) ? ` enter fx-${s.fx || 'spot'}` : '');
     const action = o.action || 'sel';
     const extra = o.click && o.click(s, i) ? `data-a="${action}" data-id="${s.id}"` : (o.seatClick ? `data-a="${o.seatClick}" data-id="${s.id}" data-seat="${seatNo}"` : '');
     return `<div class="st ${cls}" style="${pos}" data-sid="${s.id}" ${extra}>
-      <span class="no">${seatNo}</span><div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, avSize)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
+      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, avSize)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
   }).join('');
-  return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="#7a5200" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="#7a5200"/><circle cx="13.8" cy="10.3" r="1.2" fill="#7a5200"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="#7a5200" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="#7a5200" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${st}</div>`;
+  return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="currentColor"/><circle cx="13.8" cy="10.3" r="1.2" fill="currentColor"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${nums.join('')}${st}</div>`;
 }
 function trackHtml(g) {
   return `<div class="track">${g.teamSizes.map((sz, i) => {
@@ -1086,12 +1202,12 @@ function lobbyHtml() {
   const vc = S.myVetoCards == null ? (account && account.vetoCards) : S.myVetoCards;
   const specBar = S.spectating ? `<div class="specbar">👁 觀戰中${(S.spectators||[]).length ? ' · ' + S.spectators.length + ' 人' : ''}</div>${(S.spectators||[]).length ? `<div class="speclist">${S.spectators.map(p => `<span class="spec-i">${av(p,22)}<i>${esc(p.name)}</i></span>`).join('')}</div>` : ''}` : ((S.spectators||[]).length ? `<div class="speclist">${S.spectators.map(p => `<span class="spec-i">${av(p,22)}<i>${esc(p.name)}</i></span>`).join('')}</div>` : '');
   return `${roomHead()}${specBar}
-  <div class="card" style="padding:10px">${roundTable(S.seats, {
+  <div class="card tbl">${roundTable(S.seats, {
       seatClick: 'seat', emote: true,
       marker: p => (p.ready ? '✅' : ''),
       cls: p => (p.isHost || p.id === S.hostId ? 'host' : ''),
       sub: p => (p.isHost || p.id === S.hostId ? '<span class="hostpill">房主</span>' : '') + (p.id === S.meId ? '<span class="mepill">我</span>' : ''),
-      center: `<div class="seatcount"><b>${x}/${n}</b><span>已就座</span></div>` })}
+      center: `<div class="seatcount"><b>${x}<small>/${n}</small></b><span>已就座</span></div>` })}
     </div>
   <div class="card cfgcard" data-a="cfg">
     <div class="row between"><h3 style="margin:0">${n} 人局</h3><span class="small gold">${host ? '調整 ›' : '查看 ›'}</span></div>
@@ -1101,7 +1217,7 @@ function lobbyHtml() {
   <div class="bottombar">${s.veto ? `<div class="veto-ic" data-a="vetoinfo" title="回避卡"><img src="/img/veto_t.webp" alt="" width="24" height="32"><b>${vetoAmt(vc)}</b></div>` : `<div class="thumb" data-a="role"></div>`}
     ${host ? `<button class="btn" data-a="start" ${x === n ? '' : 'disabled'}>開始遊戲（${x}/${n}）</button>` :
       S.mySeat ? `<button class="btn ${me && me.ready ? 'ghost' : ''}" data-a="ready">${me && me.ready ? '已準備 ✓' : '準備'}</button>` : `<button class="btn ghost" disabled>觀戰中 · 點空位即可就座</button>`}
-  </div>`;
+  </div>${avoidFab()}`;
 }
 function gameHtml() {
   const g = S.game; const me = g.me; const meId = S.meId;
@@ -1164,7 +1280,7 @@ function gameHtml() {
   <div class="btns"><button class="btn dark" data-a="invite">房間二維碼</button><button class="btn dark" data-a="go" data-v="home">返回主頁</button></div>
   ${S.isHost && !ended ? '<button class="btn dark" data-a="abort" style="color:#ff8b9c">強制結束本局</button>' : ''}
   ${g.settings.veto && me && !ended ? `<button type="button" class="veto-fab ${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'ready' : 'dim'}" data-a="${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'veto' : 'vetoinfo'}" aria-label="回避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>回避卡</span><b>${vetoAmt(me.vetoCards != null ? me.vetoCards : S.myVetoCards)}</b></button>` : ''}
-  ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}`;
+  ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}${ended ? avoidFab() : ''}`;
 }
 function ladyChainHtml(log, seats) {
   if (!log || !log.length) return '';
@@ -1320,6 +1436,75 @@ function skinsHtml() {
       <div class="skinrow" style="margin-top:10px">${skinsFor(k).map(s => `<div class="skin ${played >= s.need ? '' : 'lock'} ${cur === s.id ? 'sel' : ''}" data-a="skin" data-r="${k}" data-s="${s.id}">${roleFace(k, s.id, true)}<div style="margin-top:4px">${s.n}${played >= s.need ? '' : ` 🔒${s.need}場`}</div></div>`).join('')}</div>
       ${next ? `<div class="tiny muted" style="margin-top:6px">下一款「${next.n}」：${played}/${next.need} 場</div><div class="bar"><i style="width:${pct(played, next.need)}%"></i></div>` : '<div class="tiny gold" style="margin-top:6px">已解鎖全部皮膚 ✦</div>'}</div>`;
   }).join('');
+}
+function equipSkin(role, skinId) {
+  const sk = SKINS.find(k => k.id === skinId);
+  const played = rolePlayed(role);
+  if (!sk || played < sk.need) return Promise.reject(new Error('locked'));
+  if (skinOf(role) === skinId) return Promise.resolve(false);
+  const prev = { ...skinSel };
+  skinSel[role] = skinId;
+  $$(`.skin[data-a="skin"][data-r="${role}"]`).forEach(x => x.classList.toggle('sel', x.dataset.s === skinId));
+  const label = `${(ROLE[role] || {}).n || role} · ${sk.n}`;
+  return saveSkins(prev).then(() => { toast(`已換上：${label}`, 'ok'); return true; })
+    .catch((err) => {
+      skinSel = prev;
+      $$(`.skin[data-a="skin"][data-r="${role}"]`).forEach(x => x.classList.toggle('sel', x.dataset.s === (prev[role] || 'classic')));
+      toast('儲存失敗，已恢復原先選擇', 'bad');
+      throw err;
+    });
+}
+function openSkinPreview(role, skinId) {
+  const sk = SKINS.find(k => k.id === skinId);
+  const meta = ROLE[role] || { n: RN[role] || role, en: '', side: 'good' };
+  if (!sk) return;
+  const played = rolePlayed(role);
+  const locked = played < sk.need;
+  const equipped = skinOf(role) === skinId;
+  const rows = [...document.querySelectorAll('.skinrow')].map(el => el.scrollLeft);
+  const y = window.scrollY;
+  const prev = document.querySelector('.skinprev');
+  if (prev) prev.remove();
+  const req = locked ? `再玩 ${sk.need - played} 場${meta.n}即可解鎖` : '';
+  const ov = document.createElement('div');
+  ov.className = 'skinprev';
+  ov.setAttribute('role', 'dialog');
+  ov.setAttribute('aria-modal', 'true');
+  ov.setAttribute('aria-label', `${meta.n} ${sk.n}`);
+  ov.innerHTML = `<div class="sp-sheet">
+      <div class="sp-frame">
+        <img class="sp-img sk-${sk.id}" src="${img(skinArt(role, skinId))}" alt="${esc(meta.n)} ${esc(sk.n)}">
+        <div class="cap"><div class="rn">${esc(meta.n)}</div>${meta.en ? `<div class="en">${esc(meta.en)}</div>` : ''}</div>
+      </div>
+      <div class="sp-sub">${esc(meta.n)} · ${esc(sk.n)}</div>
+      <button type="button" class="btn" id="sp-eq" ${locked || equipped ? 'disabled' : ''}>${esc(equipped ? '使用中' : (locked ? req : '換上'))}</button>
+      <button type="button" class="btn ghost" id="sp-x">關閉</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = () => {
+    document.removeEventListener('keydown', onKey, true);
+    if (ov.parentNode) ov.remove();
+    const live = document.querySelectorAll('.skinrow');
+    rows.forEach((v, i) => { if (live[i]) live[i].scrollLeft = v; });
+    window.scrollTo(0, y);
+  };
+  function onKey(e) {
+    if (e.key !== 'Escape' || !document.body.contains(ov)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    close();
+  }
+  document.addEventListener('keydown', onKey, true);
+  $('#sp-x', ov).onclick = (e) => { e.preventDefault(); e.stopPropagation(); close(); };
+  ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+  const eq = $('#sp-eq', ov);
+  if (eq && !eq.disabled) eq.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    equipSkin(role, skinId).then(() => { eq.disabled = true; eq.textContent = '使用中'; }).catch(() => {});
+  };
+  const x = $('#sp-x', ov);
+  if (x && x.focus) x.focus({ preventScroll: true });
 }
 
 // ================= rules =================
@@ -1685,6 +1870,7 @@ document.addEventListener('click', async (e) => {
     case 'cfg': cfgOpen = true; openModal(cfgSheetHtml()); cfgOpen = true; return;
     case 'cfgclose': return closeModal();
     case 'emote': return toggleEmotes(el);
+    case 'avoid': return openAvoidSheet();
     case 'vetoinfo': { const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards); return openModal(`<div class="vuse"><img src="/img/veto.webp" alt="回避卡" width="150" height="200"></div><div class="center name">${isGM() ? '∞' : vetoAmt(vc) + ' / 10'}</div><p class="small muted center">${isGM() ? 'GM 回避卡為無限（∞），使用時唔會扣減，但仍要喺投票階段且身為隊員，每局只可以用一次。' : '每贏一局 +1 張（上限 10 張），永久保存在帳號。房間開啟「回避卡」時，投票階段身為隊員可用一張退出隊伍，本次組隊作廢且不計否決。'}</p><button type="button" class="btn" id="ok">知道了</button>`, el2 => $('#ok', el2).onclick = closeModal); }
     case 'shiny': {
       if (mvpTotal() < 10) return toast('達成「10次MVP」即可解鎖');
@@ -1789,17 +1975,7 @@ document.addEventListener('click', async (e) => {
     case 'poster': return posterDialog();
     case 'story': return storySheet(window.__lastRecord);
     case 'storystats': return storySheet(null);
-    case 'skin': {
-      const r = el.dataset.r, s = el.dataset.s; const sk = SKINS.find(k => k.id === s); const played = rolePlayed(r);
-      if (played < sk.need) return toast(`再玩 ${sk.need - played} 場${(ROLE[r]||{}).n||r}即可解鎖`);
-      if (skinSel[r] === s) return;
-      const prev = { ...skinSel }; skinSel[r] = s;
-      $$(`.skin[data-a="skin"][data-r="${r}"]`).forEach(x => x.classList.toggle('sel', x.dataset.s === s));
-      const label = `${(ROLE[r]||{}).n || r} · ${sk.n}`;
-      saveSkins(prev).then(() => toast(`已換上：${label}`, 'ok'))
-        .catch(() => { $$(`.skin[data-a="skin"][data-r="${r}"]`).forEach(x => x.classList.toggle('sel', x.dataset.s === (prev[r] || 'classic'))); toast('儲存失敗，已恢復原先選擇', 'bad'); });
-      return;
-    }
+    case 'skin': return openSkinPreview(el.dataset.r, el.dataset.s);
     case 'rtab': rulesTab = el.dataset.v; if (rulesTab === 'round') demoStep = 0; return mountRules();
     case 'wk': wkRole = el.dataset.r; return mountRules();
     case 'wkrev': wkReveal = !wkReveal; return mountRules();

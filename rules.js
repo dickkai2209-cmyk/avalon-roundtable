@@ -70,6 +70,43 @@ function canPlayFail(role, switched) {
 
 function needTwoFails(n, round) { return n >= 7 && round === 3; }
 
+// Pregame role avoidance. `avoids[i]` is a role key or null, aligned with `roles`.
+// Status:
+//   none        — no choice
+//   inactive    — chosen role is not in this deal (no effect)
+//   applied     — player did not receive the chosen role
+//   conflict    — the choice could not be honoured; player still has that role
+// The returned assignment is always a permutation of `roles`.
+function resolveAvoidance(avoids, roles) {
+  const n = roles.length;
+  const assign = roles.slice();
+  const result = avoids.map(role => ({ role: role || null, status: role ? 'pending' : 'none' }));
+  for (let i = 0; i < n; i++) {
+    if (avoids[i] && !roles.includes(avoids[i])) result[i].status = 'inactive';
+  }
+  const active = i => !!(avoids[i] && result[i].status !== 'inactive');
+  const violates = (i, role) => active(i) && role === avoids[i];
+  let guard = n * n + 2;
+  let moved = true;
+  while (moved && guard--) {
+    moved = false;
+    for (let i = 0; i < n; i++) {
+      if (!active(i) || assign[i] !== avoids[i]) continue;
+      for (let j = 0; j < n; j++) {
+        if (j === i || assign[j] === avoids[i] || violates(j, assign[i])) continue;
+        const tmp = assign[i]; assign[i] = assign[j]; assign[j] = tmp;
+        moved = true;
+        break;
+      }
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    if (!active(i)) continue;
+    result[i].status = assign[i] === avoids[i] ? 'conflict' : 'applied';
+  }
+  return { assign, result };
+}
+
 function knowledge(seats, seat, switched) {
   // Use ORIGINAL roles (not switched sides) so mid-game swap doesn't rewrite opening info
   const role = seat.role; const out = [];
@@ -88,5 +125,5 @@ function knowledge(seats, seat, switched) {
 
 module.exports = {
   TEAM_SIZES, EVIL_COUNT, ROLE_SIDE, ROLE_NAME, PRESETS,
-  defaultSettings, presetRoles, currentSide, canPlayFail, needTwoFails, knowledge,
+  defaultSettings, presetRoles, currentSide, canPlayFail, needTwoFails, knowledge, resolveAvoidance,
 };

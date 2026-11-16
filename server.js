@@ -9,7 +9,7 @@ const db = require('./db');
 const { build: buildReview } = require('./review');
 const {
   TEAM_SIZES, EVIL_COUNT, ROLE_SIDE, ROLE_NAME,
-  defaultSettings, presetRoles, currentSide, canPlayFail, needTwoFails, knowledge,
+  defaultSettings, presetRoles, currentSide, canPlayFail, needTwoFails, knowledge, resolveAvoidance,
 } = require('./rules');
 
 const PORT = process.env.PORT || 3000;
@@ -102,6 +102,7 @@ function makeRoom(host) {
     capacity, seats: Array(capacity).fill(null),
     settings: defaultSettings(capacity),
     game: null, eventSeq: 0, members: new Set([host.pid]),
+    avoid: {}, avoidResult: {},
   };
   room.seats[0] = newPlayer(host.pid, host, 1);
   rooms.set(code, room);
@@ -142,13 +143,28 @@ function buildRoles(n, s) {
   return { roles: shuffle(good.concat(evil)) };
 }
 
-function startGame(room) {
+async function cardsOf(pid) {
+  if (!vetoCache.has(pid)) vetoCache.set(pid, await db.getVetoCards(pid));
+  return vetoCache.get(pid);
+}
+async function startGame(room) {
   const n = room.capacity;
   if (room.seats.some(s => !s)) return `還有空位（${seated(room).length}/${n}）`;
   const { roles, error } = buildRoles(n, room.settings);
   if (error) return error;
   const players = seated(room);
-  const seats = players.map((p, i) => ({ pid: p.pid, id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx, pendant: p.pendant, pv: p.pv || 0, role: roles[i] }));
+  room.avoid = room.avoid || {};
+  room.avoidResult = room.avoidResult || {};
+  const raw = players.map(p => room.avoid[p.pid] || null);
+  const cards = [];
+  for (const p of players) cards.push(await cardsOf(p.pid));
+  // A choice with no cards is not applied. GM inventory is 999, so it stays eligible.
+  const gated = raw.map((role, i) => (role && cards[i] > 0) ? role : null);
+  const { assign, result } = resolveAvoidance(gated, roles);
+  for (let i = 0; i < players.length; i++) {
+    if (raw[i] && cards[i] <= 0) result[i] = { role: raw[i], status: 'insufficient' };
+  }
+  const seats = players.map((p, i) => ({ pid: p.pid, id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx, pendant: p.pendant, pv: p.pv || 0, role: assign[i] }));
   const leader = crypto.randomInt(n);
   const lance = !!(room.settings.lancelot && seats.some(s => s.role === 'lancelot_good'));
   room.game = {
@@ -165,7 +181,23 @@ function startGame(room) {
     sword: null, swordFlipped: null,
     lance, lanceSwitched: false, lanceDeck: lance ? shuffle(['switch', 'switch', 'stay', 'stay', 'stay']) : [], lanceLog: [],
     vetoUsed: [], vetoBlocked: {},
+    avoidDebited: {},
   };
+  // Charge one card only when the deal honours the choice (final role is not the
+  // chosen role). Inactive, conflict, and insufficient choices are not charged.
+  // avoidDebited makes a second pass over this same game a no-op.
+  for (let i = 0; i < players.length; i++) {
+    const pid = players[i].pid;
+    if (!raw[i]) continue;
+    const status = result[i].status;
+    room.avoidResult[pid] = { gid: room.game.gid, status, role: raw[i] };
+    delete room.avoid[pid];
+    if (status === 'applied' && !room.game.avoidDebited[pid]) {
+      room.game.avoidDebited[pid] = true;
+      const left = await db.consumeVeto(pid);
+      if (left >= 0) vetoCache.set(pid, left);
+    }
+  }
   room.lastEvent = { seq: ++room.eventSeq, type: 'start' };
   return null;
 }
@@ -333,10 +365,24 @@ async function act(room, pid, type, data) {
       dropRoom(room.code);
       return 'dissolved';
     }
+    case 'avoid': {
+      if (g && g.phase !== 'end') return '遊戲進行中，下一局先可以改';
+      room.avoid = room.avoid || {};
+      const role = String((data && data.role) || '');
+      if (!role) {
+        delete room.avoid[pid];
+        return null;
+      }
+      if (!ROLE_SIDE[role]) return '無效角色';
+      const cards = await cardsOf(pid);
+      if (cards <= 0) return '你沒有迴避卡';
+      room.avoid[pid] = role;
+      return null;
+    }
     case 'start': {
       if (!isHost) return '只有房主可以開始';
       if (g && g.phase !== 'end') return '遊戲已開始';
-      const e = startGame(room);
+      const e = await startGame(room);
       if (!e && room.game) {
         room.game.vetoInv = {};
         for (const s of room.game.seats) { const c = await db.getVetoCards(s.pid).catch(() => 0); room.game.vetoInv[s.id] = c; vetoCache.set(s.pid, c); }
@@ -509,6 +555,8 @@ function viewFor(room, pid) {
     settings: room.settings, lastEvent: room.lastEvent ? (({ swordPrivate, ...rest }) => rest)(room.lastEvent) : null,
     capacity: room.capacity, seated: seated(room).length, readyCount: readyN,
     mySeat: meSeated ? findSeat(room, pid) + 1 : null, myVetoCards: vetoCache.has(pid) ? vetoCache.get(pid) : null,
+    myAvoid: (room.avoid && room.avoid[pid]) || null,
+    myAvoidResult: (room.avoidResult && room.avoidResult[pid]) || null,
     spectating: !isSeatedPid(room, pid), spectators: specs,
     seats: room.seats.map((p, i) => p ? { ...pubPlayer({ ...p, seat: i + 1 }), online: online.has(p.pid), isHost: p.pid === room.hostPid } : { empty: true, seat: i + 1 }),
     preset, teamSizes: TEAM_SIZES[room.capacity], evilCount: EVIL_COUNT[room.capacity],
@@ -524,7 +572,8 @@ function viewFor(room, pid) {
     v.game = {
       gid: g.gid, n: g.n, phase: g.phase, earlyAssassin: !!g.earlyAssassin, round: g.round, leaderId: g.seats[g.leader].id, rejects: g.rejects,
       teamSizes: TEAM_SIZES[g.n], twoFailRound: g.n >= 7 ? 3 : -1, settings: g.settings,
-      seats: g.seats.map(s => ({
+      seats: g.seats.map((s, i) => ({
+        seat: i + 1,
         id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, fx: s.fx, pendant: s.pendant,
         photoUrl: s.avatar === 'photo' ? `/api/avatar/${s.id}?v=${s.pv || 0}` : `/img/av/${s.avatar || 'fox'}.webp`,
         online: online.has(s.pid),

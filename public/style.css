@@ -527,3 +527,19 @@ main{padding:8px 16px 96px}
 .mrow.danger b{color:#e23a52}.mrow.danger .mic{background:#ffecee}
 .banner.none{background:linear-gradient(135deg,#eef0f4,#dfe3ea);color:#3a4150}
 .phase.evilbar{background:#ffecee;color:#c8283f;border-radius:10px;padding:8px 10px}
+/* branding + perf */
+.hero .logo.amigos{width:auto;height:64px;filter:none}
+.hero.sm .logo.amigos{width:auto;height:56px}
+.hero .en{letter-spacing:4px;font-size:11px;font-weight:700;color:#8a909c;opacity:1}
+.splash{min-height:70vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#1d2333}
+.splash img{height:80px;width:auto}.splash b{font-size:24px;font-weight:900;letter-spacing:2px}.splash span{font-size:11px;letter-spacing:4px;color:#8a909c}
+.splash i{width:28px;height:28px;border-radius:50%;border:3px solid #e3e6ec;border-top-color:#2f6fe8;margin-top:12px;animation:spin .8s linear infinite}
+.wake{position:fixed;left:50%;top:56px;transform:translateX(-50%);z-index:60;background:#1d2333;color:#fff;font-size:13px;padding:8px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.15)}
+.modal{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.myrole-fab{z-index:15!important}
+.matepanel .kring{width:100%;max-width:280px}
+.track .q{background:#f3f5f9;border:2px solid #dfe3ea;color:#5d6472}
+.track .q.cur{background:#fff;border-color:#2f6fe8;color:#2f6fe8;box-shadow:0 0 0 3px rgba(47,111,232,.15);animation:qpulse 1.8s ease-in-out infinite}
+.track .q.ok{background:#2f6fe8;border-color:#2f6fe8;color:#fff}
+.track .q.bad{background:#e23a52;border-color:#e23a52;color:#fff}
+@keyframes qpulse{50%{transform:scale(1.06)}}

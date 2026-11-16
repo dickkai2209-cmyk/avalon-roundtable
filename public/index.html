@@ -3,29 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b1230">
-<title>旺角Avalon · 網頁版阿瓦隆</title>
+<meta name="theme-color" content="#ffffff">
+<title>旺角阿瓦隆 · 網頁版阿瓦隆</title>
 <meta name="author" content="Amigosparty">
-<meta name="application-name" content="旺角Avalon">
-<meta name="apple-mobile-web-app-title" content="旺角Avalon">
+<meta name="application-name" content="旺角阿瓦隆">
+<meta name="apple-mobile-web-app-title" content="旺角阿瓦隆">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta property="og:title" content="旺角Avalon · 網頁版阿瓦隆">
-<meta property="og:site_name" content="旺角Avalon">
+<meta property="og:title" content="旺角阿瓦隆 · 網頁版阿瓦隆">
+<meta property="og:site_name" content="旺角阿瓦隆">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="description" content="免安裝、手機瀏覽器即玩的阿瓦隆多人遊戲。同枱朋友掃碼入房。">
-<link rel="icon" href="/img/icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/style.css?v=5">
+<meta name="description" content="旺角阿瓦隆 MONGKOK AVALON · 手機瀏覽器即玩的阿瓦隆多人遊戲，同枱朋友掃碼入房。by Amigosparty · Design by Teddy Design Limited">
+<link rel="icon" href="/img/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/img/icon-192.png">
+<meta property="og:image" content="/img/icon-512.png">
+<meta property="og:description" content="旺角阿瓦隆 MONGKOK AVALON · by Amigosparty">
+<link rel="stylesheet" href="/style.css?v=6">
 </head>
 <body>
 <header class="topbar">
   <button id="backBtn" class="icon-btn hidden" aria-label="返回">‹</button>
-  <div class="title" id="topTitle">旺角Avalon</div>
+  <div class="title" id="topTitle">旺角阿瓦隆</div>
   <div class="conn" id="conn" title="連線狀態"></div>
 </header>
-<main id="app"></main>
+<main id="app"><div class="splash"><img src="/img/amigos.webp" alt="" width="120" height="96"><b>旺角阿瓦隆</b><span>MONGKOK AVALON</span><i></i></div></main>
+<div id="wake" class="wake hidden">伺服器喚醒中，請稍候（最多約 30 秒）…</div>
 <div id="modal" class="modal hidden"><div class="sheet" id="sheet"></div></div>
 <div id="toast" class="toast hidden"></div>
-<script src="/socket.io/socket.io.js"></script>
-<script src="/app.js?v=5"></script>
+<script defer src="/vendor/socket.io.min.js"></script>
+<script defer src="/app.js?v=6"></script>
 </body>
 </html>

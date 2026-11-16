@@ -523,10 +523,21 @@ async function restoreRooms() {
     if (rooms.size) console.log('restored rooms:', rooms.size);
   } catch (e) { console.error('restoreRooms', e.message); }
 }
+const bcastPending = new Set();
 function broadcast(room) {
-  if (!rooms.has(room.code)) return;
-  room.touched = Date.now(); persistRoom(room);
-  for (const s of io.sockets.sockets.values()) if (s.data.room === room.code) s.emit('state', viewFor(room, s.data.pid));
+  // coalesce bursts of updates in the same tick into one state push per socket
+  if (!rooms.has(room.code) || bcastPending.has(room.code)) return;
+  bcastPending.add(room.code);
+  setImmediate(() => {
+    bcastPending.delete(room.code);
+    if (!rooms.has(room.code)) return;
+    room.touched = Date.now(); persistRoom(room);
+    for (const s of io.sockets.sockets.values()) if (s.data.room === room.code) {
+      const v = viewFor(room, s.data.pid); const j = JSON.stringify(v);
+      if (s.data.lastState === j) continue; // nothing changed for this player
+      s.data.lastState = j; s.emit('state', v);
+    }
+  });
 }
 
 function leaveCurrent(socket, pid, removeFromLobby) {
@@ -544,9 +555,18 @@ function leaveCurrent(socket, pid, removeFromLobby) {
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' }, pingInterval: 20000, pingTimeout: 25000 });
+const io = new Server(server, { cors: { origin: '*' }, pingInterval: 20000, pingTimeout: 25000, perMessageDeflate: { threshold: 1024 } });
+app.use(require('compression')());
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '10m' }));
+app.get('/healthz', (req, res) => res.set('Cache-Control', 'no-store').send('ok'));
+app.get('/vendor/socket.io.min.js', (req, res) => res.set('Cache-Control', 'public, max-age=604800').sendFile(path.join(__dirname, 'node_modules/socket.io-client/dist/socket.io.min.js')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, file) {
+    if (/\.html?$/.test(file) || /manifest\.webmanifest$/.test(file)) res.set('Cache-Control', 'no-cache');
+    else if (/[\\/]img[\\/]/.test(file)) res.set('Cache-Control', 'public, max-age=2592000');
+    else res.set('Cache-Control', 'public, max-age=604800'); // app.js / style.css are versioned with ?v=
+  },
+}));
 
 function bearer(req) {
   const h = req.headers.authorization || '';
@@ -813,7 +833,10 @@ async function flushRooms() {
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { flushRooms().finally(() => process.exit(0)); setTimeout(() => process.exit(0), 4000).unref(); });
 
 db.init().then(restoreRooms).then(() => {
-  server.listen(PORT, () => console.log('旺角Avalon on :' + PORT, 'db=' + db.mode()));
+  server.listen(PORT, () => console.log('旺角阿瓦隆 on :' + PORT, 'db=' + db.mode()));
+  // keep the free Render instance warm (it sleeps after 15 min idle); disable with KEEPALIVE=0
+  const self = process.env.KEEPALIVE_URL || (process.env.RENDER_EXTERNAL_URL && process.env.RENDER_EXTERNAL_URL + '/healthz');
+  if (self && process.env.KEEPALIVE !== '0') setInterval(() => fetch(self).catch(() => {}), 10 * 60 * 1000).unref();
 }).catch(e => { console.error('DB init failed', e); process.exit(1); });
 
 module.exports = { server, TEAM_SIZES, EVIL_COUNT };

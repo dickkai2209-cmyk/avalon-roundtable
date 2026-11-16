@@ -45,7 +45,7 @@ const PD_IMG = { crown: 1, bow: 1, halo: 1 };
 const PENDANT_ICON = { none:'', crown:'👑', bow:'🎀', halo:'✨', flower:'🌸', star:'⭐', sword:'⚔️', moon:'🌙', wings:'🕊️' };
 const PHASE = { team: '組隊', vote: '投票', sword: '授予王者之劍', quest: '任務', swordflip: '王者之劍', lady: '湖中仙女', assassin: '刺殺梅林', end: '遊戲結束' };
 const TEAM_SIZES = { 5: [2, 3, 2, 3, 3], 6: [2, 3, 4, 3, 4], 7: [2, 3, 3, 4, 4], 8: [3, 4, 4, 5, 5], 9: [3, 4, 4, 5, 5], 10: [3, 4, 4, 5, 5], 11: [3, 4, 4, 5, 5], 12: [3, 4, 5, 5, 5] };
-const LOGO = `<svg class="logo" viewBox="0 0 64 64"><defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0c0"/><stop offset="1" stop-color="#b8892f"/></linearGradient></defs><path d="M32 4l22 7v17c0 16-10 27-22 32C20 55 10 44 10 28V11z" fill="#16224a" stroke="url(#lg)" stroke-width="3"/><path d="M32 13v38M24 21h16" stroke="url(#lg)" stroke-width="3.6" stroke-linecap="round"/><circle cx="32" cy="12" r="3" fill="url(#lg)"/><path d="M20 40c4 4 8 6 12 6s8-2 12-6" stroke="url(#lg)" stroke-width="2" fill="none" opacity=".6"/></svg>`;
+const LOGO = `<img class="logo amigos" src="/img/amigos.webp" alt="Amigos' Party" width="120" height="96" decoding="async">`;
 const ROLE_ART = { lancelot_evil: 'assassin' };
 const RN = { merlin:'梅林', percival:'派西維爾', servant:'忠臣', lancelot_good:'蘭斯洛特（正）', assassin:'刺客', morgana:'莫甘娜', mordred:'莫德雷德', oberon:'奧伯倫', minion:'爪牙', lancelot_evil:'蘭斯洛特（邪）' };
 
@@ -113,6 +113,8 @@ socket.on('connect', () => {
   }).catch(e => toast(e.message || '無法連線至伺服器'));
 });
 socket.on('disconnect', () => $('#conn').classList.remove('on'));
+let wakeT = setTimeout(() => { if (!socket.connected) $('#wake').classList.remove('hidden'); }, 2500);
+socket.on('connect', () => { clearTimeout(wakeT); $('#wake').classList.add('hidden'); });
 function refreshRoom() {
   toast('重新同步中…'); sessionStorage.removeItem('cc.modalq');
   socket.once('state', () => toast('已同步最新房間狀態 ✓'));
@@ -169,7 +171,7 @@ function pendantHtml(p) {
   return `<span class="pendant ${k}">${PENDANT_ICON[k] || ''}</span>`;
 }
 function av(p, size = 36) {
-  return `<span class="av-wrap"><span class="av s${size}" style="background:${esc((p && p.bg) || '#f3d9a4')}"><img src="${esc(photoSrc(p))}" alt=""></span>${pendantHtml(p)}</span>`;
+  return `<span class="av-wrap"><span class="av s${size}" style="width:${size}px;height:${size}px;background:${esc((p && p.bg) || '#f3d9a4')}"><img src="${esc(photoSrc(p))}" alt="" width="${size}" height="${size}" decoding="async"></span>${pendantHtml(p)}</span>`;
 }
 const chip = (id, list) => { const p = P(id, list); return `<span class="chip">${av(p, 22)}${esc(p.name)}</span>`; };
 const fmtTime = (t) => { const d = new Date(t); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -261,7 +263,7 @@ function inviteDialog() {
     <div class="center"><div class="tiny muted">房間號</div><div class="code">${S.code}</div></div>
     <div class="btns"><button class="btn ghost" id="cp">複製連結</button>${navigator.share ? '<button class="btn" id="sh">分享</button>' : ''}</div>`, (el) => {
     $('#cp', el).onclick = async () => { try { await navigator.clipboard.writeText(url); toast('已複製：' + url); } catch { prompt('複製此連結', url); } };
-    const sh = $('#sh', el); if (sh) sh.onclick = () => navigator.share({ title: '旺角Avalon', text: `入房玩旺角Avalon！房間號 ${S.code}`, url }).catch(() => {});
+    const sh = $('#sh', el); if (sh) sh.onclick = () => navigator.share({ title: '旺角阿瓦隆', text: `入房玩旺角阿瓦隆！房間號 ${S.code}`, url }).catch(() => {});
   });
 }
 function authDialog(mode) {
@@ -523,15 +525,42 @@ function showEnd() {
 }
 
 // ================= views =================
+// ---- tiny DOM morph: patch only what changed (keeps images/animations, avoids full re-render jank) ----
+function morphAttrs(a, b) {
+  for (const { name } of Array.from(a.attributes)) if (!b.hasAttribute(name)) a.removeAttribute(name);
+  for (const { name, value } of Array.from(b.attributes)) if (a.getAttribute(name) !== value) a.setAttribute(name, value);
+}
+function morphChildren(a, b) {
+  const an = a.childNodes, bn = Array.from(b.childNodes);
+  for (let i = 0; i < bn.length; i++) {
+    const x = an[i], y = bn[i];
+    if (!x) { a.appendChild(y); continue; }
+    if (x.nodeType !== y.nodeType || x.nodeName !== y.nodeName || (x.nodeType === 1 && (x.dataset.id || '') !== (y.dataset.id || ''))) { a.replaceChild(y, x); continue; }
+    if (x.nodeType === 3 || x.nodeType === 8) { if (x.data !== y.data) x.data = y.data; continue; }
+    if (x.tagName === 'CANVAS') { a.replaceChild(y, x); continue; }
+    morphAttrs(x, y);
+    if ((x.tagName === 'INPUT' || x.tagName === 'TEXTAREA') && document.activeElement === x) continue;
+    morphChildren(x, y);
+  }
+  while (an.length > bn.length) a.removeChild(a.lastChild);
+}
+function setHTML(el, html) {
+  if (el._html === html) return false;
+  el._html = html;
+  const tpl = document.createElement('template'); tpl.innerHTML = html;
+  if (!el.firstChild) el.appendChild(tpl.content); else morphChildren(el, tpl.content);
+  return true;
+}
 function render() {
   const app = $('#app'); const inRoom = S && S.code;
   if (view === 'room' && !inRoom) view = 'home';
   $('#backBtn').classList.toggle('hidden', view === 'home');
-  $('#topTitle').textContent = { home: '旺角Avalon', room: inRoom ? `圓桌 ${S.code}` : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就' }[view];
-  if (view === 'home') app.innerHTML = homeHtml();
+  $('#topTitle').textContent = { home: '旺角阿瓦隆', room: inRoom ? `圓桌 ${S.code}` : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就' }[view];
+  if (view !== 'home' && view !== 'room') app._html = null;
+  if (view === 'home') setHTML(app, homeHtml());
   else if (view === 'room') {
     const before = {}; $$('.rt .st[data-id]').forEach(e => { const r = e.getBoundingClientRect(); before[e.dataset.id] = [r.left, r.top]; });
-    app.innerHTML = S.game ? gameHtml() : lobbyHtml(); enterIds.clear();
+    setHTML(app, S.game ? gameHtml() : lobbyHtml()); enterIds.clear();
     if (!S.game) $$('.rt .st[data-id]').forEach(e => {
       const b = before[e.dataset.id]; if (!b) return; const r = e.getBoundingClientRect(); const dx = b[0] - r.left, dy = b[1] - r.top;
       if (Math.abs(dx) + Math.abs(dy) < 4) return;
@@ -549,7 +578,7 @@ function render() {
 function homeHtml() {
   const inRoom = S && S.code;
   const vc = account ? account.vetoCards : null;
-  return `<div class="hero sm">${LOGO}<h1>旺角Avalon</h1></div>
+  return `<div class="hero sm">${LOGO}<h1>旺角阿瓦隆</h1><div class="en">MONGKOK AVALON</div></div>
   <div class="card prof-head">
     <div class="row" data-a="profile" style="cursor:pointer">${av(profile, 60)}
       <div class="grow"><div class="name">${profile.name ? esc(profile.name) : '未設定暱稱'}</div><div class="muted small">${myStats.played || 0} 場 · 勝率 ${pct(myStats.won, myStats.played)}%${vc != null ? ` · 🛡️ 回避卡 ${vc}/10` : ''}</div></div></div>
@@ -572,7 +601,7 @@ function homeHtml() {
     <div class="item" data-a="go" data-v="rules"><span class="ic">📖</span><span class="grow">規則介紹</span><span class="chev">›</span></div>
     <div class="item" data-a="about"><span class="ic">ℹ️</span><span class="grow">版本</span><span class="muted small">v3.1</span><span class="chev">›</span></div>
   </div>
-  <div class="footer"><span class="credit">旺角Avalon · by Amigosparty · v3.1</span><br><span class="credit2">Design by Teddy Design Limited</span></div>`;
+  <div class="footer"><span class="credit">旺角阿瓦隆 · by Amigosparty · v3.1</span><br><span class="credit2">Design by Teddy Design Limited</span></div>`;
 }
 const ACHS = [
   ['first', '初入圓桌', '完成第 1 場遊戲', s => s.played >= 1],
@@ -907,8 +936,9 @@ async function makePoster(r, personal = true) {
   y += 16; x.textAlign = 'left'; x.font = '15px sans-serif'; x.fillStyle = '#97a1c2'; x.fillText('綠＝贊成　紅＝反對　藍框＝隊員　👑＝隊長　⌖＝被刺殺', pad, y); y += 30;
   const qr = await load('/api/qr?text=' + encodeURIComponent(replayUrl(r)));
   x.fillStyle = '#fff'; rr(pad, y, 170, 170, 14); x.fill(); if (qr) x.drawImage(qr, pad + 10, y + 10, 150, 150);
-  x.fillStyle = '#f3d68f'; x.font = 'bold 30px sans-serif'; x.fillText('旺角Avalon', pad + 200, y + 60);
-  x.fillStyle = '#d8b25e'; x.font = '18px sans-serif'; x.fillText('· Amigosparty', pad + 200, y + 92);
+  x.fillStyle = '#f3d68f'; x.font = 'bold 30px sans-serif'; x.fillText('旺角阿瓦隆', pad + 200, y + 60);
+  x.fillStyle = '#d8b25e'; x.font = '18px sans-serif'; x.fillText('MONGKOK AVALON · by Amigosparty', pad + 200, y + 92);
+  const lg = await load('/img/amigos.webp'); if (lg) { x.fillStyle = '#fff'; rr(W - pad - 120, y - 104, 120, 96, 12); x.fill(); x.drawImage(lg, W - pad - 110, y - 96, 100, 80); }
   x.fillStyle = '#c9cfe6'; x.font = '18px sans-serif'; x.fillText('掃碼查看對局回放', pad + 200, y + 130);
   x.fillStyle = '#7d87aa'; x.font = '14px sans-serif'; x.fillText(replayUrl(r).replace(/^https?:\/\//, ''), pad + 200, y + 156);
   return c;
@@ -928,7 +958,7 @@ async function saveCard(r, show) {
 }
 function shareSheet(r) {
   if (!r) return;
-  const url = replayUrl(r); const text = `旺角Avalon｜${r.winner === 'none' ? '提前結束' : r.winner === 'good' ? '藍方勝利' : '紅方勝利'}！${r.n} 人局戰報`;
+  const url = replayUrl(r); const text = `旺角阿瓦隆｜${r.winner === 'none' ? '提前結束' : r.winner === 'good' ? '藍方勝利' : '紅方勝利'}！${r.n} 人局戰報`;
   const e = encodeURIComponent;
   const links = [
     ['WhatsApp', '#25D366', `https://wa.me/?text=${e(text + ' ' + url)}`],
@@ -950,15 +980,15 @@ function shareSheet(r) {
     $('#pp', el).onclick = () => saveCard(r, true);
     $('#ig', el).onclick = async () => {
       const b = await cardBlob(r); const f = new File([b], 'mongkok-avalon.png', { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: '旺角Avalon', text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: '旺角阿瓦隆', text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
       const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'mongkok-avalon.png'; a.click();
       toast('海報已儲存，請打開 Instagram 發佈（限時動態或貼文）');
     };
     $('#sys', el).onclick = async () => {
       try {
         const b = await cardBlob(r); const f = new File([b], 'mongkok-avalon.png', { type: 'image/png' });
-        if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: '旺角Avalon', text, url });
-        else if (navigator.share) await navigator.share({ title: '旺角Avalon', text, url });
+        if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: '旺角阿瓦隆', text, url });
+        else if (navigator.share) await navigator.share({ title: '旺角阿瓦隆', text, url });
         else { await navigator.clipboard.writeText(url); toast('此瀏覽器不支援系統分享，已複製連結'); }
       } catch (e) { if (e.name !== 'AbortError') toast('分享未完成'); }
     };
@@ -973,7 +1003,7 @@ document.addEventListener('click', async (e) => {
   switch (a) {
     case 'profile': return editProfile();
     case 'ptab': return editProfile(null, el.dataset.t);
-    case 'about': return openModal(`<h2>關於</h2><div class="center">${LOGO}<div class="name" style="margin-top:6px">旺角Avalon</div><div class="small muted">版本 3.1 · 網頁版阿瓦隆多人遊戲</div><div class="small" style="margin-top:10px">by <b class="gold">Amigosparty</b></div><div class="tiny muted">Design by Teddy Design Limited</div><div class="tiny muted" style="margin-top:8px">原創美術 · 角色立繪、動物頭像、掛件皆為本作原創</div></div><button class="btn" id="ok">關閉</button>`, el2 => $('#ok', el2).onclick = closeModal);
+    case 'about': return openModal(`<h2>關於</h2><div class="center">${LOGO}<div class="name" style="margin-top:6px">旺角阿瓦隆</div><div class="small muted">版本 3.1 · 網頁版阿瓦隆多人遊戲</div><div class="small" style="margin-top:10px">by <b class="gold">Amigosparty</b></div><div class="tiny muted">Design by Teddy Design Limited</div><div class="tiny muted" style="margin-top:8px">原創美術 · 角色立繪、動物頭像、掛件皆為本作原創</div></div><button class="btn" id="ok">關閉</button>`, el2 => $('#ok', el2).onclick = closeModal);
     case 'cfg': cfgOpen = true; openModal(cfgSheetHtml()); cfgOpen = true; return;
     case 'cfgclose': return closeModal();
     case 'vetoinfo': { const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards); return openModal(`<h2>回避卡</h2><div class="center big">🛡️</div><div class="center name">${vc == null ? '–' : vc} / 10</div><p class="small muted center">每贏一局 +1 張（上限 10 張），永久保存在帳號。房間開啟「回避卡」時，投票階段身為隊員可用一張退出隊伍，本次組隊作廢且不計否決。</p><button class="btn" id="ok">知道了</button>`, el2 => $('#ok', el2).onclick = closeModal); }
@@ -1071,4 +1101,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
+window.__av = { get S() { return S; }, showQuest, closeModal, go, showRole, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

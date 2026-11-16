@@ -44,15 +44,20 @@ const ANIMALS = [
   ['capybara','水豚'],['penguin','企鵝'],['koala','無尾熊'],['cat','貓咪'],['wolf','狼仔'],['lion','獅子'],['piglet','豬仔'],['guineapig','天竺鼠']
 ];
 const EMOJI_MAP = {'🦊':'fox','🐼':'panda','🦆':'duck','🐿️':'squirrel','🦔':'hedgehog','🐰':'bunny','🐻':'bear','🦝':'redpanda','🦦':'otter','🐹':'hamster','🐕':'shiba','🐶':'shiba','🦫':'capybara','🐧':'penguin','🐨':'koala','🐱':'cat','🐺':'wolf','🦁':'lion','🐷':'piglet','🐖':'piglet'};
-const BGS = ['#f3d9a4', '#f7c1c8', '#bfe3c9', '#bcd6ff', '#d9c6ff', '#ffe08a', '#c8eef0', '#ffcfa6', '#2b3a6e', '#3a2a1c'];
-const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['spark','星火',1],['petals','花瓣',3],['fire','火焰圈',6],['lightning','閃電',10]];
+const BGS = ['#ffffff', '#f3d9a4', '#f7c1c8', '#bfe3c9', '#bcd6ff', '#d9c6ff', '#ffe08a', '#c8eef0', '#ffcfa6', '#2b3a6e', '#3a2a1c'];
+const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['snow','聖誕飄雪',0],['spark','星火',1],['petals','花瓣',3],['howl','狼人咆哮',4],['fire','火焰圈',6],['lightning','閃電',10]];
 // [key, name, unlock type ('free'|'games'|'wins'), need, special?]
 const PENDANTS = [
   ['wolf', '滿月狼人', 'free', 0], ['pumpkin', '南瓜燈先知', 'free', 0], ['devil', '搗蛋小惡魔', 'free', 0],
-  ['crown', '小王冠', 'games', 1], ['bow', '花花蝴蝶結', 'games', 2], ['halo', '星星光環', 'games', 3],
-  ['ghost', '床單幽靈', 'games', 4], ['witch', '月夜女巫', 'games', 5], ['bat', '孤影蝙蝠', 'games', 8, 1], ['vampire', '午夜血族', 'games', 12, 1],
-  ['plume', '圓桌騎士羽飾', 'wins', 1], ['merlinhat', '梅林法師帽', 'wins', 3, 1], ['lotus', '湖中仙女蓮花', 'wins', 5, 1], ['excal', '王者之劍徽章', 'wins', 10, 1],
+  ['crown', '小王冠', 'free', 0], ['bow', '花花蝴蝶結', 'free', 0],
+  ['halo', '星星光環', 'games', 2], ['egg', '雞蛋仔', 'games', 3], ['ghost', '床單幽靈', 'games', 4], ['witch', '月夜女巫', 'games', 5],
+  ['bolo', '菠蘿油', 'games', 6], ['tram', '叮叮電車', 'games', 7], ['bat', '孤影蝙蝠', 'games', 8, 1], ['vampire', '午夜血族', 'games', 12, 1],
+  ['plume', '圓桌騎士羽飾', 'wins', 1], ['taxi', '紅色的士', 'wins', 2], ['merlinhat', '梅林法師帽', 'wins', 3, 1], ['lion', '獅子山', 'wins', 4],
+  ['lotus', '湖中仙女蓮花', 'wins', 5, 1], ['neon', '港式霓虹', 'wins', 6], ['excal', '王者之劍徽章', 'wins', 10, 1],
+  ['laurel', 'MVP金桂冠', 'mvp', 10, 1],
 ];
+const PD_V = 3;
+const pdSrc = (k, back) => `/img/pd/${k}${back ? '_b' : ''}.webp?v=${PD_V}`;
 const BADGE_LEAD = `<span class="sbadge lead" title="本輪隊長"><svg viewBox="0 0 24 24" width="100%" height="100%"><circle cx="12" cy="12" r="11" fill="#fff4cf" stroke="#e0a412" stroke-width="1.6"/><path d="M8 18.5V5.5" stroke="#9a6b10" stroke-width="1.6" stroke-linecap="round"/><path d="M8.6 6h8.2l-2 3 2 3H8.6z" fill="#f4b623" stroke="#c8880a" stroke-width=".8" stroke-linejoin="round"/><path d="M10.6 8.2l.9.9.9-1.3.9 1.3.9-.9-.4 2h-2.8z" fill="#fff"/></svg></span>`;
 const BADGE_LADY = `<span class="sbadge lady" title="湖中仙女"><svg viewBox="0 0 24 24" width="100%" height="100%"><circle cx="12" cy="12" r="11" fill="#e6f4ff" stroke="#4aa3e8" stroke-width="1.6"/><path d="M12 6c1.6 1.6 1.9 4 0 6.4C10.1 10 10.4 7.6 12 6z" fill="#f59ac4"/><path d="M12 12.4c-1.4-2-3.5-2.8-5.3-2.3.3 2.2 2.4 3.4 5.3 2.3zm0 0c1.4-2 3.5-2.8 5.3-2.3-.3 2.2-2.4 3.4-5.3 2.3z" fill="#f7b6d4"/><path d="M6 15.2c2 1.2 4 1.2 6 0s4-1.2 6 0" fill="none" stroke="#3b93db" stroke-width="1.5" stroke-linecap="round"/><path d="M7.5 18c1.5.8 3 .8 4.5 0s3-.8 4.5 0" fill="none" stroke="#7dbdf0" stroke-width="1.2" stroke-linecap="round"/></svg></span>`;
 const PD_BACK = { devil: 1, bat: 1, vampire: 1 };
@@ -71,7 +76,7 @@ LS.setItem('cc.pid', pid);
 let token = LS.getItem('cc.token') || '';
 let account = null; // {username, guest}
 function migrateAvatar(a) { if (!a) return 'fox'; if (EMOJI_MAP[a]) return EMOJI_MAP[a]; if (a === 'photo' || ANIMALS.some(([k]) => k === a) || String(a).startsWith('data:')) return a; return 'fox'; }
-let profile = JSON.parse(LS.getItem('cc.profile') || 'null') || { name: LS.getItem('avalon.name') || '', avatar: 'fox', bg: BGS[Math.floor(Math.random() * 8)], fx: 'spot', pendant: 'none' };
+let profile = JSON.parse(LS.getItem('cc.profile') || 'null') || { name: LS.getItem('avalon.name') || '', avatar: 'fox', bg: '#ffffff', fx: 'spot', pendant: 'none' };
 profile.avatar = migrateAvatar(profile.avatar);
 profile.pendant = profile.pendant || 'none';
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -82,7 +87,7 @@ const authHdr = () => token ? { Authorization: 'Bearer ' + token, 'Content-Type'
 const api = (url, opt = {}) => fetch(url, { ...opt, headers: { ...authHdr(), ...(opt.headers || {}) } }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || '請求失敗'); return j; });
 function checkAch() { // one-time unlock celebration for 10次MVP
   if (!myStats || (myStats.mvp || 0) < 10 || LS.getItem('cc.ach.mvp10')) return; LS.setItem('cc.ach.mvp10', '1');
-  queueModal(() => openModal(`<div class="achpop"><div class="ap-glow"></div><div class="ap-medal">🌈</div><div class="ap-t">成就解鎖</div><h2>10次MVP</h2><div class="small muted center">獎勵：<b>閃光卡牌特效</b> ✨<br>可以喺「角色皮膚」開關</div>
+  queueModal(() => openModal(`<div class="achpop"><div class="ap-glow"></div><div class="ap-medal">🌈</div><div class="ap-t">成就解鎖</div><h2>10次MVP</h2><div class="small muted center">獎勵：<b>閃光卡牌特效</b> ✨ 同 <b>MVP金桂冠</b> 掛件<br>可以喺「角色皮膚」同「掛件」使用</div>
     <div class="holo-demo rcard good holo"><div class="rart" style="background-image:url(${img(cardBackOf())})"></div></div><button class="btn" id="ok">太好了！</button></div>`, el => { $('#ok', el).onclick = closeModal; }));
 }
 const refreshStats = () => api('/api/stats').then(s => { myStats = s; checkAch(); return s; }).catch(() => myStats);
@@ -134,6 +139,7 @@ socket.on('connect', () => {
       if (!r || !r.room) { S = null; if (view === 'room') go('home'); }
       if (pendingJoin) { const c = pendingJoin; pendingJoin = null; ensureName(() => joinRoom(c)); }
       if (pendingGame) { const gid = pendingGame; pendingGame = null; return go('detail', { gid, from: 'home' }); }
+      if (view === 'skins' || view === 'rules' || view === 'ach') return; // keep selection UI / scroll
       render();
     });
   }).catch(e => toast(e.message || '無法連線至伺服器'));
@@ -202,7 +208,7 @@ const act = (type, data) => emit('act', { type, data });
 
 // ================= helpers =================
 let toastT;
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), 2600); }
+function toast(msg, kind) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (kind ? ' ' + kind : ''); t.classList.remove('hidden'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), kind ? 2800 : 2200); }
 let modalLock = false;
 function openModal(html, onMount, lock) { modalLock = !!lock; $('#sheet').innerHTML = html; $('#modal').classList.remove('hidden'); onMount && onMount($('#sheet')); }
 let cfgOpen = false;
@@ -225,11 +231,18 @@ function photoSrc(p) {
 }
 function pendantHtml(p) {
   const k = (p && p.pendant) || 'none'; if (!PD_IMG[k]) return '';
-  return `<img class="pov" src="/img/pd/${k}.webp" alt="" loading="lazy" decoding="async">`;
+  // All pendant art is a sibling overlay IN FRONT of the clipped photo (never inside .av).
+  return `<img class="pov" src="${pdSrc(k)}" alt="" loading="lazy" decoding="async">`;
 }
-const pendantBack = (p) => { const k = (p && p.pendant) || 'none'; return PD_BACK[k] ? `<img class="pov back" src="/img/pd/${k}_b.webp" alt="" loading="lazy" decoding="async">` : ''; };
+const pendantBack = (p) => { const k = (p && p.pendant) || 'none'; return PD_BACK[k] ? `<img class="pov back" src="${pdSrc(k, 1)}" alt="" loading="lazy" decoding="async">` : ''; };
+function faceCirc(p) {
+  return `<span class="pdcirc"><img src="${esc(photoSrc(p))}" alt=""></span>`;
+}
 function av(p, size = 36) {
-  return `<span class="av-wrap">${pendantBack(p)}<span class="av s${size}" style="width:${size}px;height:${size}px;background:${esc((p && p.bg) || '#f3d9a4')}"><img src="${esc(photoSrc(p))}" alt="" width="${size}" height="${size}" decoding="async"></span>${pendantHtml(p)}</span>`;
+  const src = esc(photoSrc(p));
+  const bg = esc((p && p.bg) || '#ffffff');
+  // Photo/circle is clipped inside .av only. Pendant overlays sit higher in an unclipped wrapper.
+  return `<span class="av-wrap">${pendantBack(p)}<span class="av s${size}" style="width:${size}px;height:${size}px;background:${bg}"><img src="${src}" alt="" width="${size}" height="${size}" decoding="async"></span>${pendantHtml(p)}</span>`;
 }
 const chip = (id, list) => { const p = P(id, list); return `<span class="chip">${av(p, 22)}${esc(p.name)}</span>`; };
 const fmtTime = (t) => { const d = new Date(t); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -240,14 +253,15 @@ const pct = (w, p) => p ? Math.round(w * 100 / p) : 0;
 const isGM = () => !!(account && account.gm);
 const playedTotal = () => isGM() ? 1e9 : (myStats.played || 0);
 const winsTotal = () => isGM() ? 1e9 : (myStats.won || 0);
-const mvpTotal = () => isGM() ? 1e9 : (myStats.mvp || 0);
+const mvpTotal = () => (myStats.mvp || 0); // even GM must earn 10 real MVPs for 桂冠 / 閃光特效
+const vetoAmt = (n) => (isGM() || n >= 999) ? '∞' : (n == null ? '–' : String(n));
 
 // ================= profile =================
 function fxUnlocked(k) { const item = FXS.find(x => x[0] === k); return playedTotal() >= (item ? item[2] : 0); }
 function pdUnlocked(k) { if (k === 'none') return true; const it = PENDANTS.find(x => x[0] === k); if (!it) return false; return unlockOk(it[2], it[3]); }
-const pdNeed = (it) => it[2] === 'wins' ? `勝 ${it[3]} 場解鎖` : `玩 ${it[3]} 場解鎖`;
+const pdNeed = (it) => it[2] === 'wins' ? `勝 ${it[3]} 場解鎖` : it[2] === 'mvp' ? `MVP ${Math.min(mvpTotal(), it[3])}/${it[3]} 解鎖` : `玩 ${it[3]} 場解鎖`;
 function pdCell(k, n, sel, locked, sp, sub) {
-  return `<button class="pdc ${sel ? 'sel' : ''} ${locked ? 'off' : ''}" data-pd="${k}">${sp ? '<span class="sp">✨</span>' : ''}${sel ? '<span class="ck">✓</span>' : ''}<div class="pdv">${k === 'none' ? '<span class="pdx">不佩戴</span>' : `${PD_BACK[k] ? `<img class="pov back" src="/img/pd/${k}_b.webp" alt="">` : ''}<span class="pdcirc"></span><img class="pov" src="/img/pd/${k}.webp" alt="">`}${locked ? '<span class="lk">🔒</span>' : ''}</div><b>${n}</b>${sub ? `<i>${sub}</i>` : ''}</button>`;
+  return `<button class="pdc ${sel ? 'sel' : ''} ${locked ? 'off' : ''}" data-pd="${k}">${sp ? '<span class="sp">✨</span>' : ''}${sel ? '<span class="ck">✓</span>' : ''}<div class="pdv">${k === 'none' ? '<span class="pdx">不佩戴</span>' : `${PD_BACK[k] ? `<img class="pov back" src="${pdSrc(k, 1)}" alt="">` : ''}${faceCirc(profile)}<img class="pov" src="${pdSrc(k)}" alt="">`}${locked ? '<span class="lk">🔒</span>' : ''}</div><b>${n}</b>${sub ? `<i>${sub}</i>` : ''}</button>`;
 }
 function pdPickerHtml(d) {
   const have = PENDANTS.filter(x => pdUnlocked(x[0])), lack = PENDANTS.filter(x => !pdUnlocked(x[0]));
@@ -257,69 +271,385 @@ function pdPickerHtml(d) {
 function previewHtml(d) {
   return `<div class="preview-stage ${d.fx && d.fx !== 'none' ? 'enter fx-' + d.fx : ''}">${av(d, 56)}<div class="nm gold" style="position:absolute;bottom:10px">${esc(d.name || '騎士')}</div></div>`;
 }
-function editProfile(after, startTab) {
-  const d = { ...profile }; let tab = startTab || 'avatar';
-  const draw = (el) => {
-    const sub = d._forceSub || ((d.avatar === 'photo' || (d.avatar && String(d.avatar).startsWith('data:'))) ? 'photo' : 'animal');
-    el.innerHTML = `<h2>個人檔案</h2>
-      ${previewHtml(d)}
-      <div class="small muted" style="margin:4px 0">暱稱（最多 10 字）</div>
-      <input class="inp" id="nm" maxlength="10" placeholder="輸入暱稱" value="${esc(d.name)}">
-      <div class="seg" style="margin-top:12px"><button data-t="avatar" class="${tab==='avatar'?'sel':''}">頭像</button><button data-t="pendant" class="${tab==='pendant'?'sel':''}">掛件</button><button data-t="fx" class="${tab==='fx'?'sel':''}">入場特效</button></div>
-      ${tab==='avatar' ? `
-        <div class="seg"><button data-sub="animal" class="${sub==='animal'?'sel':''}">動物頭像</button><button data-sub="photo" class="${sub==='photo'?'sel':''}">上載相片</button></div>
-        ${sub==='animal' ? `<div class="agrid">${ANIMALS.map(([k,n]) => `<button data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div></button>`).join('')}</div>
-          <div class="small muted" style="margin-top:12px">背景顏色</div><div class="swatches">${BGS.map(c => `<button data-c="${c}" class="${c===d.bg?'sel':''}" style="background:${c}"></button>`).join('')}</div>`
-        : `<div class="center" style="margin-top:12px"><label class="btn ghost" style="display:inline-block;width:auto;padding:10px 20px">選擇相片<input id="file" type="file" accept="image/*" hidden></label><div class="small muted" style="margin-top:6px">相片會壓縮保存到你的帳號，歷史記錄也看得到</div></div>`}
-      ` : tab==='pendant' ? pdPickerHtml(d)
-      : `<div class="agrid">${FXS.map(([k,n,need]) => `<button data-fx="${k}" class="${d.fx===k?'sel':''} ${fxUnlocked(k)?'':'off'}"><div class="cell" style="background:#1a2550">${k==='none'?'—':({spot:'💡',gold:'✨',spark:'🌟',petals:'🌸',fire:'🔥',lightning:'⚡'}[k]||'')}</div><div class="lb">${n}${fxUnlocked(k)?'':` 🔒${need}場`}</div></button>`).join('')}</div><div class="small muted center" style="margin-top:8px">選擇後可在上方預覽，入座時所有人會看見</div>`}
-      <button class="btn" id="ok">儲存到帳號</button>`;
-    const nm = $('#nm', el); if (nm) nm.oninput = () => d.name = nm.value;
-    $$('[data-t]', el).forEach(b => b.onclick = () => { tab = b.dataset.t; draw(el); });
-    $$('[data-sub]', el).forEach(b => b.onclick = () => { if (b.dataset.sub==='animal' && (d.avatar==='photo' || String(d.avatar).startsWith('data:'))) d.avatar='fox'; draw.sub=b.dataset.sub; if (b.dataset.sub==='animal') d._sub='animal'; else d._sub='photo'; tab='avatar'; if (b.dataset.sub==='photo') { /* keep */ } d.__sub=b.dataset.sub; /* redraw with photo tab */ 
-      // use closure
+
+// Circular photo crop (before upload). Gestures stay on the crop stage only.
+async function loadOrientedBitmap(file) {
+  const url = URL.createObjectURL(file);
+  const bake = (src, w, h) => {
+    const max = 2048, k = Math.min(1, max / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * k));
+    c.height = Math.max(1, Math.round(h * k));
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+    if (src.close) try { src.close(); } catch (e) {}
+    return c;
+  };
+  try {
+    if (typeof createImageBitmap === 'function') {
+      try {
+        const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        URL.revokeObjectURL(url);
+        return bake(bmp, bmp.width, bmp.height);
+      } catch (e) { /* fall through */ }
+    }
+    const im = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error('img'));
+      i.src = url;
     });
-    // sub tab: reuse draw by setting d._sub
-    $$('[data-sub]', el).forEach(b => b.onclick = () => { d._forceSub = b.dataset.sub; if (b.dataset.sub==='animal' && (d.avatar==='photo'||String(d.avatar||'').startsWith('data:'))) d.avatar='fox'; draw(el); });
-    $$('[data-e]', el).forEach(b => b.onclick = () => { d.avatar = b.dataset.e; d._forceSub='animal'; draw(el); });
-    $$('[data-c]', el).forEach(b => b.onclick = () => { d.bg = b.dataset.c; draw(el); });
-    $$('[data-fx]', el).forEach(b => b.onclick = () => { if (!fxUnlocked(b.dataset.fx)) return toast('再玩多幾場即可解鎖此外觀'); d.fx = b.dataset.fx; draw(el); });
-    $$('[data-pd]', el).forEach(b => b.onclick = () => { const it = PENDANTS.find(x => x[0] === b.dataset.pd); if (!pdUnlocked(b.dataset.pd)) return toast(`「${it[1]}」：${pdNeed(it)}`); d.pendant = b.dataset.pd; draw(el); });
-    const f = $('#file', el); if (f) f.onchange = () => { const file = f.files[0]; if (!file) return;
-      const u = URL.createObjectURL(file); const im = new Image();
-      im.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); const s = Math.min(im.naturalWidth, im.naturalHeight);
-        x.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, 0, 0, 256, 256); URL.revokeObjectURL(u); im.src = '';
-        d.avatar = 'photo'; d._photo = c.toDataURL('image/jpeg', 0.82); d._forceSub = 'photo'; c.width = c.height = 0; draw(el); };
-      im.onerror = () => { URL.revokeObjectURL(u); toast('讀唔到呢張相，請揀另一張'); };
-      im.src = u; };
-    if (d._photo && (d.avatar==='photo')) { const img = el.querySelector('.preview-stage img'); if (img) img.src = d._photo; }
+    URL.revokeObjectURL(url);
+    // Fallback JPEG EXIF orientation when createImageBitmap is unavailable
+    let ori = 1;
+    try {
+      const buf = await file.slice(0, 64 * 1024).arrayBuffer();
+      const v = new DataView(buf);
+      if (v.getUint16(0) === 0xFFD8) {
+        let off = 2;
+        while (off + 4 < v.byteLength) {
+          const mark = v.getUint16(off); off += 2;
+          if (mark === 0xFFDA) break;
+          const len = v.getUint16(off); off += 2;
+          if (mark === 0xFFE1 && off + 8 < v.byteLength && v.getUint32(off) === 0x45786966 && v.getUint16(off + 4) === 0) {
+            const tiff = off + 6;
+            const le = v.getUint16(tiff) === 0x4949;
+            const u16 = (o) => le ? v.getUint16(o, true) : v.getUint16(o, false);
+            const u32 = (o) => le ? v.getUint32(o, true) : v.getUint32(o, false);
+            const ifd = tiff + u32(tiff + 4);
+            const n = u16(ifd);
+            for (let i = 0; i < n; i++) {
+              const e = ifd + 2 + i * 12;
+              if (u16(e) === 0x0112) { ori = u16(e + 8); break; }
+            }
+          }
+          off += len - 2;
+        }
+      }
+    } catch (e) { ori = 1; }
+    if (ori === 1) return bake(im, im.naturalWidth, im.naturalHeight);
+    const w = im.naturalWidth, h = im.naturalHeight;
+    const swap = ori >= 5 && ori <= 8;
+    const src = document.createElement('canvas');
+    src.width = swap ? h : w; src.height = swap ? w : h;
+    const x = src.getContext('2d');
+    const map = { 2: [ -1, 0, 0, 1, w, 0 ], 3: [ -1, 0, 0, -1, w, h ], 4: [ 1, 0, 0, -1, 0, h ], 5: [ 0, 1, 1, 0, 0, 0 ], 6: [ 0, 1, -1, 0, h, 0 ], 7: [ 0, -1, -1, 0, h, w ], 8: [ 0, -1, 1, 0, 0, w ] };
+    const m = map[ori];
+    if (m) { x.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]); }
+    x.drawImage(im, 0, 0);
+    return bake(src, src.width, src.height);
+  } catch (e) {
+    URL.revokeObjectURL(url);
+    throw e;
+  }
+}
+
+function openPhotoCrop(bitmap, opts) {
+  const prev = document.getElementById('cropov');
+  if (prev) prev.remove();
+  const iw = bitmap.width, ih = bitmap.height;
+  const ov = document.createElement('div');
+  ov.id = 'cropov';
+  ov.className = 'crop-ov';
+  ov.innerHTML = `<div class="crop-sheet" role="dialog" aria-modal="true" aria-labelledby="croptitle">
+    <h2 id="croptitle">裁剪頭像</h2>
+    <p class="crop-hint">拖動調整位置；雙指或下方滑桿縮放。圓圈入面就係最後頭像。</p>
+    <div class="crop-stage" id="cropstage">
+      <img class="crop-img" id="cropimg" alt="">
+      <div class="crop-mask" id="cropmask"></div>
+      <div class="crop-ring" id="cropring"></div>
+    </div>
+    <div class="crop-zoom">
+      <button type="button" id="cropzout" aria-label="縮小">−</button>
+      <input type="range" id="cropzoom" min="0" max="100" value="0" aria-label="縮放">
+      <button type="button" id="cropzin" aria-label="放大">+</button>
+    </div>
+    <div class="crop-btns">
+      <button type="button" class="btn ghost" id="cropcancel">取消</button>
+      <button type="button" class="btn" id="cropok">確定</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  const stage = $('#cropstage', ov);
+  const imgEl = $('#cropimg', ov);
+  const ring = $('#cropring', ov);
+  const slider = $('#cropzoom', ov);
+  imgEl.src = bitmap.toDataURL('image/jpeg', 0.92);
+  const pend = (opts && opts.pendant) || 'none';
+  if (pend && pend !== 'none' && PD_IMG[pend]) {
+    ring.innerHTML = `${PD_BACK[pend] ? `<img class="pov back" src="${pdSrc(pend, 1)}" alt="">` : ''}<img class="pov" src="${pdSrc(pend)}" alt="">`;
+  }
+  const layout = () => {
+    const wr = stage.getBoundingClientRect();
+    const S = Math.min(wr.width, wr.height);
+    const D = S * 0.6; // crop circle = 60% of overlay, same as worn pendant math
+    return { S, D, R: D / 2 };
+  };
+  const minScale = () => {
+    const { D } = layout();
+    return Math.max(D / iw, D / ih);
+  };
+  const maxScale = () => minScale() * 4;
+  let scale = minScale();
+  let px = 0, py = 0; // image centre offset from circle centre
+  const clampPan = () => {
+    const { D } = layout();
+    const W = iw * scale, H = ih * scale, R = D / 2;
+    const maxX = Math.max(0, W / 2 - R), maxY = Math.max(0, H / 2 - R);
+    px = Math.min(maxX, Math.max(-maxX, px));
+    py = Math.min(maxY, Math.max(-maxY, py));
+  };
+  const apply = () => {
+    const { S, D } = layout();
+    const cx = S / 2, cy = S / 2;
+    const W = iw * scale, H = ih * scale;
+    imgEl.style.width = W + 'px';
+    imgEl.style.height = H + 'px';
+    imgEl.style.left = (cx + px - W / 2) + 'px';
+    imgEl.style.top = (cy + py - H / 2) + 'px';
+    const t = ((scale - minScale()) / (maxScale() - minScale() || 1)) * 100;
+    slider.value = String(Math.round(Math.min(100, Math.max(0, t))));
+  };
+  const setScale = (next, around) => {
+    const { S } = layout();
+    const old = scale;
+    scale = Math.min(maxScale(), Math.max(minScale(), next));
+    if (around && old > 0) {
+      const cx = S / 2, cy = S / 2;
+      const ax = around.x - cx, ay = around.y - cy;
+      // keep the image point under `around` stable
+      const k = scale / old;
+      px = ax - (ax - px) * k;
+      py = ay - (ay - py) * k;
+    }
+    clampPan();
+    apply();
+  };
+  const onResize = () => { scale = Math.max(scale, minScale()); clampPan(); apply(); };
+  requestAnimationFrame(() => { scale = minScale(); px = 0; py = 0; apply(); });
+  window.addEventListener('resize', onResize);
+
+  // Pointer gestures isolated to the stage (touch-action:none there only)
+  const ptrs = new Map();
+  let lastPinch = 0, lastMid = null, dragging = false, lastX = 0, lastY = 0;
+  stage.addEventListener('pointerdown', (e) => {
+    stage.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 1) { dragging = true; lastX = e.clientX; lastY = e.clientY; }
+    if (ptrs.size === 2) {
+      dragging = false;
+      const [a, b] = [...ptrs.values()];
+      lastPinch = Math.hypot(a.x - b.x, a.y - b.y);
+      const r = stage.getBoundingClientRect();
+      lastMid = { x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top };
+    }
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 2 && lastPinch) {
+      const [a, b] = [...ptrs.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const r = stage.getBoundingClientRect();
+      const mid = { x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top };
+      if (dist > 0 && lastPinch > 0) setScale(scale * (dist / lastPinch), mid);
+      lastPinch = dist;
+      lastMid = mid;
+    } else if (dragging && ptrs.size === 1) {
+      px += e.clientX - lastX;
+      py += e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY;
+      clampPan(); apply();
+    }
+  });
+  const endPtr = (e) => {
+    ptrs.delete(e.pointerId);
+    if (ptrs.size < 2) lastPinch = 0;
+    if (ptrs.size === 0) dragging = false;
+    try { stage.releasePointerCapture(e.pointerId); } catch (err) {}
+  };
+  stage.addEventListener('pointerup', endPtr);
+  stage.addEventListener('pointercancel', endPtr);
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    const factor = e.deltaY > 0 ? 0.92 : 1.08;
+    setScale(scale * factor, { x: e.clientX - r.left, y: e.clientY - r.top });
+  }, { passive: false });
+
+  slider.addEventListener('input', () => {
+    const t = Number(slider.value) / 100;
+    setScale(minScale() + t * (maxScale() - minScale()));
+  });
+  $('#cropzin', ov).onclick = () => setScale(scale * 1.12);
+  $('#cropzout', ov).onclick = () => setScale(scale / 1.12);
+
+  const close = () => {
+    window.removeEventListener('resize', onResize);
+    ov.remove();
+    document.removeEventListener('keydown', onKey, true);
+  };
+  const confirm = () => {
+    const { D } = layout();
+    const R = D / 2;
+    const W = iw * scale, H = ih * scale;
+    const sx = (W / 2 - px - R) / scale;
+    const sy = (H / 2 - py - R) / scale;
+    const sw = D / scale;
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const x = c.getContext('2d');
+    x.imageSmoothingEnabled = true;
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(bitmap, sx, sy, sw, sw, 0, 0, 256, 256);
+    const data = c.toDataURL('image/jpeg', 0.82);
+    c.width = c.height = 0;
+    close();
+    opts && opts.onConfirm && opts.onConfirm(data);
+  };
+  const cancel = () => { close(); opts && opts.onCancel && opts.onCancel(); };
+  $('#cropok', ov).onclick = confirm;
+  $('#cropcancel', ov).onclick = cancel;
+  ov.addEventListener('click', (e) => { if (e.target === ov) cancel(); });
+  function onKey(e) {
+    if (!document.body.contains(ov)) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); }
+    else if (e.key === 'Enter' && e.target && e.target.id !== 'cropzoom') { e.preventDefault(); confirm(); }
+  }
+  document.addEventListener('keydown', onKey, true);
+}
+
+function editProfile(after, startTab) {
+  const d = { ...profile, bg: profile.bg || '#ffffff' }; let tab = startTab === 'fx' ? 'avatar' : (startTab || 'avatar');
+  const FX_IC = { none:'—', spot:'💡', gold:'✨', snow:'❄️', spark:'🌟', petals:'🌸', howl:'🐺', fire:'🔥', lightning:'⚡' };
+  const peek = (el) => {
+    const avHost = el.querySelector('.pe-av');
+    if (!avHost) return;
+    if (d._photo && d.avatar === 'photo') d.photoUrl = d._photo;
+    const avHtml = av(d, 64);
+    const old = avHost.querySelector('.av-wrap');
+    if (old) old.outerHTML = avHtml;
+    else avHost.insertAdjacentHTML('afterbegin', avHtml);
+    const face = avHost.querySelector('.av img');
+    if (face && d._photo && d.avatar === 'photo') face.src = d._photo;
+  };
+  const markSel = (root, sel, btn) => { $$(sel, root).forEach(x => { x.classList.toggle('sel', x === btn); const ck = x.querySelector('.ck'); if (x === btn) { if (!ck) x.insertAdjacentHTML('beforeend', '<span class="ck">✓</span>'); } else if (ck) ck.remove(); }); };
+  const pickMsg = (name) => toast(`已選擇：${name}，按保存套用`);
+  const bodyHtml = () => {
+    if (tab === 'pendant') {
+      const cells = [`<button type="button" class="pdc ${!d.pendant || d.pendant==='none'?'sel':''}" data-pd="none"><div class="pdv"><span class="pdx">不佩戴</span></div><b>不佩戴</b></button>`]
+        .concat(PENDANTS.map(x => {
+          const locked = !pdUnlocked(x[0]);
+          const sel = d.pendant === x[0];
+          return `<button type="button" class="pdc ${sel?'sel':''} ${locked?'off':''}" data-pd="${x[0]}">${sel?'<span class="ck">✓</span>':''}${x[4]?'<span class="sp">✨</span>':''}<div class="pdv">${PD_BACK[x[0]]?`<img class="pov back" src="${pdSrc(x[0],1)}" alt="">`:''}${faceCirc(d)}<img class="pov" src="${pdSrc(x[0])}" alt="">${locked?'<span class="lk">🔒</span>':''}</div><b>${x[1]}</b>${locked?`<i>${pdNeed(x)}</i>`:''}</button>`;
+        }));
+      return `<div class="pe-grid">${cells.join('')}</div>`;
+    }
+    const photoOn = d.avatar === 'photo' || (d.avatar && String(d.avatar).startsWith('data:')) || d._forceSub === 'photo';
+    const tiles = [`<button type="button" class="${photoOn?'sel':''}" data-upload="1"><div class="cell pe-camcell">📷</div><div class="lb">上載相片</div>${photoOn?'<span class="ck">✓</span>':''}</button>`]
+      .concat(ANIMALS.map(([k,n]) => `<button type="button" data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div>${k===d.avatar?'<span class="ck">✓</span>':''}</button>`));
+    const sw = `<div class="swatches">${BGS.map(c => `<button type="button" data-c="${c}" class="${c===d.bg?'sel':''}" style="background:${c}"></button>`).join('')}</div>`;
+    const fxs = `<div class="pe-fxlab">入場特效</div><div class="pe-fx">${FXS.map(([k,n,need]) => `<button type="button" data-fx="${k}" class="${d.fx===k?'sel':''} ${fxUnlocked(k)?'':'off'}">${FX_IC[k]||''} ${n}${fxUnlocked(k)?'':` 🔒${need}場`}</button>`).join('')}</div>`;
+    return `${sw}<div class="pe-grid">${tiles.join('')}</div>${fxs}`;
+  };
+  const draw = (el) => {
+    const n = d.name || '';
+    el.innerHTML = `<div class="pe">
+      <h2>編輯檔案</h2>
+      <div class="pe-top">
+        <div class="pe-av" data-cam="1">${av(d, 64)}<span class="pe-cam" title="上載相片">📷</span></div>
+        <div class="pe-nick">
+          <div class="pe-lab">暱稱</div>
+          <input class="inp" id="nm" maxlength="10" placeholder="輸入暱稱" value="${esc(n)}" autocomplete="off">
+          <div class="pe-hint">點入輸入框即可更改暱稱</div>
+          <span class="pe-cnt"><i id="nlen">${Array.from(n).length}</i>/10</span>
+        </div>
+      </div>
+      <div class="seg pe-tabs"><button type="button" data-t="avatar" class="${tab==='avatar'?'sel':''}">頭像</button><button type="button" data-t="pendant" class="${tab==='pendant'?'sel':''}">掛件</button></div>
+      <div class="pe-body">${bodyHtml()}</div>
+      <input id="file" type="file" accept="image/*" hidden>
+      <div class="pe-bot"><button type="button" class="btn pe-save" id="ok">保存</button></div>
+    </div>`;
+    bind(el);
+    if (d._photo && d.avatar === 'photo') { const img = el.querySelector('.pe-av .av img'); if (img) img.src = d._photo; }
+  };
+  const bind = (el) => {
+    const nm = $('#nm', el);
+    if (nm) nm.oninput = () => { d.name = nm.value; const nlen = $('#nlen', el); if (nlen) nlen.textContent = Array.from(d.name||'').length; };
+    $$('[data-t]', el).forEach(b => b.onclick = () => { tab = b.dataset.t; const body = el.querySelector('.pe-body'); if (body) body.innerHTML = bodyHtml(); $$('.pe-tabs [data-t]', el).forEach(x => x.classList.toggle('sel', x.dataset.t === tab)); bindBody(el); });
+    bindBody(el);
+    const pickFile = () => { const f = $('#file', el); if (f) f.click(); };
+    $$('[data-cam]', el).forEach(b => b.onclick = (ev) => { ev.preventDefault(); pickFile(); });
+    const f = $('#file', el); if (f) f.onchange = async () => { const file = f.files[0]; f.value = ''; if (!file) return;
+      try {
+        const bmp = await loadOrientedBitmap(file);
+        openPhotoCrop(bmp, {
+          pendant: d.pendant,
+          onConfirm: (data) => {
+            d.avatar = 'photo'; d._photo = data; d.photoUrl = data; d._forceSub = 'photo';
+            peek(el);
+            const up = el.querySelector('[data-upload]');
+            if (up) { $$('.pe-grid [data-e], .pe-grid [data-upload]', el).forEach(x => { x.classList.toggle('sel', x === up); const ck = x.querySelector('.ck'); if (x === up) { if (!ck) x.insertAdjacentHTML('beforeend', '<span class="ck">✓</span>'); } else if (ck) ck.remove(); }); }
+            pickMsg('上載相片');
+          },
+          onCancel: () => {}
+        });
+      } catch (e) { toast('讀唔到呢張相，請揀另一張', 'bad'); }
+    };
     $('#ok', el).onclick = async () => {
       const n = Array.from((d.name || '').trim()).slice(0, 10).join(''); if (!n) return toast('請輸入暱稱');
-      if ((d._forceSub==='photo' || d.avatar==='photo') && !d._photo && d.avatar!=='photo') return toast('請選擇相片');
       try {
         await ensureSession();
         const body = { name: n, bg: d.bg, fx: d.fx, pendant: d.pendant, skins: skinSel };
         if (d._photo && d.avatar === 'photo') body.photo = d._photo;
         else body.avatar = migrateAvatar(d.avatar) === 'photo' ? undefined : migrateAvatar(d.avatar);
         const r = await api('/api/me', { method: 'PUT', body: JSON.stringify(body) });
-        applyUser(r.user); socket.emit('profile', {}); closeModal(); render(); after && after(); toast('已永久保存');
-      } catch (e) { toast(e.message || '儲存失敗'); }
+        applyUser(r.user); socket.emit('profile', {}); closeModal(); if (view === 'home' || view === 'room') render(); after && after(); toast('已永久保存', 'ok');
+      } catch (e) { toast(e.message || '儲存失敗', 'bad'); }
     };
   };
-  // fix sub tab detection
-  const _draw = draw;
-  const wrapped = (el) => {
-    const orig = d._forceSub;
-    // monkeypatch photoSrc for preview of data url
-    const prevPhotoSrc = photoSrc;
-    if (d._photo) { const p = photoSrc; window.__tmpPhoto = d._photo; }
-    _draw(el);
+  const bindBody = (el) => {
+    $$('[data-upload]', el).forEach(b => b.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); $('#file', el) && $('#file', el).click(); });
+    $$('[data-e]', el).forEach(b => b.onclick = () => {
+      d.avatar = b.dataset.e; d._forceSub = 'animal';
+      markSel(el, '.pe-grid [data-e], .pe-grid [data-upload]', b);
+      peek(el);
+      const it = ANIMALS.find(x => x[0] === d.avatar);
+      pickMsg(it ? it[1] : '頭像');
+    });
+    $$('[data-c]', el).forEach(b => b.onclick = () => {
+      d.bg = b.dataset.c;
+      $$('[data-c]', el).forEach(x => x.classList.toggle('sel', x === b));
+      $$('.pe-grid .cell[style]', el).forEach(c => { if (!c.classList.contains('pe-camcell')) c.style.background = d.bg; });
+      const avEl = el.querySelector('.pe-av .av'); if (avEl) avEl.style.background = d.bg;
+      pickMsg('背景顏色');
+    });
+    $$('[data-fx]', el).forEach(b => b.onclick = () => {
+      if (!fxUnlocked(b.dataset.fx)) return toast('再玩多幾場即可解鎖此外觀');
+      d.fx = b.dataset.fx;
+      $$('[data-fx]', el).forEach(x => x.classList.toggle('sel', x === b));
+      const stage = el.querySelector('.pe-av');
+      // replay preview on top avatar wrap
+      const wrap = el.querySelector('.pe-top');
+      if (wrap) { wrap.className = 'pe-top' + (d.fx && d.fx !== 'none' ? ' enter fx-' + d.fx : ''); }
+      const it = FXS.find(x => x[0] === d.fx);
+      pickMsg(it ? it[1] : '入場特效');
+    });
+    $$('[data-pd]', el).forEach(b => b.onclick = () => {
+      const k = b.dataset.pd;
+      if (k !== 'none' && !pdUnlocked(k)) { const it = PENDANTS.find(x => x[0] === k); return toast(`「${it[1]}」：${pdNeed(it)}`); }
+      d.pendant = k;
+      $$('[data-pd]', el).forEach(x => { x.classList.toggle('sel', x === b); const ck = x.querySelector('.ck'); if (x === b) { if (!ck) x.insertAdjacentHTML('afterbegin', '<span class="ck">✓</span>'); } else if (ck) ck.remove(); });
+      peek(el);
+      const it = k === 'none' ? null : PENDANTS.find(x => x[0] === k);
+      pickMsg(it ? it[1] : '不佩戴');
+    });
   };
   openModal('', draw);
 }
+
 function ensureName(fn) { if (profile.name) fn(); else editProfile(fn); }
 async function createRoom() { await ensureSession(); const r = await emit('create'); if (r.room) go('room'); }
-async function joinRoom(code) { await ensureSession(); const r = await emit('join', { code }); if (r.room) { closeModal(); go('room'); } }
+async function joinRoom(code) { await ensureSession(); const r = await emit('join', { code }); if (r.room) { closeModal(); go('room'); if (r.spectating) toast('已進入觀戰'); } }
 function joinDialog() {
   openModal(`<h2>加入房間</h2><input class="inp code-inp" id="cd" maxlength="4" placeholder="····" autocomplete="off">
   <p class="muted small center">輸入同枱朋友的 4 位房間號，或用相機掃描他們的二維碼</p><button class="btn" id="ok">進入圓桌</button>`, (el) => {
@@ -426,7 +756,7 @@ function roundTable(seats, o = {}) {
     const action = o.action || 'sel';
     const extra = o.click && o.click(s, i) ? `data-a="${action}" data-id="${s.id}"` : (o.seatClick ? `data-a="${o.seatClick}" data-id="${s.id}" data-seat="${seatNo}"` : '');
     return `<div class="st ${cls}" style="left:${x}%;top:${y}%" data-sid="${s.id}" ${extra}>
-      <span class="no">${seatNo}</span><div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, 44)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="nm">${esc(s.name)}</div>${o.sub ? o.sub(s, i) : ''}</div>`;
+      <span class="no">${seatNo}</span><div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${av(s, 44)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
   }).join('');
   return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="#7a5200" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="#7a5200"/><circle cx="13.8" cy="10.3" r="1.2" fill="#7a5200"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="#7a5200" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="#7a5200" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${st}</div>`;
 }
@@ -634,6 +964,7 @@ function setHTML(el, html) {
 }
 function render() {
   const app = $('#app'); const inRoom = S && S.code;
+  if (view !== 'skins') app.dataset.v = view || '';
   if (view === 'room' && !inRoom) view = 'home';
   $('#backBtn').classList.toggle('hidden', view === 'home');
   $('#topTitle').textContent = { home: '旺角阿瓦隆', room: inRoom ? `圓桌 ${S.code}` : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就' }[view];
@@ -653,16 +984,23 @@ function render() {
   else if (view === 'history') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadHistory(); }
   else if (view === 'stats') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadStats(); }
   else if (view === 'ach') { app.innerHTML = '<div class="card center muted">載入中…</div>'; refreshStats().catch(() => {}).then(() => { if (view === 'ach') app.innerHTML = achHtml(); }); }
-  else if (view === 'skins') { app.innerHTML = '<div class="card center muted">載入中…</div>'; refreshStats().then(() => { if (view === 'skins') app.innerHTML = skinsHtml(); }); }
+  else if (view === 'skins') {
+    if (app.dataset.v === 'skins' && app.querySelector('.skinrow')) return; // already mounted — never flash/rebuild
+    app.dataset.v = 'skins';
+    app.innerHTML = '<div class="card center muted">載入中…</div>';
+    refreshStats().then(() => { if (view === 'skins') { app.dataset.v = 'skins'; app.innerHTML = skinsHtml(); } });
+  }
   else if (view === 'detail') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadDetail(viewArg.gid); }
 }
 function homeHtml() {
   const inRoom = S && S.code;
   const vc = account ? account.vetoCards : null;
   return `  <div class="card prof-head">
-    <div class="row" data-a="profile" style="cursor:pointer">${av(profile, 60)}
-      <div class="grow"><div class="name">${profile.name ? esc(profile.name) : '未設定暱稱'}${isGM() ? '<span class="gmb" title="Game Master">GM</span>' : ''}</div>${account ? `<div class="muted small">${myStats.played || 0} 場 · 勝率 ${pct(myStats.won, myStats.played)}%</div>` : '<div class="skel" style="width:110px"></div><div class="skel" style="width:80px;margin-top:6px"></div>'}${vc != null ? `<div class="vchip" data-a="vetoinfo"><img src="/img/veto_t.webp" alt="" width="18" height="24">回避卡 <b>${vc}</b>/10</div>` : ''}</div></div>
-    <div class="row" style="gap:8px;margin-top:10px"><button class="btn sm ghost" data-a="profile">✎ 編輯檔案</button><button class="btn sm ghost" data-a="ptab" data-t="pendant">🎀 頭像掛件</button></div>
+    <div class="prof-row">
+    <div class="row" data-a="profile" style="cursor:pointer;flex:1;min-width:0">${av(profile, 60)}
+      <div class="grow"><div class="name">${profile.name ? esc(profile.name) : '未設定暱稱'}${isGM() ? '<span class="gmb" title="Game Master">GM</span>' : ''}</div>${account ? `<div class="muted small">${myStats.played || 0} 場 · 勝率 ${pct(myStats.won, myStats.played)}%</div>` : '<div class="skel" style="width:110px"></div><div class="skel" style="width:80px;margin-top:6px"></div>'}${vc != null ? `<div class="vchip" data-a="vetoinfo"><img src="/img/veto_t.webp" alt="" width="18" height="24">回避卡 <b>${vetoAmt(vc)}</b>${isGM()?'':'/10'}</div>` : ''}</div></div>
+    <div class="prof-actions"><button type="button" class="btn sm ghost pa" data-a="profile">✎ 編輯檔案</button><button type="button" class="btn sm ghost pa" data-a="ptab" data-t="pendant">🎀 頭像掛件</button></div>
+    </div>
     <div class="acct">${account && (account.username || account.google) ? `<div class="row between"><div class="small">已登入 <b>${esc(account.username || account.email || 'Google 帳號')}</b>${account.google ? ' <span class="badge">Google</span>' : ''}</div><button class="btn sm dark" data-a="logout">登出</button></div>` : `<div class="tiny muted">目前是訪客。註冊或用 Google 登入後，資料永久保存、換機也能找回。</div><div class="btns"><button class="btn sm" data-a="register">註冊帳號</button><button class="btn sm ghost" data-a="login">登入</button></div>`}</div>
   </div>
   ${inRoom ? `<div class="card"><div class="row between"><div><span class="code">${S.code}</span>${S.isHost ? '<span class="badge host">房主</span>' : ''}<div class="muted small">就座 ${S.seated}/${S.capacity} · ${S.game ? (S.game.phase === 'end' ? '已結束' : '遊戲中') : '等待開局'}</div></div><button class="btn sm" data-a="toroom">回到房間</button></div></div>` : ''}
@@ -686,13 +1024,13 @@ const ACHS = [
   ['win1', '首勝', '贏得第 1 場', s => s.won >= 1],
   ['win10', '常勝騎士', '累積 10 場勝利', s => s.won >= 10],
   ['mvp', '全場最佳', '獲得一次 MVP', s => (s.mvp || 0) >= 1],
-  ['mvp10', '10次MVP', '累積 10 次 MVP · 獎勵：閃光卡牌特效', s => (s.mvp || 0) >= 10, s => [Math.min(s.mvp || 0, 10), 10]],
+  ['mvp10', '10次MVP', '累積 10 次 MVP · 獎勵：閃光卡牌特效、MVP金桂冠掛件', s => (s.mvp || 0) >= 10, s => [Math.min(s.mvp || 0, 10), 10]],
   ['merlin', '智者', '以梅林身份獲勝', s => ((s.roles || {}).merlin || {}).won >= 1],
   ['assassin', '暗影之刃', '以刺客身份獲勝', s => ((s.roles || {}).assassin || {}).won >= 1],
   ['allroles', '千面騎士', '玩過 6 種不同角色', s => Object.keys(s.roles || {}).length >= 6],
 ];
 function achHtml() {
-  const s = isGM() ? { played: 1e9, won: 1e9, mvp: 1e9, roles: Object.fromEntries(ROLE_ORDER.map(k => [k, { played: 1e9, won: 1e9 }])) } : (myStats || {}); const got = ACHS.filter(a => a[3](s)).length;
+  const s = isGM() ? { played: 1e9, won: 1e9, mvp: (myStats.mvp || 0), roles: Object.fromEntries(ROLE_ORDER.map(k => [k, { played: 1e9, won: 1e9 }])) } : (myStats || {}); const got = ACHS.filter(a => a[3](s)).length;
   return `<div class="card"><h3>成就 ${got}/${ACHS.length}</h3><div class="bar"><i style="width:${pct(got, ACHS.length)}%"></i></div></div>` +
     `<div class="card ach">${ACHS.map(([k, n, d, f, prog]) => `<div class="ach-i ${f(s) ? 'on' : ''}"><span class="medal">${f(s) ? (k === 'mvp10' ? '🌈' : '🏅') : '🔒'}</span><div class="grow"><b>${n}</b><div class="tiny muted">${d}</div>${prog && !isGM() ? `<div class="bar sm"><i style="width:${pct(prog(s)[0], prog(s)[1])}%"></i></div><div class="tiny muted">${prog(s)[0]}/${prog(s)[1]}</div>` : ''}</div></div>`).join('')}</div>`;
 }
@@ -721,22 +1059,23 @@ function lobbyHtml() {
   const n = S.capacity, x = S.seated, s = S.settings, host = S.isHost;
   const me = (S.seats || []).find(p => p && p.id === S.meId);
   const vc = S.myVetoCards == null ? (account && account.vetoCards) : S.myVetoCards;
-  return `${roomHead()}
+  const specBar = S.spectating ? `<div class="specbar">👁 觀戰中${(S.spectators||[]).length ? ' · ' + S.spectators.length + ' 人' : ''}</div>${(S.spectators||[]).length ? `<div class="speclist">${S.spectators.map(p => `<span class="spec-i">${av(p,22)}<i>${esc(p.name)}</i></span>`).join('')}</div>` : ''}` : ((S.spectators||[]).length ? `<div class="speclist">${S.spectators.map(p => `<span class="spec-i">${av(p,22)}<i>${esc(p.name)}</i></span>`).join('')}</div>` : '');
+  return `${roomHead()}${specBar}
   <div class="card" style="padding:10px">${roundTable(S.seats, {
       seatClick: 'seat', emote: true,
       marker: p => (p.ready ? '✅' : ''),
       cls: p => (p.isHost || p.id === S.hostId ? 'host' : ''),
       sub: p => (p.isHost || p.id === S.hostId ? '<span class="hostpill">房主</span>' : '') + (p.id === S.meId ? '<span class="mepill">我</span>' : ''),
       center: `<b>${x}/${n} 已就座</b>` })}
-    <div class="tiny muted center" style="margin-top:4px">點空位就座 · 點玩家看名片${host ? '或請他離座' : ''}</div></div>
+    </div>
   <div class="card cfgcard" data-a="cfg">
     <div class="row between"><h3 style="margin:0">${n} 人局</h3><span class="small gold">${host ? '調整 ›' : '查看 ›'}</span></div>
     ${presetCard(S.preset)}
     <div class="xps">${expStatus(s)}</div>
   </div>
-  <div class="bottombar">${s.veto ? `<div class="veto-ic" data-a="vetoinfo" title="回避卡"><img src="/img/veto_t.webp" alt="" width="24" height="32"><b>${vc == null ? '–' : vc}</b></div>` : `<div class="thumb" data-a="role"></div>`}
+  <div class="bottombar">${s.veto ? `<div class="veto-ic" data-a="vetoinfo" title="回避卡"><img src="/img/veto_t.webp" alt="" width="24" height="32"><b>${vetoAmt(vc)}</b></div>` : `<div class="thumb" data-a="role"></div>`}
     ${host ? `<button class="btn" data-a="start" ${x === n ? '' : 'disabled'}>開始遊戲（${x}/${n}）</button>` :
-      S.mySeat ? `<button class="btn ${me && me.ready ? 'ghost' : ''}" data-a="ready">${me && me.ready ? '已準備 ✓' : '準備'}</button>` : `<button class="btn ghost" disabled>請先點空位就座</button>`}
+      S.mySeat ? `<button class="btn ${me && me.ready ? 'ghost' : ''}" data-a="ready">${me && me.ready ? '已準備 ✓' : '準備'}</button>` : `<button class="btn ghost" disabled>觀戰中 · 點空位即可就座</button>`}
   </div>`;
 }
 function gameHtml() {
@@ -751,7 +1090,7 @@ function gameHtml() {
   } else if (g.phase === 'vote') {
     center = `<b>投票中</b>${g.voted.length}/${g.n} 已投`;
     panel = `<div class="phase">是否同意此隊伍出任務？</div><div>${g.team.map(id => chip(id)).join('')}</div><div class="small muted" style="margin-top:6px">全員投完後同時公開</div>` +
-      (me && !me.voted ? `<div class="btns"><button class="btn good" data-a="vote" data-v="1">✓ 贊成</button><button class="btn evil" data-a="vote" data-v="0">✕ 反對</button></div>${me.hasVeto && g.team.includes(meId) ? '<button class="btn ghost" data-a="veto">使用回避卡（退出隊伍）</button>' : ''}` : `<div class="center muted" style="margin-top:10px">你已投${me && me.myVote ? '「贊成」' : '「反對」'}，等待其他騎士…</div>`);
+      (me && !me.voted ? `<div class="btns"><button class="btn good" data-a="vote" data-v="1">✓ 贊成</button><button class="btn evil" data-a="vote" data-v="0">✕ 反對</button></div>${me.hasVeto && g.team.includes(meId) ? '<button class="btn ghost" data-a="veto">使用回避卡（退出隊伍）</button>' : ''}` : `<div class="center muted" style="margin-top:10px">${me ? '你已投' + (me.myVote ? '「贊成」' : '「反對」') + '，等待其他騎士…' : '觀戰中，等待投票結果'}</div>`);
   } else if (g.phase === 'sword') {
     const proposer = (g.rounds[g.round]||[]).slice(-1)[0];
     const amL = proposer && proposer.leader === meId;
@@ -792,21 +1131,114 @@ function gameHtml() {
     label: s => ended ? `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>` : (s.evil ? '<span class="lbl e">壞人</span>' : ''),
     center,
   });
-  return `<div class="card">${trackHtml(g)}</div>
+  return `${!me ? '<div class="specbar">👁 觀戰中</div>' : ''}<div class="card">${trackHtml(g)}</div>
   <div class="card" style="padding:10px">${table}</div>
   <div class="card">${panel}</div>
-  ${me ? `<div class="card rolestrip" data-a="role"><div class="th"></div><div class="grow"><div class="serif gold" style="font-weight:700">我的身份卡</div><div class="small muted">點擊翻開查看（請遮住螢幕）</div></div><span class="gold">›</span></div>` : '<div class="card muted">你是觀眾</div>'}
+  ${me ? `<div class="card rolestrip" data-a="role"><div class="th"></div><div class="grow"><div class="serif gold" style="font-weight:700">我的身份卡</div><div class="small muted">點擊翻開查看（請遮住螢幕）</div></div><span class="gold">›</span></div>` : '<div class="specbar">👁 觀戰中 · 唔會看到隱藏身分</div>'}
   ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : `<div class="card"><h3>組隊 / 投票記錄</h3>${voteGrid(g.seats, g.rounds, g.quests, meId)}${ladyChainHtml(g.ladyLog, g.seats)}</div>`}
   <div class="btns"><button class="btn dark" data-a="invite">房間二維碼</button><button class="btn dark" data-a="go" data-v="home">返回主頁</button></div>
   ${S.isHost && !ended ? '<button class="btn dark" data-a="abort" style="color:#ff8b9c">強制結束本局</button>' : ''}
-  ${me && !ended ? `<button class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}`;
+  ${g.settings.veto && me && !ended ? `<button type="button" class="veto-fab ${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'ready' : 'dim'}" data-a="${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'veto' : 'vetoinfo'}" aria-label="回避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>回避卡</span><b>${vetoAmt(me.vetoCards != null ? me.vetoCards : S.myVetoCards)}</b></button>` : ''}
+  ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}`;
 }
 function ladyChainHtml(log, seats) {
   if (!log || !log.length) return '';
   return `<div class="small" style="margin-top:12px"><span class="gold">🌊 湖中仙女：</span>${log.map(l => `${esc(P(l.holder, seats).name)} → ${esc(P(l.target, seats).name)}${l.side ? ` <span class="badge ${l.side}">${l.side === 'good' ? '好' : '壞'}</span>` : ''}`).join('　')}</div>`;
 }
+
+function reviewOf(r) {
+  if (r && r.review && r.review.cards) return r.review;
+  if (typeof AvalonReview !== 'undefined') {
+    return AvalonReview.build({
+      players: r.players, quests: r.quests, rounds: r.rounds, ladyLog: r.ladyLog,
+      ladyStartId: r.ladyStartId, ladyUsed: r.ladyUsed, settings: r.settings, winner: r.winner,
+    });
+  }
+  return { cards: [] };
+}
+function reviewHtml(r) {
+  const built = reviewOf(r);
+  const seats = r.players || [];
+  const lab = (id) => {
+    if (typeof AvalonReview !== 'undefined') return AvalonReview.label(seats, id);
+    const p = seats.find(s => s.id === id);
+    return p ? `${p.seat || '?'}號 ${esc(p.name)}` : '未有記錄';
+  };
+  const roleOf = (id) => {
+    const p = seats.find(s => s.id === id);
+    if (!p || !p.role) return '<i class="rev-miss">未有記錄</i>';
+    return esc((ROLE[p.role] && ROLE[p.role].n) || RN[p.role] || p.role);
+  };
+  if (!built.cards || !built.cards.length) {
+    return `<div class="card"><h3>覆盤重點</h3><p class="rev-miss">此對局未有足夠記錄可重播。</p></div>`;
+  }
+  const cards = built.cards.map(c => {
+    if (c.type === 'lady') {
+      if (c.disabled) return `<article class="rev-card"><h4><span class="rev-k">湖中仙女</span> 本局未開啟</h4></article>`;
+      if (c.unknown) return `<article class="rev-card"><h4><span class="rev-k">湖中仙女</span></h4><p class="rev-miss">舊記錄未保存是否開啟湖中仙女，未有記錄。</p></article>`;
+      const start = c.startKnown ? lab(c.startId) : '<span class="rev-miss">未有記錄</span>';
+      const checkLines = (c.checks || []).map(ch => {
+        if (ch.kind === 'notplayed') return '';
+        if (ch.kind === 'ended') return `<div>第 ${ch.mission} 個任務結束後已分出勝負或進入刺殺，沒有查驗。</div>`;
+        if (ch.kind === 'missing') return `<div>第 ${ch.mission} 個任務後嘅查驗：<span class="rev-miss">未有記錄</span></div>`;
+        const side = ch.side === 'good' ? '好人' : ch.side === 'evil' ? '壞人' : null;
+        return `<div>第 ${ch.mission} 個任務後：${lab(ch.holder)} 查驗 ${lab(ch.target)}${side ? `（陣營：${side}）` : '（查驗結果：<span class="rev-miss">未有記錄</span>）'}，之後把仙女交給對方。</div>`;
+      }).filter(Boolean).join('') || '<div class="rev-miss">沒有查驗記錄。</div>';
+      const chain = (c.chain && c.chain.length)
+        ? `<div class="rev-chain">傳遞鏈：${c.chain.map(lab).join(' → ')}</div>`
+        : `<div class="rev-miss">傳遞鏈：未有記錄</div>`;
+      const used = (c.used && c.used.length)
+        ? `<div>曾持有、不能再被查驗：${c.used.map(lab).join('、')}</div>`
+        : `<div class="rev-miss">曾持有名單：未有記錄</div>`;
+      return `<article class="rev-card"><h4><span class="rev-k">湖中仙女</span> 查驗同傳遞</h4>
+        <p>起始持有者：${start}。規則：第 2、3、4 個任務後可以查驗一人陣營，然後把仙女交給被查驗者；曾持有者不能再被查驗。</p>
+        ${checkLines}${chain}${used}</article>`;
+    }
+    if (c.type === 'proposal') {
+      const ok = c.quest ? (c.quest.success ? 'ok' : 'bad') : (c.approved ? 'ok' : '');
+      const tag = c.quest
+        ? (c.quest.success ? `第 ${c.mission} 個任務 · 成功` : `第 ${c.mission} 個任務 · 失敗${c.quest.fails != null ? `（${c.quest.fails} 張失敗卡）` : ''}`)
+        : (c.approved ? `第 ${c.mission} 個任務組隊通過` : `第 ${c.mission} 個任務組隊被否決`);
+      const leader = c.leader ? lab(c.leader) : '<span class="rev-miss">隊長未有記錄</span>';
+      const att = c.attempt ? `第 ${c.attempt} 次提名` : '';
+      let nar = `隊長 ${leader}${att ? '（' + att + '）' : ''} 提名 ${ (c.team||[]).length || '？' } 人隊伍。`;
+      if (c.approved && c.yes != null) nar += `投票 ${c.yes} 贊成、${c.no} 反對，組隊通過。`;
+      else if (c.approved === false && c.yes != null) nar += `投票 ${c.yes} 贊成、${c.no} 反對，組隊被否決。`;
+      else if (c.missingVotes) nar += '詳細投票：<span class="rev-miss">未有記錄</span>。';
+      if (c.quest) nar += c.quest.success
+        ? `任務結果：成功${c.quest.fails != null ? `（失敗卡 ${c.quest.fails} 張）` : ''}。`
+        : `任務結果：失敗${c.quest.fails != null ? `（失敗卡 ${c.quest.fails} 張）` : ''}。`;
+      if (c.sameMerlinMorgana) nar += '此隊同時有梅林同莫甘娜。';
+      const team = (c.team || []).map(id => {
+        const p = seats.find(s => s.id === id) || { id, name: '？' };
+        return `<div class="rev-p">${av(p, 36)}<b>${esc(p.name || '騎士')}</b><i>${p.seat || '?'}號 · ${roleOf(id)}</i></div>`;
+      }).join('');
+      let votes = '';
+      if (c.votes) {
+        const rows = seats.map(p => {
+          const v = c.votes[p.id];
+          const mark = v === true ? '<span class="y">贊成</span>' : v === false ? '<span class="n">反對</span>' : '<span class="rev-miss">未有記錄</span>';
+          return `<div class="rev-v">${av(p, 22)}${esc(p.name)}（${p.seat || '?'}號）${mark}</div>`;
+        }).join('');
+        votes = `<div class="rev-votes">${rows}</div>`;
+      } else {
+        votes = `<p class="rev-miss">個別投票未有記錄。</p>`;
+      }
+      return `<article class="rev-card"><h4><span class="rev-k ${ok}">${att || '組隊'}</span> ${esc(tag)}</h4>
+        <p>${nar}</p>
+        ${team ? `<div class="rev-team">${team}</div>` : '<p class="rev-miss">隊伍名單未有記錄。</p>'}
+        ${votes}</article>`;
+    }
+    return '';
+  }).join('');
+  return `<div class="card"><h3>覆盤重點</h3><div class="rev">${cards}</div></div>`;
+}
 function liveRecord(g) {
-  return { gid: g.gid, winner: g.winner, reason: g.reason, n: g.n, players: g.seats.map((s, i) => ({ ...s, seat: i + 1 })), quests: g.quests, rounds: g.rounds, ladyLog: g.ladyLog, assassinTarget: g.assassinTarget, scores: g.scores || {}, mvp: g.mvp, runnerUp: g.runnerUp, highlights: g.highlights || [], myId: S.meId, room: S.code, endedAt: Date.now() };
+  return { gid: g.gid, winner: g.winner, reason: g.reason, n: g.n, settings: g.settings,
+    players: g.seats.map((s, i) => ({ ...s, seat: i + 1 })), quests: g.quests, rounds: g.rounds,
+    ladyLog: g.ladyLog, ladyStartId: g.ladyStartId, ladyUsed: g.ladyUsed,
+    assassinTarget: g.assassinTarget, scores: g.scores || {}, mvp: g.mvp, runnerUp: g.runnerUp,
+    highlights: g.highlights || [], review: g.review, myId: S.meId, room: S.code, endedAt: Date.now() };
 }
 function detailHtml(r) {
   const seats = r.players; const me = seats.find(s => s.id === r.myId); const sc = r.scores || {};
@@ -824,7 +1256,8 @@ function detailHtml(r) {
   </div>
   <div class="card"><h3>MVP</h3><div class="mvp">${mvpBox(r.mvp, '🏅 MVP')}${mvpBox(r.runnerUp, '🥈 亞軍')}</div><div class="tiny muted" style="margin-top:8px">計分：勝利 +12 · 正確投票 +2 · 完成己方任務 +1 · 人數加成 · 刺中梅林/梅林隱藏 +5</div></div>
   <div class="card"><h3>全員身份</h3>${roundTable(seats, { label: s => `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>`, marker: s => (s.id === r.assassinTarget ? '🗡️' : '') + (s.id === r.mvp ? '🏅' : '') + (s.id === r.myId ? '⭐' : ''), center: `<b>${goodWin ? '好人勝' : '壞人勝'}</b>🗡️ 被刺殺　🏅 MVP` })}</div>
-  ${r.highlights && r.highlights.length ? `<div class="card"><h3>精彩時刻</h3><ul class="hl">${r.highlights.map(h => `<li>${esc(h)}</li>`).join('')}</ul>${ladyChainHtml(r.ladyLog, seats)}</div>` : ''}
+  ${reviewHtml(r)}
+  ${r.highlights && r.highlights.length ? `<div class="card"><h3>精彩時刻</h3><ul class="hl">${r.highlights.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
   <div class="card"><h3>組隊 / 投票全記錄</h3>${voteGrid(seats, r.rounds || [], r.quests, r.myId)}</div>
   <button class="btn ghost" data-a="poster">🖼️ 生成戰報海報</button>`;
 }
@@ -937,6 +1370,30 @@ async function animateDemo() {
   if (dq && DEMO[step].quests.length > (DEMO[step - 1] || { quests: [] }).quests.length) for (const c of $$('.vc', dq)) { await sleep(500); if (step !== demoStep) return; c.classList.add('on'); }
 }
 
+
+// Shared canvas avatar: clip/draw the photo FIRST as a circle, then ALL pendant art in front (never behind).
+async function canvasDrawAv(x, load, p, cx, cy, rad) {
+  const ov = rad * 2 / 0.6;
+  x.save();
+  x.beginPath();
+  x.arc(cx, cy, rad, 0, Math.PI * 2);
+  x.fillStyle = (p && p.bg) || '#ffffff';
+  x.fill();
+  x.clip();
+  const im = await load(photoSrc(p));
+  if (im) {
+    const s = Math.min(im.naturalWidth || im.width, im.naturalHeight || im.height);
+    const sx = ((im.naturalWidth || im.width) - s) / 2, sy = ((im.naturalHeight || im.height) - s) / 2;
+    x.drawImage(im, sx, sy, s, s, cx - rad, cy - rad, rad * 2, rad * 2);
+  }
+  x.restore();
+  const k = p && p.pendant;
+  if (k && k !== 'none') {
+    if (PD_BACK[k]) { const bi = await load(pdSrc(k, 1)); if (bi) x.drawImage(bi, cx - ov / 2, cy - ov / 2, ov, ov); }
+    if (PD_IMG[k]) { const pi = await load(pdSrc(k)); if (pi) x.drawImage(pi, cx - ov / 2, cy - ov / 2, ov, ov); }
+  }
+}
+
 // ================= poster =================
 const replayUrl = (r) => r && r.gid ? `${PUBLIC_ORIGIN}/g/${r.gid}` : PUBLIC_ORIGIN;
 const sideOf = (p) => (ROLE[p.role] || {}).side || p.side || 'good';
@@ -964,13 +1421,7 @@ async function makePoster(r, personal = true) {
   x.fillStyle = accent; x.fillRect(pad, 28, W - pad * 2, 8); x.restore();
   const logo = await load('/img/amigos.webp');
   const hero = early ? null : (ps.find(p => p.id === r.mvp && sideOf(p) === r.winner) || ps.find(p => sideOf(p) === r.winner));
-  const drawAv = async (p, cx, cy, rad, ring) => {
-    const ov = rad * 2 / 0.6;
-    if (PD_BACK[p.pendant]) { const bi = await load(`/img/pd/${p.pendant}_b.webp`); if (bi) x.drawImage(bi, cx - ov / 2, cy - ov / 2, ov, ov); }
-    x.save(); x.beginPath(); x.arc(cx, cy, rad, 0, Math.PI * 2); x.fillStyle = p.bg || '#f3d9a4'; x.fill(); x.clip();
-    const im = await load(photoSrc(p)); if (im) x.drawImage(im, cx - rad, cy - rad, rad * 2, rad * 2); x.restore();
-    if (PD_IMG[p.pendant]) { const pi = await load(`/img/pd/${p.pendant}.webp`); if (pi) x.drawImage(pi, cx - ov / 2, cy - ov / 2, ov, ov); }
-  };
+  const drawAv = async (p, cx, cy, rad, ring) => canvasDrawAv(x, load, p, cx, cy, rad);
 
   if (hero) await drawAv(hero, pad + 92, 150, 58, accent);
   else { x.fillStyle = '#eef0f4'; x.beginPath(); x.arc(pad + 92, 150, 58, 0, Math.PI * 2); x.fill(); x.font = '56px sans-serif'; x.textAlign = 'center'; x.fillText('🏳️', pad + 92, 170); }
@@ -1128,11 +1579,9 @@ async function makeStory(r) {
   ctr(!r ? '我的戰績' : early ? '提前結束' : good ? '藍方勝利' : '紅方勝利', y + 100, '900 76px sans-serif', '#fff');
   ctr(!r ? `${st.played || 0} 場 · 勝率 ${pct(st.won, st.played)}%` : `${r.n} 人局${r.room ? ' · 房間 ' + r.room : ''}`, y + 148, '600 30px sans-serif', 'rgba(255,255,255,.92)');
   y += 230;
-  // avatar + pendant
-  const rad = 130, cx = W / 2, cy = y + rad + 30; const ov = rad * 2 / 0.6;
-  if (PD_BACK[meP.pendant]) { const bi = await load(`/img/pd/${meP.pendant}_b.webp`); if (bi) x.drawImage(bi, cx - ov / 2, cy - ov / 2, ov, ov); }
-  x.save(); x.beginPath(); x.arc(cx, cy, rad, 0, 6.2832); x.fillStyle = meP.bg || '#f3d9a4'; x.fill(); x.clip(); const im = await load(photoSrc(meP)); if (im) x.drawImage(im, cx - rad, cy - rad, rad * 2, rad * 2); x.restore();
-  if (PD_IMG[meP.pendant]) { const pi = await load(`/img/pd/${meP.pendant}.webp`); if (pi) x.drawImage(pi, cx - ov / 2, cy - ov / 2, ov, ov); }
+  // avatar + pendant (photo first, all pendant art in front)
+  const rad = 130, cx = W / 2, cy = y + rad + 30;
+  await canvasDrawAv(x, load, meP, cx, cy, rad);
   y = cy + rad + 70; ctr(String(meP.name || '騎士').slice(0, 10), y, '800 54px sans-serif', '#1f2633');
   if (r && me) {
     y += 64; const rn = roleN(me.role); const side = sideOf(me);
@@ -1193,8 +1642,16 @@ async function storySheet(r) {
 async function posterDialog() { return saveCard(window.__lastRecord, true); }
 
 // ================= actions =================
+function saveSkins(prev) {
+  LS.setItem('cc.skins', JSON.stringify(skinSel));
+  return api('/api/me', { method: 'PUT', body: JSON.stringify({ skins: skinSel }) }).catch((err) => {
+    if (prev) { skinSel = prev; LS.setItem('cc.skins', JSON.stringify(skinSel)); }
+    throw err;
+  });
+}
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-a]'); if (!el || !document.body.contains(el)) return;
+  if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.closest('form')) e.preventDefault();
   const a = el.dataset.a;
   switch (a) {
     case 'profile': return editProfile();
@@ -1203,9 +1660,25 @@ document.addEventListener('click', async (e) => {
     case 'cfg': cfgOpen = true; openModal(cfgSheetHtml()); cfgOpen = true; return;
     case 'cfgclose': return closeModal();
     case 'emote': return toggleEmotes(el);
-    case 'vetoinfo': { const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards); return openModal(`<div class="vuse"><img src="/img/veto.webp" alt="回避卡" width="150" height="200"></div><div class="center name">${vc == null ? '–' : vc} / 10</div><p class="small muted center">每贏一局 +1 張（上限 10 張），永久保存在帳號。房間開啟「回避卡」時，投票階段身為隊員可用一張退出隊伍，本次組隊作廢且不計否決。</p><button class="btn" id="ok">知道了</button>`, el2 => $('#ok', el2).onclick = closeModal); }
-    case 'shiny': { if (mvpTotal() < 10) return toast('達成「10次MVP」即可解鎖'); skinSel._shiny = !skinSel._shiny; LS.setItem('cc.skins', JSON.stringify(skinSel)); api('/api/me', { method: 'PUT', body: JSON.stringify({ skins: skinSel }) }).catch(() => {}); return render(); }
-    case 'cardback': { const k = el.dataset.k; const c = CARDBACKS.find(x => x[0] === k); if (!unlockOk(c[2], c[3])) return toast(`${needText(c[2], c[3])}即可解鎖`); skinSel._cardback = k; LS.setItem('cc.skins', JSON.stringify(skinSel)); api('/api/me', { method: 'PUT', body: JSON.stringify({ skins: skinSel }) }).catch(() => {}); return render(); }
+    case 'vetoinfo': { const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards); return openModal(`<div class="vuse"><img src="/img/veto.webp" alt="回避卡" width="150" height="200"></div><div class="center name">${isGM() ? '∞' : vetoAmt(vc) + ' / 10'}</div><p class="small muted center">${isGM() ? 'GM 回避卡為無限（∞），使用時唔會扣減，但仍要喺投票階段且身為隊員，每局只可以用一次。' : '每贏一局 +1 張（上限 10 張），永久保存在帳號。房間開啟「回避卡」時，投票階段身為隊員可用一張退出隊伍，本次組隊作廢且不計否決。'}</p><button type="button" class="btn" id="ok">知道了</button>`, el2 => $('#ok', el2).onclick = closeModal); }
+    case 'shiny': {
+      if (mvpTotal() < 10) return toast('達成「10次MVP」即可解鎖');
+      const prev = { ...skinSel }; const on = !skinSel._shiny;
+      skinSel._shiny = on; el.classList.toggle('on', on);
+      saveSkins(prev).then(() => toast(on ? '已開啟：閃光卡牌特效' : '已關閉：閃光卡牌特效', 'ok'))
+        .catch(() => { el.classList.toggle('on', !!skinSel._shiny); toast('儲存失敗，已恢復原先選擇', 'bad'); });
+      return;
+    }
+    case 'cardback': {
+      const k = el.dataset.k; const c = CARDBACKS.find(x => x[0] === k);
+      if (!unlockOk(c[2], c[3])) return toast(`${needText(c[2], c[3])}即可解鎖`);
+      if (skinSel._cardback === k) return;
+      const prev = { ...skinSel }; skinSel._cardback = k;
+      $$('.skin[data-a="cardback"]').forEach(x => x.classList.toggle('sel', x.dataset.k === k));
+      saveSkins(prev).then(() => toast(`已換上：${c[1]}`, 'ok'))
+        .catch(() => { $$('.skin[data-a="cardback"]').forEach(x => x.classList.toggle('sel', x.dataset.k === (prev._cardback || 'cardback'))); toast('儲存失敗，已恢復原先選擇', 'bad'); });
+      return;
+    }
     case 'sharecard': return shareSheet(window.__lastRecord);
     case 'savecard': return saveCard(window.__lastRecord);
     case 'create': return ensureName(createRoom);
@@ -1291,8 +1764,17 @@ document.addEventListener('click', async (e) => {
     case 'poster': return posterDialog();
     case 'story': return storySheet(window.__lastRecord);
     case 'storystats': return storySheet(null);
-    case 'skin': { const r = el.dataset.r, s = el.dataset.s; const need = SKINS.find(k => k.id === s).need; const played = rolePlayed(r);
-      if (played < need) return toast(`再玩 ${need - played} 場${(ROLE[r]||{}).n||r}即可解鎖`); skinSel[r] = s; LS.setItem('cc.skins', JSON.stringify(skinSel)); api('/api/me',{method:'PUT',body:JSON.stringify({skins:skinSel})}).catch(()=>{}); return render(); }
+    case 'skin': {
+      const r = el.dataset.r, s = el.dataset.s; const sk = SKINS.find(k => k.id === s); const played = rolePlayed(r);
+      if (played < sk.need) return toast(`再玩 ${sk.need - played} 場${(ROLE[r]||{}).n||r}即可解鎖`);
+      if (skinSel[r] === s) return;
+      const prev = { ...skinSel }; skinSel[r] = s;
+      $$(`.skin[data-a="skin"][data-r="${r}"]`).forEach(x => x.classList.toggle('sel', x.dataset.s === s));
+      const label = `${(ROLE[r]||{}).n || r} · ${sk.n}`;
+      saveSkins(prev).then(() => toast(`已換上：${label}`, 'ok'))
+        .catch(() => { $$(`.skin[data-a="skin"][data-r="${r}"]`).forEach(x => x.classList.toggle('sel', x.dataset.s === (prev[r] || 'classic'))); toast('儲存失敗，已恢復原先選擇', 'bad'); });
+      return;
+    }
     case 'rtab': rulesTab = el.dataset.v; if (rulesTab === 'round') demoStep = 0; return mountRules();
     case 'wk': wkRole = el.dataset.r; return mountRules();
     case 'wkrev': wkReveal = !wkReveal; return mountRules();

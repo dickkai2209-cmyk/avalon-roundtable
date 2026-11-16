@@ -76,6 +76,9 @@ async function init() {
         ALTER TABLE users ADD COLUMN IF NOT EXISTS veto_cards INT NOT NULL DEFAULT 1;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT UNIQUE;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+        ALTER TABLE games ADD COLUMN IF NOT EXISTS review JSONB;
+        ALTER TABLE games ADD COLUMN IF NOT EXISTS lady_start TEXT;
+        ALTER TABLE games ADD COLUMN IF NOT EXISTS lady_used JSONB;
         CREATE TABLE IF NOT EXISTS user_stats (
           user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
           played INT NOT NULL DEFAULT 0,
@@ -116,11 +119,13 @@ function saveJson() {
   }, 200);
 }
 
-// Exactly one GM: the account whose verified Google email equals GM_EMAIL, or whose id equals GM_USER_ID.
+// Exactly one GM: the account whose verified Google email equals GM_EMAIL
+// (fallback dickkai2209@gmail.com), or whose id equals GM_USER_ID.
 // No API or UI can grant this; it is derived only from server env + verified identity.
+const GM_EMAIL_DEFAULT = 'dickkai2209@gmail.com';
 function isGM(u) {
   if (!u) return false;
-  const em = (process.env.GM_EMAIL || '').trim().toLowerCase(), gid = (process.env.GM_USER_ID || '').trim();
+  const em = (process.env.GM_EMAIL || GM_EMAIL_DEFAULT).trim().toLowerCase(), gid = (process.env.GM_USER_ID || '').trim();
   return !!((gid && u.id === gid) || (em && u.google_sub && (u.email || '').toLowerCase() === em));
 }
 function pubUser(u) {
@@ -281,10 +286,10 @@ const J = (v) => v === undefined ? null : JSON.stringify(v);
 async function saveGame(rec) {
   if (mode === 'pg') {
     await pool.query(
-      `INSERT INTO games (gid,room,started_at,ended_at,n,winner,reason,settings,players,quests,rounds,lady_log,assassin_target,scores,mvp,runner_up,highlights,pids)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+      `INSERT INTO games (gid,room,started_at,ended_at,n,winner,reason,settings,players,quests,rounds,lady_log,assassin_target,scores,mvp,runner_up,highlights,pids,review,lady_start,lady_used)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        ON CONFLICT (gid) DO NOTHING`,
-      [rec.gid, rec.room, rec.startedAt ? new Date(rec.startedAt) : null, rec.endedAt ? new Date(rec.endedAt) : new Date(), rec.n, rec.winner, rec.reason, J(rec.settings), J(rec.players), J(rec.quests), J(rec.rounds), J(rec.ladyLog), rec.assassinTarget, J(rec.scores), rec.mvp, rec.runnerUp, J(rec.highlights), rec.pids]
+      [rec.gid, rec.room, rec.startedAt ? new Date(rec.startedAt) : null, rec.endedAt ? new Date(rec.endedAt) : new Date(), rec.n, rec.winner, rec.reason, J(rec.settings), J(rec.players), J(rec.quests), J(rec.rounds), J(rec.ladyLog), rec.assassinTarget, J(rec.scores), rec.mvp, rec.runnerUp, J(rec.highlights), rec.pids, J(rec.review || null), rec.ladyStartId || null, J(rec.ladyUsed || [])]
     );
     for (const pid of rec.winner === 'none' ? [] : rec.pids) {
       const st = rec.players[rec.pids.indexOf(pid)];
@@ -343,6 +348,7 @@ function rowToGame(r) {
     n: r.n, winner: r.winner, reason: r.reason, settings: r.settings, players: r.players,
     quests: r.quests, rounds: r.rounds, ladyLog: r.lady_log || r.ladyLog, assassinTarget: r.assassin_target || r.assassinTarget,
     scores: r.scores, mvp: r.mvp, runnerUp: r.runner_up || r.runnerUp, highlights: r.highlights, pids: r.pids,
+    review: r.review, ladyStartId: r.lady_start || r.ladyStartId || null, ladyUsed: r.lady_used || r.ladyUsed || [],
   };
 }
 async function getStats(userId) {
@@ -354,9 +360,13 @@ async function getStats(userId) {
 }
 
 async function getVetoCards(id) {
-  const u = await getUser(id); return u ? (u.veto_cards == null ? 1 : u.veto_cards) : 0;
+  const u = await getUser(id); if (!u) return 0;
+  if (isGM(u)) return 999;
+  return u.veto_cards == null ? 1 : u.veto_cards;
 }
 async function consumeVeto(id) {
+  const u0 = await getUser(id);
+  if (isGM(u0)) return 999; // unlimited inventory; game eligibility is enforced by the caller
   if (mode === 'pg') {
     const r = await pool.query('UPDATE users SET veto_cards = veto_cards - 1 WHERE id=$1 AND veto_cards > 0 RETURNING veto_cards', [id]);
     return r.rows.length ? r.rows[0].veto_cards : -1;
@@ -396,9 +406,9 @@ function flush() {
 }
 
 // ---- one-off cleanup of automated-test guests (strict key patterns that real clients never generate) ----
-const TEST_KEY_SQL = `(guest_key ~ '^(sim|tf|lb|rs|smk|rvb|uibot)[a-z0-9]+$' AND username IS NULL AND google_sub IS NULL)
+const TEST_KEY_SQL = `(guest_key ~ '^(sim|tf|lb|rs|smk|rvb|uibot|demo)[a-z0-9]+$' AND username IS NULL AND google_sub IS NULL)
   OR (guest_key ~ '^acct[a-z0-9]{8}xx$' AND username ~ '^u[a-z0-9]{6}$' AND google_sub IS NULL)`;
-const TEST_KEY_RE = /^(sim|tf|lb|rs|smk|rvb|uibot)[a-z0-9]+$/;
+const TEST_KEY_RE = /^(sim|tf|lb|rs|smk|rvb|uibot|demo)[a-z0-9]+$/;
 async function purgeTestData() {
   if (mode === 'pg') {
     const ids = (await pool.query(`SELECT id FROM users WHERE (${TEST_KEY_SQL}) AND email IS NULL AND google_sub IS NULL`)).rows.map(r => r.id).filter(id => id !== (process.env.GM_USER_ID || '').trim());
@@ -422,7 +432,7 @@ async function purgeTestData() {
 }
 async function findGMCandidates() {
   if (mode !== 'pg') return [];
-  return (await pool.query(`SELECT id, username, name, email, google_sub IS NOT NULL AS google, created_at FROM users WHERE email ILIKE '%dickson%' OR username ILIKE '%dickson%' OR name ILIKE '%dickson%' OR email = $1 ORDER BY created_at LIMIT 10`, [(process.env.GM_EMAIL || '').toLowerCase()])).rows;
+  return (await pool.query(`SELECT id, username, name, email, google_sub IS NOT NULL AS google, created_at FROM users WHERE email ILIKE '%dickson%' OR username ILIKE '%dickson%' OR name ILIKE '%dickson%' OR email = $1 ORDER BY created_at LIMIT 10`, [(process.env.GM_EMAIL || GM_EMAIL_DEFAULT).toLowerCase()])).rows;
 }
 module.exports = {
   isGM, findGMCandidates, purgeTestData, flush, saveRoom, deleteRoom, loadRooms,

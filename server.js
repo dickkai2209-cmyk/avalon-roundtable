@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { Server } = require('socket.io');
 const db = require('./db');
+const { build: buildReview } = require('./review');
 const {
   TEAM_SIZES, EVIL_COUNT, ROLE_SIDE, ROLE_NAME,
   defaultSettings, presetRoles, currentSide, canPlayFail, needTwoFails, knowledge,
@@ -16,26 +17,28 @@ const pubId = (pid) => crypto.createHash('sha256').update(String(pid)).digest('h
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const cleanName = (s) => Array.from(String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim()).slice(0, 10).join('') || '騎士';
 const ANIMALS = ['fox','panda','duck','squirrel','hedgehog','bunny','bear','redpanda','otter','hamster','shiba','dalmatian','capybara','penguin','koala','cat','wolf','lion','piglet','guineapig'];
-const FXS = ['none','spot','gold','spark','petals','fire','lightning'];
+const FXS = ['none','spot','gold','snow','spark','petals','howl','fire','lightning'];
 const EMOTES = ['1f602','1f62d','1f631','1f914','1f60e','1f621','1f64f','1f44d','1f44f','1f525','2764_fe0f','1f608','1f92b','1f440','1f389'];
 const emoteAt = new Map();
 // cosmetic unlock rules, enforced server-side (GM bypasses all)
-const PD_RULE = { wolf: ['free', 0], pumpkin: ['free', 0], devil: ['free', 0], crown: ['games', 1], bow: ['games', 2], halo: ['games', 3], ghost: ['games', 4], witch: ['games', 5], bat: ['games', 8], vampire: ['games', 12], plume: ['wins', 1], merlinhat: ['wins', 3], lotus: ['wins', 5], excal: ['wins', 10] };
+const PD_RULE = { wolf: ['free', 0], pumpkin: ['free', 0], devil: ['free', 0], crown: ['free', 0], bow: ['free', 0], halo: ['games', 2], egg: ['games', 3], ghost: ['games', 4], witch: ['games', 5], bolo: ['games', 6], tram: ['games', 7], bat: ['games', 8], vampire: ['games', 12], plume: ['wins', 1], taxi: ['wins', 2], merlinhat: ['wins', 3], lion: ['wins', 4], lotus: ['wins', 5], neon: ['wins', 6], excal: ['wins', 10], laurel: ['mvp', 10] };
 const CB_RULE = { cardback: ['free', 0], cardback_xmas: ['free', 0], cardback_sakura: ['games', 2], cardback_halloween: ['games', 3], cardback_lny: ['games', 6], cardback_starry: ['wins', 3], cardback_neon: ['wins', 5], cardback_amigos: ['wins', 10] };
-const FX_NEED = { none: 0, spot: 0, gold: 0, spark: 1, petals: 3, fire: 6, lightning: 10 };
+const FX_NEED = { none: 0, spot: 0, gold: 0, snow: 0, spark: 1, petals: 3, howl: 4, fire: 6, lightning: 10 };
 function unlockedBy(rule, st) { if (!rule) return false; const [k, n] = rule; return k === 'free' || (k === 'games' ? st.played : k === 'wins' ? st.won : st.mvp) >= n; }
 async function enforceUnlocks(user, f) {
-  if (db.isGM(user)) return null;
   const s = await db.getStats(user.id) || {}; const st = { played: s.played || 0, won: s.won || 0, mvp: s.mvp || 0 };
-  if (f.pendant && f.pendant !== 'none' && !unlockedBy(PD_RULE[f.pendant], st)) f.pendant = 'none';
+  // MVP rewards (pendant + shiny card effect) require 10 real MVPs — even for GM
+  if (f.pendant === 'laurel' && st.mvp < 10) f.pendant = 'none';
+  if (f.skins && f.skins._shiny && st.mvp < 10) f.skins._shiny = false;
+  if (db.isGM(user)) return null;
+  if (f.pendant && f.pendant !== 'none' && f.pendant !== 'laurel' && !unlockedBy(PD_RULE[f.pendant], st)) f.pendant = 'none';
   if (f.fx && st.played < (FX_NEED[f.fx] || 0)) f.fx = 'spot';
   if (f.skins) {
     if (f.skins._cardback && !unlockedBy(CB_RULE[f.skins._cardback], st)) f.skins._cardback = 'cardback';
-    if (f.skins._shiny && st.mvp < 10) f.skins._shiny = false;
   }
   return null;
 }
-const PENDANTS = ['none','wolf','pumpkin','devil','crown','bow','halo','ghost','witch','bat','vampire','plume','merlinhat','lotus','excal'];
+const PENDANTS = ['none','wolf','pumpkin','devil','crown','bow','halo','egg','ghost','witch','bolo','tram','bat','vampire','plume','taxi','merlinhat','lion','lotus','neon','excal','laurel'];
 const cleanAvatar = (s) => ANIMALS.includes(s) || s === 'photo' ? s : 'fox';
 const cleanBg = (s) => /^#[0-9a-fA-F]{6}$/.test(String(s)) ? s : '#f3d9a4';
 const cleanFx = (s) => FXS.includes(s) ? s : 'spot';
@@ -60,6 +63,32 @@ function pubPlayer(p) {
 function seated(room) { return room.seats.map((p, i) => p && { ...p, seat: i + 1 }).filter(Boolean); }
 function findPlayer(room, pid) { return room.seats.find(p => p && p.pid === pid) || null; }
 function findSeat(room, pid) { return room.seats.findIndex(p => p && p.pid === pid); }
+function inGameSeat(room, pid) { return !!(room.game && room.game.seats.some(s => s.pid === pid)); }
+function isSeatedPid(room, pid) { return !!findPlayer(room, pid) || inGameSeat(room, pid); }
+function rememberWatcher(room, socket) {
+  if (!socket || !socket.data || !socket.data.pid) return;
+  room.watchers = room.watchers || {};
+  const d = socket.data;
+  room.watchers[d.pid] = { name: d.name || '觀戰', avatar: d.avatar || 'fox', bg: d.bg, fx: d.fx, pendant: d.pendant || 'none', pv: d.pv || 0 };
+}
+function spectatorList(room) {
+  const seated = new Set();
+  for (const p of room.seats) if (p) seated.add(p.pid);
+  if (room.game) for (const p of room.game.seats) seated.add(p.pid);
+  const out = [], seen = new Set();
+  for (const so of io.sockets.sockets.values()) {
+    if (so.data.room === room.code && so.data.pid && !seated.has(so.data.pid) && !seen.has(so.data.pid)) {
+      seen.add(so.data.pid);
+      const d = so.data;
+      out.push({ id: pubId(d.pid), name: d.name || '觀戰', avatar: d.avatar || 'fox', bg: d.bg, pendant: d.pendant || 'none', pv: d.pv || 0, online: true });
+    }
+  }
+  for (const [pid, w] of Object.entries(room.watchers || {})) {
+    if (!seated.has(pid) && !seen.has(pid))
+      out.push({ id: pubId(pid), name: (w && w.name) || '觀戰', avatar: (w && w.avatar) || 'fox', bg: w && w.bg, pendant: (w && w.pendant) || 'none', pv: (w && w.pv) || 0, online: false });
+  }
+  return out;
+}
 function newPlayer(pid, d, seat) {
   return { pid, id: pubId(pid), name: d.name || '騎士', avatar: d.avatar || 'fox', bg: d.bg, fx: d.fx, pendant: d.pendant || 'none', pv: d.pv || 0, ready: false, seat };
 }
@@ -126,6 +155,7 @@ function startGame(room) {
     gid: crypto.randomUUID(), startedAt: Date.now(), n, seats, settings: { ...room.settings },
     round: 0, leader, rejects: 0,
     lady: room.settings.lady ? (leader - 1 + n) % n : -1,
+    ladyStartId: room.settings.lady ? seats[(leader - 1 + n) % n].id : null,
     ladyUsed: room.settings.lady ? [seats[(leader - 1 + n) % n].id] : [],
     ladyLog: [],
     phase: 'team', team: [], votes: {}, questVotes: {},
@@ -193,8 +223,14 @@ async function endGame(room, winner, reason) {
     settings: g.settings,
     players: g.seats.map((s, i) => ({ id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, pendant: s.pendant, pv: s.pv || 0, role: s.role, side: currentSide(s.role, g.lanceSwitched), seat: i + 1 })),
     quests: g.quests.map(q => q ? { success: q.success, fails: q.fails, team: q.team, sword: q.sword, flipped: q.flipped } : null),
-    rounds: g.rounds, ladyLog: g.ladyLog, lanceLog: g.lanceLog, assassinTarget: g.assassinTarget,
-    scores, mvp, runnerUp, highlights, pids: g.seats.map(s => s.pid), mvpPid, early,
+    rounds: g.rounds, ladyLog: g.ladyLog, ladyStartId: g.ladyStartId || null, ladyUsed: g.ladyUsed || [],
+    lanceLog: g.lanceLog, assassinTarget: g.assassinTarget,
+    scores, mvp, runnerUp, highlights, review: buildReview({
+      players: g.seats.map((s, i) => ({ ...s, seat: i + 1, role: s.role, name: s.name, id: s.id })),
+      quests: g.quests, rounds: g.rounds, ladyLog: g.ladyLog, ladyStartId: g.ladyStartId, ladyUsed: g.ladyUsed,
+      settings: g.settings, winner: g.winner,
+    }),
+    pids: g.seats.map(s => s.pid), mvpPid, early,
   };
   try { await db.saveGame(rec); } catch (e) { console.error('saveGame', e); }
   for (const s of g.seats) db.getVetoCards(s.pid).then(c => { vetoCache.set(s.pid, c); }).catch(() => {});
@@ -465,6 +501,7 @@ function viewFor(room, pid) {
   const online = new Set();
   for (const s of io.sockets.sockets.values()) if (s.data.room === room.code && s.data.pid) online.add(s.data.pid);
   const meSeated = findPlayer(room, pid);
+  const specs = spectatorList(room);
   const preset = presetRoles(room.capacity, room.settings);
   const readyN = seated(room).filter(p => p.ready || p.pid === room.hostPid).length;
   const v = {
@@ -472,6 +509,7 @@ function viewFor(room, pid) {
     settings: room.settings, lastEvent: room.lastEvent ? (({ swordPrivate, ...rest }) => rest)(room.lastEvent) : null,
     capacity: room.capacity, seated: seated(room).length, readyCount: readyN,
     mySeat: meSeated ? findSeat(room, pid) + 1 : null, myVetoCards: vetoCache.has(pid) ? vetoCache.get(pid) : null,
+    spectating: !isSeatedPid(room, pid), spectators: specs,
     seats: room.seats.map((p, i) => p ? { ...pubPlayer({ ...p, seat: i + 1 }), online: online.has(p.pid), isHost: p.pid === room.hostPid } : { empty: true, seat: i + 1 }),
     preset, teamSizes: TEAM_SIZES[room.capacity], evilCount: EVIL_COUNT[room.capacity],
     game: null,
@@ -480,7 +518,9 @@ function viewFor(room, pid) {
   if (g) {
     const seat = g.seats.find(s => s.pid === pid);
     const ended = g.phase === 'end';
-    const revealEvil = g.phase === 'assassin';
+    const isPlayer = !!seat;
+    // Spectators never receive hidden role info; mid-game evil reveal is players only; full roles at game end (public replay)
+    const revealEvil = g.phase === 'assassin' && isPlayer;
     v.game = {
       gid: g.gid, n: g.n, phase: g.phase, earlyAssassin: !!g.earlyAssassin, round: g.round, leaderId: g.seats[g.leader].id, rejects: g.rejects,
       teamSizes: TEAM_SIZES[g.n], twoFailRound: g.n >= 7 ? 3 : -1, settings: g.settings,
@@ -496,10 +536,15 @@ function viewFor(room, pid) {
       team: g.team, voted: Object.keys(g.votes), questDone: Object.keys(g.questVotes).length,
       quests: g.quests.map(q => q ? { success: q.success, fails: q.fails, team: q.team, sword: q.sword } : null),
       rounds: g.rounds, winner: g.winner, reason: g.reason, assassinTarget: g.assassinTarget,
-      ladyId: g.lady >= 0 ? g.seats[g.lady].id : null, ladyUsed: g.ladyUsed,
-      ladyLog: g.ladyLog.map(l => ({ round: l.round, holder: l.holder, target: l.target, side: (ended || (seat && l.holder === seat.id)) ? l.side : undefined })),
+      ladyId: g.lady >= 0 ? g.seats[g.lady].id : null, ladyUsed: g.ladyUsed, ladyStartId: g.ladyStartId || null,
+      ladyLog: g.ladyLog.map(l => ({ round: l.round, holder: l.holder, target: l.target, side: (ended || (isPlayer && seat && l.holder === seat.id)) ? l.side : undefined })),
       sword: g.sword, lanceSwitched: ended ? g.lanceSwitched : undefined, lanceLog: g.lanceLog,
       scores: ended ? g.scores : undefined, mvp: ended ? g.mvp : undefined, runnerUp: ended ? g.runnerUp : undefined, highlights: ended ? g.highlights : undefined,
+      review: ended ? (g.review || buildReview({
+        players: g.seats.map((s, i) => ({ ...s, seat: i + 1, role: ended ? s.role : undefined, name: s.name, id: s.id })),
+        quests: g.quests, rounds: g.rounds, ladyLog: g.ladyLog, ladyStartId: g.ladyStartId, ladyUsed: g.ladyUsed,
+        settings: g.settings, winner: g.winner,
+      })) : undefined,
       vetoUsed: g.vetoUsed, vetoBlocked: g.vetoBlocked[g.round] || [],
       me: seat ? {
         role: seat.role, side: currentSide(seat.role, g.lanceSwitched), roleName: ROLE_NAME[seat.role],
@@ -768,7 +813,7 @@ async function bindSocketUser(socket, token, guestKey, profile) {
   if (!u && guestKey) u = await db.getUserByGuestKey(guestKey) || await db.createGuest({ guestKey, name: cleanName(profile && profile.name), avatar: cleanAvatar(profile && profile.avatar), bg: cleanBg(profile && profile.bg), fx: cleanFx(profile && profile.fx), pendant: cleanPendant(profile && profile.pendant) });
   if (!u) return null;
   socket.data.pid = u.id;
-  vetoCache.set(u.id, u.veto_cards == null ? 1 : u.veto_cards);
+  vetoCache.set(u.id, db.isGM(u) ? 999 : (u.veto_cards == null ? 1 : u.veto_cards));
   socket.data.name = u.name || cleanName(profile && profile.name);
   socket.data.avatar = u.avatar; socket.data.pv = u.updated_at ? new Date(u.updated_at).getTime() : 0;
   socket.data.bg = u.bg;
@@ -787,6 +832,7 @@ io.on('connection', (socket) => {
     if (room && room.members.has(pid)) {
       const p = findPlayer(room, pid);
       if (p && (!room.game || room.game.phase === 'end')) applyProfile(p, socket.data);
+      if (!p) rememberWatcher(room, socket);
       socket.join(code); socket.data.room = code; broadcast(room);
       return cb({ room: code, user: db.pubUser(u) });
     }
@@ -800,7 +846,7 @@ io.on('connection', (socket) => {
       socket.data.name = u.name; socket.data.avatar = u.avatar; socket.data.pv = u.updated_at ? new Date(u.updated_at).getTime() : 0; socket.data.bg = u.bg; socket.data.fx = u.fx; socket.data.pendant = u.pendant;
     }
     const room = socket.data.room && rooms.get(socket.data.room);
-    if (room && (!room.game || room.game.phase === 'end')) { const p = findPlayer(room, pid); if (p) { applyProfile(p, socket.data); broadcast(room); } }
+    if (room && (!room.game || room.game.phase === 'end')) { const p = findPlayer(room, pid); if (p) { applyProfile(p, socket.data); broadcast(room); } else { rememberWatcher(room, socket); broadcast(room); } }
   });
   socket.on('create', async (_, cb = () => {}) => {
     socket.data.sent = null;
@@ -817,24 +863,29 @@ io.on('connection', (socket) => {
     const pid = socket.data.pid; if (!pid) return cb({ error: '請先設定暱稱' });
     code = String(code || '').toUpperCase().trim();
     const room = rooms.get(code); if (!room) return cb({ error: `找不到房間 ${code}` });
-    if (room.game && room.game.phase !== 'end' && !findPlayer(room, pid) && !room.game.seats.some(s => s.pid === pid))
-      return cb({ error: '遊戲已開始，無法加入' });
     const cur = pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
-    if (cur && cur !== room && cur.game && cur.game.phase !== 'end') return cb({ error: '你正在另一局遊戲中' });
+    if (cur && cur !== room && cur.game && cur.game.phase !== 'end' && isSeatedPid(cur, pid))
+      return cb({ error: '你正在另一局遊戲中' });
     if (cur !== room) leaveCurrent(socket, pid, true);
     room.members.add(pid); pidRoom.set(pid, code);
-    socket.join(code); socket.data.room = code; broadcast(room); cb({ room: code });
+    rememberWatcher(room, socket);
+    socket.join(code); socket.data.room = code; broadcast(room);
+    cb({ room: code, spectating: !isSeatedPid(room, pid) });
   });
   socket.on('leave', (_, cb = () => {}) => {
     socket.data.sent = null;
     const pid = socket.data.pid; const room = pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
-    if (room && room.game && room.game.phase !== 'end') { socket.leave(room.code); socket.data.room = null; return cb({ ok: true, stillSeated: true }); }
+    if (room && room.game && room.game.phase !== 'end' && isSeatedPid(room, pid)) { socket.leave(room.code); socket.data.room = null; return cb({ ok: true, stillSeated: true }); }
+    if (room && room.watchers) delete room.watchers[pid];
     leaveCurrent(socket, pid, true); cb({ ok: true });
   });
   socket.on('act', async ({ type, data } = {}, cb = () => {}) => {
     const pid = socket.data.pid; const room = socket.data.room && rooms.get(socket.data.room);
     if (!room || !room.members.has(pid) && !findPlayer(room, pid) && room.hostPid !== pid) return cb({ error: '你不在房間中' });
     room.members.add(pid);
+    const GAME_ACTS = { vote:1, propose:1, quest:1, lady:1, assassinate:1, sword:1, swordflip:1, swordskip:1, veto:1, earlyassassin:1, ready:1 };
+    if (GAME_ACTS[String(type)] && room.game && room.game.phase !== 'end' && !inGameSeat(room, pid) && !(String(type)==='ready' && findPlayer(room, pid)))
+      return cb({ error: '觀戰中不能進行此操作' });
     let err;
     try { err = await act(room, pid, String(type), data || {}); } catch (e) { console.error(e); err = '伺服器錯誤'; }
     if (err === 'dissolved') return cb({ ok: true, dissolved: true });

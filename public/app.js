@@ -199,6 +199,17 @@ socket.on('state', (st) => {
   if (st.game && ['vote', 'quest', 'end'].includes(st.game.phase)) selected = new Set();
   if (st.game && prev && prev.game && prev.game.phase !== st.game.phase) selected = new Set();
   S = st;
+  if (st && st.myAvoidResult && st.myAvoidResult.gid) {
+    const prevR = prev && prev.myAvoidResult;
+    if (!prevR || prevR.gid !== st.myAvoidResult.gid) {
+      const r = st.myAvoidResult;
+      const nm = (ROLE[r.role] && ROLE[r.role].n) || '';
+      if (r.status === 'applied') toast(isGM() ? `已避開${nm}（GM 無限，冇扣減）` : `已避開${nm}，開局扣咗 1 張迴避卡`, 'ok');
+      else if (r.status === 'conflict') toast(`今局避開唔到${nm}，冇扣卡`);
+      else if (r.status === 'inactive') toast(`${nm}唔喺本局陣容，冇扣卡`);
+      else if (r.status === 'insufficient') toast('冇迴避卡，今局冇套用');
+    }
+  }
   if (autoRoom && view === 'home' && st.code) { autoRoom = false; view = 'room'; }
   handleEvent(st);
   if (view === 'room' || view === 'home') render();
@@ -745,6 +756,61 @@ function roomHead() {
   if (!left.length && !right) return '';
   return `<div class="rhead compact"><div class="rh-sub">${left.join(' · ')}${(left.length || right) && right ? '<span class="grow"></span>' : ''}${right}</div></div>`;
 }
+function avoidFab() {
+  if (!S || (S.game && S.game.phase !== 'end')) return '';
+  const vc = S.myVetoCards == null ? (account && account.vetoCards) : S.myVetoCards;
+  const picked = S.myAvoid && ROLE[S.myAvoid] ? ROLE[S.myAvoid].n : '';
+  return `<button type="button" class="avoid-fab" data-a="avoid" aria-label="迴避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>迴避卡</span><b>${vetoAmt(vc)}</b>${picked ? `<i>${esc(picked)}</i>` : ''}</button>`;
+}
+function openAvoidSheet() {
+  const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards);
+  const broke = !isGM() && !(Number(vc) > 0);
+  const pr = (S && S.preset) || { good: [], evil: [] };
+  const uniq = (arr) => [...new Set(arr || [])].filter(k => ROLE[k]);
+  const groups = { good: uniq(pr.good), evil: uniq(pr.evil) };
+  let pick = (S && S.myAvoid) || '';
+  const tile = (k) => `<button type="button" class="avoid-tile${pick === k ? ' sel' : ''}" data-role="${k}" aria-pressed="${pick === k ? 'true' : 'false'}">${roleFace(k, 'classic', true)}</button>`;
+  openModal(`<div class="avoid-sheet"><h2>這局避開誰？</h2>
+    <div class="avoid-inv">迴避卡 <b>${vetoAmt(vc)}</b>${isGM() ? '' : '<span>/10</span>'}</div>
+    <p class="avoid-note">私人選擇，其他玩家同觀戰者睇唔到。</p>
+    <p class="avoid-note">開局時先扣 1 張。關閉或取消唔會扣。</p>
+    <div class="avoid-side good">藍方</div><div class="avoid-grid">${groups.good.map(tile).join('') || '<div class="avoid-note">沒有可選角色</div>'}</div>
+    <div class="avoid-side evil">紅方</div><div class="avoid-grid">${groups.evil.map(tile).join('') || '<div class="avoid-note">沒有可選角色</div>'}</div>
+    <button type="button" class="btn" id="avoid-ok" ${broke ? 'disabled' : ''}>${broke ? '沒有迴避卡' : '請揀一個角色'}</button>
+    ${pick ? '<button type="button" class="btn ghost" id="avoid-clear">取消今局選擇</button>' : ''}
+    <button type="button" class="btn ghost" id="avoid-x">關閉</button></div>`, (el) => {
+    const paint = () => {
+      el.querySelectorAll('.avoid-tile').forEach(b => {
+        const on = b.dataset.role === pick;
+        b.classList.toggle('sel', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      const ok = $('#avoid-ok', el);
+      if (broke) { ok.disabled = true; ok.textContent = '沒有迴避卡'; return; }
+      ok.disabled = !pick;
+      ok.textContent = pick ? `確認避開${ROLE[pick].n}` : '請揀一個角色';
+    };
+    paint();
+    el.querySelectorAll('.avoid-tile').forEach(b => b.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      pick = b.dataset.role;
+      paint();
+    }));
+    $('#avoid-ok', el).addEventListener('click', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!pick || broke) return;
+      const r = await act('avoid', { role: pick });
+      if (r && r.ok) { closeModal(); toast('已選擇，開局時先扣卡', 'ok'); }
+    });
+    const clr = $('#avoid-clear', el);
+    if (clr) clr.addEventListener('click', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const r = await act('avoid', { role: '' });
+      if (r && r.ok) { closeModal(); toast('已取消選擇'); }
+    });
+    $('#avoid-x', el).addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeModal(); });
+  });
+}
 function presetCard(pr) {
   if (!pr) return '';
   const g = (pr.good||[]).map(k => RN[k]||k);
@@ -1151,7 +1217,7 @@ function lobbyHtml() {
   <div class="bottombar">${s.veto ? `<div class="veto-ic" data-a="vetoinfo" title="回避卡"><img src="/img/veto_t.webp" alt="" width="24" height="32"><b>${vetoAmt(vc)}</b></div>` : `<div class="thumb" data-a="role"></div>`}
     ${host ? `<button class="btn" data-a="start" ${x === n ? '' : 'disabled'}>開始遊戲（${x}/${n}）</button>` :
       S.mySeat ? `<button class="btn ${me && me.ready ? 'ghost' : ''}" data-a="ready">${me && me.ready ? '已準備 ✓' : '準備'}</button>` : `<button class="btn ghost" disabled>觀戰中 · 點空位即可就座</button>`}
-  </div>`;
+  </div>${avoidFab()}`;
 }
 function gameHtml() {
   const g = S.game; const me = g.me; const meId = S.meId;
@@ -1214,7 +1280,7 @@ function gameHtml() {
   <div class="btns"><button class="btn dark" data-a="invite">房間二維碼</button><button class="btn dark" data-a="go" data-v="home">返回主頁</button></div>
   ${S.isHost && !ended ? '<button class="btn dark" data-a="abort" style="color:#ff8b9c">強制結束本局</button>' : ''}
   ${g.settings.veto && me && !ended ? `<button type="button" class="veto-fab ${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'ready' : 'dim'}" data-a="${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'veto' : 'vetoinfo'}" aria-label="回避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>回避卡</span><b>${vetoAmt(me.vetoCards != null ? me.vetoCards : S.myVetoCards)}</b></button>` : ''}
-  ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}`;
+  ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}${ended ? avoidFab() : ''}`;
 }
 function ladyChainHtml(log, seats) {
   if (!log || !log.length) return '';
@@ -1804,6 +1870,7 @@ document.addEventListener('click', async (e) => {
     case 'cfg': cfgOpen = true; openModal(cfgSheetHtml()); cfgOpen = true; return;
     case 'cfgclose': return closeModal();
     case 'emote': return toggleEmotes(el);
+    case 'avoid': return openAvoidSheet();
     case 'vetoinfo': { const vc = S && S.myVetoCards != null ? S.myVetoCards : (account && account.vetoCards); return openModal(`<div class="vuse"><img src="/img/veto.webp" alt="回避卡" width="150" height="200"></div><div class="center name">${isGM() ? '∞' : vetoAmt(vc) + ' / 10'}</div><p class="small muted center">${isGM() ? 'GM 回避卡為無限（∞），使用時唔會扣減，但仍要喺投票階段且身為隊員，每局只可以用一次。' : '每贏一局 +1 張（上限 10 張），永久保存在帳號。房間開啟「回避卡」時，投票階段身為隊員可用一張退出隊伍，本次組隊作廢且不計否決。'}</p><button type="button" class="btn" id="ok">知道了</button>`, el2 => $('#ok', el2).onclick = closeModal); }
     case 'shiny': {
       if (mvpTotal() < 10) return toast('達成「10次MVP」即可解鎖');

@@ -266,7 +266,8 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         seats, sw: doc.scrollWidth, cw: doc.clientWidth, sh: doc.scrollHeight, ih: innerHeight,
         barBottom: bar.bottom + scrollY, gap: doc.scrollHeight - (bar.bottom + scrollY),
         top: !!document.querySelector('.top-room-acts:not(.hidden)'),
-        rhead: (document.querySelector('.rhead') || {}).className || ''
+        rhead: (document.querySelector('.rhead') || {}).className || '',
+        avoidFab: !!document.querySelector('.avoid-fab')
       };
     })()`);
 
@@ -287,7 +288,8 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         assert(bCol !== sCol, 'occupied digit and /n are different colours');
         assert(m.emo.shadow === 'none' && !/255, 224|255, 201|ffe066|ffc928/i.test(m.emo.bg + m.emo.shadow), tag + ' emoji button is flat pale, not yellow glow');
         assert(m.sw <= m.cw + 1, tag + '/' + n + ' no horizontal overflow (' + m.sw + '/' + m.cw + ')');
-        assert(m.gap < 36, tag + '/' + n + ' room gap below the action bar is small (' + m.gap.toFixed(1) + 'px)');
+        if (m.avoidFab) assert(m.gap > 60 && m.gap < 110, tag + '/' + n + ' room leaves the avoid-card button clear (' + m.gap.toFixed(1) + 'px)');
+        else assert(m.gap < 36, tag + '/' + n + ' room gap below the action bar is small (' + m.gap.toFixed(1) + 'px)');
         assert(m.top && /compact/.test(m.rhead), 'sticky invite/menu and compact header stay');
         const cx = m.rt.l + m.rt.w / 2, cy = m.rt.t + m.rt.h / 2;
         let minEdge = Infinity, maxReach = 0;

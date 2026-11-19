@@ -1001,7 +1001,7 @@ function markMaybeOffline(room, pid) {
 function floorView(room) {
   const f = floors.get(room.code);
   if (!f) return null;
-  const base = { id: f.id, token: f.token, discuss: f.discuss, index: f.index, order: f.order.map(x => x.id), seats: f.order.map(x => x.seat), ms: f.ms, status: f.status, selectId: f.selectId || null };
+  const base = { id: f.id, token: f.token, discuss: f.discuss, index: f.index, order: f.order.map(x => x.id), seats: f.order.map(x => x.seat), ms: f.ms, status: f.status, selectId: f.selectId || null, skipped: !!f.skipped };
   if (f.status === 'select') return { ...base, speaker: null, seat: null, deadline: 0 };
   if (!f.speaker) return null;
   return { ...base, speaker: f.speaker, seat: f.seat, deadline: f.deadline };
@@ -1067,14 +1067,24 @@ function advanceFloor(room, token) {
   armFloor(room);
   return true;
 }
-function beginFloor(room) {
+function speechSkipped(g) { return !!(g && g.rejects >= 2); }
+function beginDirectSelect(room) {
   clearFloor(room);
+  muteExcept(room, null);
+  const g = room.game;
+  const key = g.gid + ':' + (g.discuss || 0);
+  const id = floorSerial++;
+  floors.set(room.code, { id, token: 1, discuss: g.discuss || 0, key, status: 'select', selectId: id + ':' + key, skipped: true, order: [], index: 0, ms: SPEAK_TURN_MS, timer: null, speaker: null, speakerPid: null, seat: null, deadline: 0 });
+}
+function beginFloor(room) {
   const g = room.game;
   if (!g || g.phase !== 'team' || !micMode(room)) return;
+  if (speechSkipped(g)) { beginDirectSelect(room); return; }
+  clearFloor(room);
   const idxs = speakOrder(g.n, g.leader, g.seats.map(s => !!s));
   const order = idxs.map(i => ({ id: g.seats[i].id, pid: g.seats[i].pid, seat: i + 1 }));
   if (!order.length) return;
-  floors.set(room.code, { id: floorSerial++, token: 0, discuss: g.discuss || 0, key: g.gid + ':' + (g.discuss || 0), status: 'speak', selectId: null, order, index: 0, ms: SPEAK_TURN_MS, timer: null, speaker: null, speakerPid: null, seat: null, deadline: 0 });
+  floors.set(room.code, { id: floorSerial++, token: 0, discuss: g.discuss || 0, key: g.gid + ':' + (g.discuss || 0), status: 'speak', selectId: null, skipped: false, order, index: 0, ms: SPEAK_TURN_MS, timer: null, speaker: null, speakerPid: null, seat: null, deadline: 0 });
   armFloor(room);
 }
 function syncFloor(room) {
@@ -1241,6 +1251,7 @@ io.on('connection', (socket) => {
     if (!micMode(ctx.room)) return cb({ error: '麥克風模式未開啟' });
     const want = !!on;
     if (want && !isSeatedPid(ctx.room, ctx.pid)) return cb({ error: '觀戰中不能開咪' });
+    if (want && speechSkipped(ctx.room.game)) return cb({ error: '已連續兩次派隊不通過，現在不能發言' });
     const turn = floorActive(ctx.room);
     if (want && turn && turn.speaker !== pubId(ctx.pid)) return cb({ error: '現在不是你的發言' });
     const m = voiceBucket(ctx.room.code);
@@ -1256,7 +1267,7 @@ io.on('connection', (socket) => {
     if (!micMode(ctx.room)) return cb({ error: '麥克風模式未開啟' });
     const id = pubId(ctx.pid);
     const m = voicePub.get(ctx.room.code);
-    if (m) for (const [pid, v] of m) {
+    if (m && !speechSkipped(ctx.room.game)) for (const [pid, v] of m) {
       if (!v || !v.on || pid === ctx.pid) continue;
       const s = [...io.sockets.sockets.values()].find(x => x.id === v.sid && x.data.room === ctx.room.code);
       if (s) s.emit('voice:please-offer', { id });
@@ -1270,6 +1281,7 @@ io.on('connection', (socket) => {
     const ctx = voiceCtx(socket);
     if (!ctx) return cb({ error: '你不在房間中' });
     if (!micMode(ctx.room)) return cb({ error: '麥克風模式未開啟' });
+    if (speechSkipped(ctx.room.game)) return cb({ error: '已連續兩次派隊不通過，現在不能發言' });
     const kind = msg.kind;
     if (kind !== 'offer' && kind !== 'answer' && kind !== 'ice') return cb({ error: '無效訊號' });
     if (kind === 'offer') {

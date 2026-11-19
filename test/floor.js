@@ -101,6 +101,117 @@ async function domPick(url, q) {
   assert(view.prompt === '請選擇隊伍' && view.glow === 0 && !view.clock && !view.modal && view.ready === 1, 'leader sees one selection prompt and no speaking chrome ' + JSON.stringify(view));
   try { dev.ws.close(); } catch (e) {}
 }
+async function five(url) {
+  const host = await mk(url, '主');
+  const room = (await host.emit('create')).room;
+  assert((await host.act('capacity', { n: 5 })).ok, 'capacity 5');
+  assert((await host.act('settings', { mic: true })).ok, 'mic stays on');
+  const cs = [host];
+  for (let i = 2; i <= 5; i++) {
+    const p = await mk(url, '五' + i);
+    await p.emit('join', { code: room });
+    assert((await p.act('sit', { seat: i })).ok, 'five sit ' + i);
+    cs.push(p);
+  }
+  assert((await host.act('start')).ok, 'five start');
+  await until(() => host.st && host.st.game && host.st.floor);
+  return { host, cs, room };
+}
+function leaderSeat(st) { const s = st.game.seats.find(x => x.id === st.game.leaderId); return s && s.seat; }
+async function proposeNow(cs) {
+  const st = cs[0].st;
+  const n = st.game.teamSizes[st.game.round];
+  const ids = st.game.seats.slice(0, n).map(s => s.id);
+  const leader = cs.find(c => c.st.meId === st.game.leaderId);
+  const r = await leader.act('propose', { team: ids });
+  if (!r || !r.ok) throw new Error('propose ' + JSON.stringify(r));
+  await until(() => cs[0].st.game.phase === 'vote');
+}
+async function voteAll(cs, approve) {
+  await Promise.all(cs.map(c => c.act('vote', { approve })));
+  await until(() => cs[0].st.game.phase !== 'vote', 5000);
+}
+async function rejectionGate() {
+  const gate = await boot(41800 + (process.pid % 200), { SPEAK_MS: '200', PRESENCE_GRACE_MS: '300' });
+  const g = await five(gate.url);
+  const cs = g.cs;
+  const speech = () => cs[0].st.floor && cs[0].st.floor.status === 'speak' && !cs[0].st.floor.skipped && cs[0].st.floor.speaker;
+  assert(cs[0].st.game.rejects === 0 && speech() && cs[0].st.floor.seats[cs[0].st.floor.seats.length - 1] === leaderSeat(cs[0].st), 'rejection 0 keeps the speaking round');
+  await speakUntilSelect(cs[0], cs);
+  await proposeNow(cs);
+  await voteAll(cs, false);
+  await until(() => cs[0].st.game.rejects === 1 && cs[0].st.floor && cs[0].st.floor.status === 'speak');
+  assert(!cs[0].st.floor.skipped && cs[0].st.floor.seats[cs[0].st.floor.seats.length - 1] === leaderSeat(cs[0].st), 'rejection 1 still speaks, leader last');
+  await speakUntilSelect(cs[0], cs);
+  await proposeNow(cs);
+  await voteAll(cs, false);
+  await until(() => cs[0].st.game.rejects === 2 && cs[0].st.floor && cs[0].st.floor.status === 'select');
+  const skip = cs[0].st.floor;
+  assert(skip.skipped && !skip.speaker && !skip.deadline && cs[0].st.game.phase === 'team' && !(cs[0].st.game.team || []).length, 'rejection 2 skips speech and opens selection');
+  assert((await cs[1].emit('voice:mic', { on: true })).error, 'skipped discussion rejects unmute');
+  assert((await cs[2].emit('voice:signal', { to: cs[1].st.meId, kind: 'offer', sdp: 'v=0\r\n' + 'x'.repeat(16) })).error, 'skipped discussion rejects transmit');
+  const sid = skip.selectId;
+  assert((await cs[0].act('floor', { op: 'restart' })).ok, 'restart during the skip');
+  await sleep(40);
+  assert(cs[0].st.floor.status === 'select' && cs[0].st.floor.skipped && !cs[0].st.floor.speaker, 'restart cannot reopen speaking');
+  await cs[0].act('floor', { op: 'end', token: cs[0].st.floor.token });
+  await sleep(30);
+  assert(cs[0].st.game.phase === 'team' && cs[0].st.floor.skipped, 'a late finish cannot start speaking');
+  assert((await cs[0].act('settings', { mic: false })).ok, 'toggle mic off');
+  await until(() => cs[0].st.floor == null);
+  assert((await cs[0].act('settings', { mic: true })).ok, 'toggle mic on');
+  await until(() => cs[0].st.floor && cs[0].st.floor.skipped && cs[0].st.floor.status === 'select' && !cs[0].st.floor.speaker);
+  assert(cs[0].st.game.rejects === 2, 'toggling mic does not reset the rejection count');
+  const who = cs[3];
+  who.s.disconnect();
+  await sleep(80);
+  who.s.connect();
+  await new Promise(r => who.s.once('connect', r));
+  await who.emit('hello', { pid: who.pid, name: '回', avatar: 'fox' });
+  await until(() => who.st && who.st.floor && who.st.floor.skipped && !who.st.floor.speaker);
+  assert(who.st.game.rejects === 2 && who.st.game.phase === 'team', 'reconnect cannot bypass the skip');
+  await domSkip(gate.url, cs.find(c => c.st.meId === cs[0].st.game.leaderId).pid);
+  await proposeNow(cs);
+  await voteAll(cs, false);
+  await until(() => cs[0].st.game.rejects === 3 && cs[0].st.floor.skipped && !cs[0].st.floor.speaker);
+  assert(cs[0].st.floor.status === 'select', 'rejection 3 stays on direct selection');
+  await proposeNow(cs);
+  await voteAll(cs, false);
+  await until(() => cs[0].st.game.rejects === 4 && cs[0].st.floor.status === 'select' && cs[0].st.floor.skipped);
+  assert(cs[0].st.game.phase === 'team', 'rejection 4 does not end the game early');
+  const evil = cs.find(c => c.st.game.me && c.st.game.me.canFail);
+  const n = cs[0].st.game.teamSizes[cs[0].st.game.round];
+  const ids = [evil.st.meId];
+  for (const c of cs) { if (ids.length >= n) break; if (!ids.includes(c.st.meId)) ids.push(c.st.meId); }
+  const leader = cs.find(c => c.st.meId === cs[0].st.game.leaderId);
+  assert((await leader.act('propose', { team: ids })).ok, 'approve path after four rejections');
+  await until(() => cs[0].st.game.phase === 'vote');
+  await voteAll(cs, true);
+  await until(() => cs[0].st.game.phase === 'quest' && cs[0].st.game.rejects === 0);
+  for (const c of cs) {
+    if (!ids.includes(c.st.meId)) continue;
+    await c.act('quest', { success: !c.st.game.me.canFail });
+  }
+  await until(() => cs[0].st.game.phase === 'team' && cs[0].st.game.round === 1, 5000);
+  assert(cs[0].st.game.quests[0] && cs[0].st.game.quests[0].success === false, 'the mission itself failed');
+  assert(cs[0].st.game.rejects === 0 && cs[0].st.floor.status === 'speak' && !cs[0].st.floor.skipped && cs[0].st.floor.speaker, 'the next mission speaks again');
+  assert(sid !== cs[0].st.floor.selectId, 'the new mission is not the skipped selection');
+  cs.forEach(c => { try { c.s.close(); } catch (err) {} });
+}
+async function domSkip(url, pid) {
+  const port = 53300 + (process.pid % 200);
+  const dir = '/tmp/chrome-floor-skip-' + process.pid;
+  fs.mkdirSync(dir, { recursive: true });
+  track(spawn('google-chrome', ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=' + port, '--user-data-dir=' + dir, 'about:blank'], { detached: true, stdio: 'ignore' }));
+  let tab; for (let i = 0; i < 40 && !tab; i++) { try { tab = JSON.parse(await get('http://127.0.0.1:' + port + '/json/list')).find(t => t.type === 'page'); } catch (e) { await sleep(120); } }
+  if (!tab) throw new Error('no chrome');
+  const dev = new Dev(tab.webSocketDebuggerUrl); await dev.ready(); await dev.send('Runtime.enable'); await dev.send('Page.enable');
+  await dev.send('Page.addScriptToEvaluateOnNewDocument', { source: `localStorage.setItem('cc.pid', ${JSON.stringify(pid)}); localStorage.removeItem('cc.token'); localStorage.setItem('cc.profile', ${JSON.stringify(JSON.stringify({ name: '隊', avatar: 'fox', bg: '#fff', fx: 'none', pendant: 'none' }))});` });
+  await dev.send('Page.navigate', { url });
+  const view = await dev.eval(`new Promise(r => { const t0=Date.now(); const t=setInterval(() => { if (document.body.innerText.includes('已連續兩次派隊不通過，直接由隊長選隊')) { clearInterval(t); r({ note: true, clock: !!document.querySelector('.floor-time'), glow: document.querySelectorAll('.is-speak').length, pick: !!document.querySelector('.pick-team') }); } else if (Date.now()-t0>8000) { clearInterval(t); r({ text: document.body.innerText.slice(0, 160) }); } }, 40); })`);
+  assert(view.note && !view.clock && view.glow === 0 && view.pick, 'skipped discussion shows the leader prompt and no countdown ' + JSON.stringify(view));
+  try { dev.ws.close(); } catch (e) {}
+}
 async function table(url) {
   const host = await mk(url, '主');
   const room = (await host.emit('create')).room;
@@ -251,6 +362,7 @@ async function table(url) {
   assert((await e.host.act('propose', { team: ids })).ok, 'the same leader can select after reconnecting');
   await until(() => e.host.st.game.phase === 'vote');
   e.cs.forEach(c => { try { c.s.close(); } catch (err) {} });
+  await rejectionGate();
   killAll();
   console.log('FLOOR TESTS PASSED');
   process.exit(0);

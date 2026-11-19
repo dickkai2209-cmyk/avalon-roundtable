@@ -17,7 +17,7 @@
   const pcs = new Map();
   const audios = new Map();
   const meters = new Map();
-  let audioCtx = null, meterTimer = null, floor = null, floorTimer = null, floorStopped = 0;
+  let audioCtx = null, meterTimer = null, floor = null, round = null, floorTimer = null, floorStopped = 0;
 
   const myId = () => { try { return hooks.myId() || ''; } catch (e) { return ''; } };
   const seated = () => { try { return !!hooks.seated(); } catch (e) { return false; } };
@@ -65,10 +65,16 @@
     if (socket) socket.emit('voice:mic', { on: false }, () => {});
   }
   function applyFloor(next) {
-    const speaking = !!(modeOn() && next && next.status !== 'select' && next.speaker);
+    const info = modeOn() && next ? next : null;
+    const speaking = !!(info && info.status !== 'select' && info.speaker && !info.skipped);
     const on = speaking ? next : null;
     const prev = floor;
+    round = info;
     floor = on;
+    if (info && info.skipped) {
+      if (micOn) stopOwnedMic();
+      for (const id of [...pcs.keys()]) closePeer(id);
+    }
     if (prev && prev.speaker && (!on || on.speaker !== prev.speaker)) {
       if (micOn && prev.speaker === myId()) stopOwnedMic();
       if (prev.speaker === myId()) { for (const id of [...pcs.keys()]) closePeer(id); }
@@ -297,6 +303,7 @@
     try { await pc.addIceCandidate(candidate); } catch (e) {}
   }
   function onSignal(msg) {
+    if (round && round.skipped) return;
     if (floor && floor.speaker && msg && msg.from !== floor.speaker && myId() !== floor.speaker) return;
     if (!modeOn() || !msg || !msg.from || msg.from === myId()) return;
     if (msg.kind === 'offer') onOffer(msg.from, msg.sdp).catch(() => setNote('未能接通對方的語音。', 'bad'));
@@ -313,6 +320,7 @@
   function onGone(msg) { if (msg && msg.id) { roster[msg.id] = false; closePeer(msg.id); paint(); } }
   function onPlease(msg) {
     if (!modeOn() || !msg || !msg.id || !micOn) return;
+    if (round && round.skipped) return;
     if (floor && floor.speaker && floor.speaker !== myId()) return;
     offer(msg.id);
   }
@@ -345,6 +353,7 @@
     }
     if (!inRoom()) { setNote('進入房間後先可以開咪。', 'bad'); return; }
     if (!seated()) { setNote('觀戰中不能開咪。', 'bad'); return; }
+    if (round && round.skipped) { setNote('已連續兩次派隊不通過，現在不能發言。', 'bad'); return; }
     if (floor && floor.speaker && floor.speaker !== myId()) { setNote('現在不是你的發言。', 'bad'); return; }
     if (!window.isSecureContext) { setNote('需要 HTTPS 先可以用麥克風。', 'bad'); return; }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setNote('此瀏覽器不支援麥克風。', 'bad'); return; }

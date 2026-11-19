@@ -1616,11 +1616,14 @@ function gameHtml() {
     const micOn = !!(S.settings && S.settings.mic === true);
     const picking = micOn && S.floor && S.floor.status === 'select';
     const talking = micOn && S.floor && S.floor.status !== 'select';
+    const skipped = picking && S.floor.skipped;
     pickLive = picking && isLeader;
     center = `<b>第 ${g.round + 1} 輪</b>隊長 ${esc(P(g.leaderId).name)}<br>需要 ${need} 人`;
-    if (isLeader && picking) panel = `<div class="phase pick-team">請選擇隊伍</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>`;
+    if (isLeader && skipped) panel = `<div class="phase pick-team">請選擇隊伍</div><div class="small skip-note">已連續兩次派隊不通過，直接由隊長選隊</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>`;
+    else if (isLeader && picking) panel = `<div class="phase pick-team">請選擇隊伍</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>`;
     else if (isLeader && talking) panel = `<div class="phase">👑 你是隊長</div><div class="small muted">全員發言後先可以選擇隊伍</div><button class="btn" data-a="propose" disabled>提交隊伍</button>`;
     else if (isLeader) panel = `<div class="phase">👑 你是隊長</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>`;
+    else if (skipped) panel = `<div class="phase">已連續兩次派隊不通過，直接由隊長選隊</div>`;
     else if (picking) panel = `<div class="phase">隊長正在選擇隊伍</div>`;
   } else if (g.phase === 'vote') {
     center = `<b>投票中</b>${g.voted.length}/${g.n} 已投`;

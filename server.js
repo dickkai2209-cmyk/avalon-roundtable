@@ -667,6 +667,7 @@ function viewFor(room, pid) {
       ladyLog: g.ladyLog.map(l => ({ round: l.round, holder: l.holder, target: l.target, side: (ended || (isPlayer && seat && l.holder === seat.id)) ? l.side : undefined })),
       sword: g.sword, lanceSwitched: ended ? g.lanceSwitched : undefined, lanceLog: g.lanceLog,
       scores: ended ? g.scores : undefined, mvp: ended ? g.mvp : undefined, runnerUp: ended ? g.runnerUp : undefined, highlights: ended ? g.highlights : undefined,
+      startedAt: ended ? g.startedAt : undefined, endedAt: ended ? g.endedAt : undefined,
       review: ended ? (g.review || buildReview({
         players: g.seats.map((s, i) => ({ ...s, seat: i + 1, role: ended ? s.role : undefined, name: s.name, id: s.id })),
         quests: g.quests, rounds: g.rounds, ladyLog: g.ladyLog, ladyStartId: g.ladyStartId, ladyUsed: g.ladyUsed,

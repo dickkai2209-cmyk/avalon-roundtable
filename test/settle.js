@@ -192,11 +192,14 @@ function bot(key, name) {
       await setSize(w, h);
       await sleep(60);
       return evalj(`(() => {
+        window.scrollTo(0, 0);
         const box = document.querySelector('#modal .settle');
         const sc = box.querySelector('.settle-scroll');
         const foot = box.querySelector('.settle-foot');
-        sc.scrollTop = sc.scrollHeight;
         const last = box.querySelector('.settle-row[data-rank="10"]');
+        const details = last.querySelector('details');
+        if (details && !details.open) details.querySelector('summary').click();
+        sc.scrollTop = sc.scrollHeight;
         const lr = last.getBoundingClientRect();
         const fr = foot.getBoundingClientRect();
         const sr = sc.getBoundingClientRect();
@@ -247,6 +250,22 @@ function bot(key, name) {
     for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('.settle-page .settle-row')`)); i++) await sleep(80);
     const again = await evalj(`[...document.querySelectorAll('.settle-page .settle-row')].map(r => r.dataset.rank).join(',')`);
     assert(again === '1,2,3,4,5,6,7,8,9,10', 'reopening the saved game keeps the ranking');
+    await setSize(375, 812);
+    await evalj(`(() => { const el = document.querySelector('.endsum'); const bar = document.querySelector('.topbar'); const y = el.getBoundingClientRect().top + window.scrollY - ((bar ? bar.offsetHeight : 52) + 8); window.scrollTo(0, Math.max(0, y)); })()`);
+    await sleep(40);
+    await shot('settle-detail-red-375.png');
+    const detailText = await evalj(`document.querySelector('#app').innerText`);
+    assert(detailText.includes('覆盤重點') && detailText.includes('組隊 / 投票全記錄'), 'detail keeps review and the full vote record');
+    assert(detailText.includes('分享戰績') && detailText.includes('生成海報') && detailText.includes('積分詳情'), 'summary keeps share, poster and score entry');
+    assert(!/亞瑟陣營|莫德雷德陣營|微信|曬到微信|高難角色|深藏不露|金牌擋刀|任務骨幹/.test(detailText), 'detail does not rename roles into fake honors or add WeChat');
+    assert(detailText.includes('紅方勝利'), 'red win detail says 紅方勝利');
+    await evalj(`document.querySelector('[data-a="scores"]').click()`);
+    for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('#modal .settle-row')`)); i++) await sleep(80);
+    await shot('settle-sheet-red-collapsed-375.png');
+    await evalj(`(() => { const row = document.querySelector('#modal .settle-row[data-rank="1"]'); if (row && !row.querySelector('details').open) row.querySelector('summary').click(); row.scrollIntoView({ block: 'center' }); })()`);
+    await sleep(40);
+    await shot('settle-sheet-red-expanded-375.png');
+    await evalj(`document.querySelector('#settle-ok').click()`);
     await evalj(`(() => {
       const page = document.querySelector('.settle-page');
       page.scrollIntoView({ block: 'start' });
@@ -272,6 +291,82 @@ function bot(key, name) {
       })().catch(e => { console.error(e); process.exit(1); });
     `], { env: { ...process.env, DATA_DIR: DATA, DATABASE_URL: '', GID: gid }, encoding: 'utf8' });
     assert(mvpCount === 1, 'the saved MVP count is one');
+
+    const red = gme();
+    const mvpPerson = people[bots.findIndex(b => b.st.meId === red.mvp)];
+    const loserTop = red.seats.map(s => ({ id: s.id, side: s.side, rank: red.scores[s.id].rank })).filter(s => s.side !== red.winner).sort((a, b) => a.rank - b.rank)[0];
+    const loserPerson = people[bots.findIndex(b => b.st.meId === loserTop.id)];
+    const plainPerson = people[bots.findIndex(b => b.st.meId !== red.mvp && b.st.meId !== loserTop.id)];
+    async function openSheetShot(person, collapsedName, expandedName) {
+      await setSize(375, 812);
+      await asUser(person);
+      for (let i = 0; i < 40 && !(await evalj(`!!document.querySelector('.endsum')`).catch(() => false)); i++) await sleep(100);
+      await evalj(`document.querySelector('#modal') && document.querySelector('#modal').classList.add('hidden')`);
+      await evalj(`(() => { const el = document.querySelector('.endsum'); const bar = document.querySelector('.topbar'); const y = el.getBoundingClientRect().top + window.scrollY - ((bar ? bar.offsetHeight : 52) + 8); window.scrollTo(0, Math.max(0, y)); })()`);
+      await sleep(60);
+      await shot(collapsedName.replace('sheet', 'summary'));
+      const summary = await evalj(`document.querySelector('.endsum').innerText`);
+      await evalj(`document.querySelector('[data-a="scores"]').click()`);
+      for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('#modal .settle-row')`)); i++) await sleep(80);
+      const seen = await evalj(`(() => {
+        const box = document.querySelector('#modal .settle');
+        const rows = [...box.querySelectorAll('.settle-row')];
+        return { n: rows.length, ranks: rows.map(r => r.dataset.rank).join(','), text: box.innerText, foot: [...box.querySelectorAll('.settle-foot button')].map(b => b.textContent).join('|') };
+      })()`);
+      assert(seen.n === 10 && seen.ranks === '1,2,3,4,5,6,7,8,9,10', person.name + ' sees every score (' + seen.ranks + ')');
+      assert(seen.foot === '生成海報|知道了', 'score sheet footer stays');
+      assert(!/亞軍|金牌|稱號|微信/.test(seen.text), 'sheet does not invent honors');
+      await shot(collapsedName);
+      await evalj(`(() => { document.querySelectorAll('#modal .settle-row details').forEach(d => { if (!d.open) d.querySelector('summary').click(); }); document.querySelector('#modal .settle-row[data-rank="1"]').scrollIntoView({ block: 'start' }); })()`);
+      await sleep(40);
+      await shot(expandedName);
+      return summary;
+    }
+    const mvpSummary = await openSheetShot(mvpPerson, 'settle-sheet-mvp-collapsed-375.png', 'settle-sheet-mvp-expanded-375.png');
+    assert(mvpSummary.includes('本局 MVP') && mvpSummary.includes(mvpPerson.name), 'MVP viewer summary names this game MVP');
+    const plainSummary = await openSheetShot(plainPerson, 'settle-sheet-nonmvp-collapsed-375.png', 'settle-sheet-nonmvp-expanded-375.png');
+    assert(plainSummary.includes(plainPerson.name), 'non-MVP summary is that viewer');
+    if (loserPerson.user.id !== plainPerson.user.id) {
+      const loseSummary = await openSheetShot(loserPerson, 'settle-sheet-losemvp-collapsed-375.png', 'settle-sheet-losemvp-expanded-375.png');
+      assert(loseSummary.includes('你是敗方 MVP') && loseSummary.includes('雖敗猶榮'), 'losing-side top score shows 雖敗猶榮');
+    }
+    if (mvpPerson.user.id !== loserPerson.user.id) assert(!mvpSummary.includes('你是敗方 MVP'), 'winning MVP is not labelled 敗方 MVP');
+
+    if (!(await bots[0].act('start')).ok) throw new Error('restart');
+    await until(() => gme().phase === 'team' && gme().gid !== gid, 'second game');
+    await mission();
+    await mission();
+    if (gme().phase === 'lady') {
+      const holder = bots.find(b => b.st.meId === gme().ladyId);
+      const target = gme().seats.find(s => s.id !== gme().ladyId);
+      if (!(await holder.act('lady', { id: target.id })).ok) throw new Error('lady2');
+      await until(() => gme().phase === 'team', 'after lady2');
+    }
+    await mission();
+    await until(() => gme().phase === 'assassin', 'assassin2');
+    const assassin2 = bots.find(b => b.st.game.me.role === 'assassin');
+    const victim = bots.find(b => b !== assassin2 && b.st.game.me.role !== 'merlin');
+    if (!(await assassin2.act('assassinate', { id: victim.st.meId })).ok) throw new Error('miss');
+    await until(() => gme().phase === 'end' && gme().winner === 'good' && gme().mvp, 'blue end');
+    const blueMvp = people[bots.findIndex(b => b.st.meId === gme().mvp)];
+    const blueOther = people[bots.findIndex(b => b.st.meId !== gme().mvp)];
+    const blueMvpText = await openSheetShot(blueMvp, 'settle-sheet-blue-mvp-collapsed-375.png', 'settle-sheet-blue-mvp-expanded-375.png');
+    assert(blueMvpText.includes('藍方勝利'), 'blue win says 藍方勝利');
+    assert(!/亞瑟陣營|莫德雷德陣營/.test(blueMvpText), 'blue summary does not say 亞瑟陣營');
+    await openSheetShot(blueOther, 'settle-sheet-blue-nonmvp-collapsed-375.png', 'settle-sheet-blue-nonmvp-expanded-375.png');
+    await evalj(`document.querySelector('#settle-ok').click()`);
+    await setSize(390, 844);
+    await evalj(`(() => { const el = document.querySelector('.endsum'); const bar = document.querySelector('.topbar'); const y = el.getBoundingClientRect().top + window.scrollY - ((bar ? bar.offsetHeight : 52) + 8); window.scrollTo(0, Math.max(0, y)); })()`);
+    await sleep(40);
+    await shot('settle-detail-blue-390.png');
+    await evalj(`document.querySelector('[data-a="scores"]').click()`);
+    for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('#modal .settle-row[data-rank="10"]')`)); i++) await sleep(80);
+    const fitBlue = await fitAt(390, 844);
+    assert(fitBlue.visible && fitBlue.sw <= fitBlue.cw + 1, 'blue win rank 10 stays above the footer at 390 ' + JSON.stringify(fitBlue));
+    await shot('settle-rank10-blue-390.png');
+    const fitBlue375 = await fitAt(375, 812);
+    assert(fitBlue375.visible && fitBlue375.sw <= fitBlue375.cw + 1, 'blue win rank 10 stays above the footer at 375 ' + JSON.stringify(fitBlue375));
+    await shot('settle-rank10-blue-375.png');
     console.log('SETTLE TESTS PASSED', info.title, info.mvp);
   } finally {
     try { ws.close(); } catch {}

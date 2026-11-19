@@ -1380,6 +1380,46 @@ function showLady(ev) {
     <div class="flip" id="flip" style="width:min(56vw,200px)"><div class="in"><div class="face back"><div class="hint">點擊查看陣營</div></div><div class="face front"><div class="rc ${mine.side} lady-reveal"><div class="art" style="background-image:url(${img('lady')})"></div><div class="cap"><div class="rn" style="font-size:20px">${mine.side === 'good' ? '好人陣營' : '壞人陣營'}</div></div></div></div></div></div>
     <p class="center small muted">只有你看到這個結果，你可以選擇說真話或說謊。</p><button class="btn" id="ok">知道了</button>`, (el) => { const f = $('#flip', el); f.onclick = () => f.classList.add('on'); $('#ok', el).onclick = closeModal; }, true);
 }
+function factionText(s) {
+  return String(s || '')
+    .replace(/亞瑟陣營勝利/g, '藍方勝利')
+    .replace(/莫德雷德陣營勝利/g, '紅方勝利')
+    .replace(/好人勝利/g, '藍方勝利')
+    .replace(/壞人逆轉勝利/g, '紅方逆轉勝利')
+    .replace(/壞人勝利/g, '紅方勝利')
+    .replace(/好人勝/g, '藍方勝利')
+    .replace(/壞人勝/g, '紅方勝利');
+}
+function winTitle(winner) {
+  if (winner === 'good') return '藍方勝利';
+  if (winner === 'evil') return '紅方勝利';
+  return '提前結束';
+}
+function outcomeText(r) {
+  const seats = r.players || r.seats || [];
+  if (r.winner === 'none') return '不計勝負、不計分';
+  const merlin = seats.find(s => s && s.role === 'merlin');
+  const at = r.assassinTarget && seats.find(s => s && s.id === r.assassinTarget);
+  if (at && at.role === 'merlin') return `刺客刺中梅林（${at.seat || ''}號 ${at.name || ''}）`;
+  if (at && merlin) return `刺客刺中的是 ${at.seat || ''}號${(ROLE[at.role] || {}).n || ''}，梅林（${merlin.seat || ''}號）安然無恙`;
+  return factionText(r.reason || '');
+}
+function endMeta(r) {
+  const bits = [];
+  if (r.mineHost) bits.push('我開的房');
+  else if (r.room) bits.push('房間 ' + r.room);
+  if (r.n) bits.push(`${r.n} 人局`);
+  if (r.endedAt) {
+    const d = new Date(r.endedAt);
+    if (!Number.isNaN(d.getTime())) bits.push(`${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
+  }
+  if (r.startedAt && r.endedAt) {
+    const ms = new Date(r.endedAt) - new Date(r.startedAt);
+    if (ms >= 0 && ms < 60000) bits.push('用時不到 1 分鐘');
+    else if (ms >= 60000) bits.push(`用時 ${Math.round(ms / 60000)} 分鐘`);
+  }
+  return bits.join(' · ');
+}
 function settleParts(r) {
   const players = (r.players || r.seats || []).filter(p => p && p.id);
   const sc = r.scores || {};
@@ -1392,35 +1432,70 @@ function settleParts(r) {
   }).sort((a, b) => (a.rank || 99) - (b.rank || 99) || (b.total - a.total));
   const mvp = !early && rows.find(x => x.p.id === r.mvp);
   const me = rows.find(x => x.p.id === myId);
-  return { rows, mvp, me, early, myId };
+  const losers = !early && r.winner && r.winner !== 'none' ? rows.filter(x => x.side && x.side !== r.winner) : [];
+  const loseMvp = losers.slice().sort((a, b) => (a.rank || 99) - (b.rank || 99) || b.total - a.total)[0] || null;
+  return { rows, mvp, me, early, myId, loseMvp };
 }
+function youHtml(me, r) {
+  if (!me) return '觀戰 · 不計個人分數';
+  const role = esc((ROLE[me.p.role] || {}).n || '');
+  const result = r.winner === 'none' ? '不計勝負' : (me.side === r.winner ? '勝利' : '落敗');
+  return `你是 ${esc(me.p.seat || '')}號 <span class="role">${role}</span> · ${result}`;
+}
+const ICO_SHARE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M5 4h9l5 5v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm8 1.5V10h4.5L13 5.5zM12 11l-4 4h3v4h2v-4h3l-4-4z"/></svg>';
+const ICO_POSTER = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v7.2l3.1-3.1 2.2 2.2 3.4-4L19 13.8V7H5zM8 10.2a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6z"/></svg>';
 function settleBody(r) {
-  const { rows, mvp, me, early, myId } = settleParts(r);
-  const good = r.winner === 'good';
-  const title = r.winner === 'none' ? '提前結束' : good ? '藍方勝利' : '紅方勝利';
-  const you = !me ? '觀戰 · 不計個人分數' : `${me.p.seat || ''}號 · ${(ROLE[me.p.role] || {}).n || ''} · ${me.side === r.winner ? '勝利' : '落敗'}`;
-  const mvpCard = mvp ? `<div class="settle-mvp"><span class="settle-crown" aria-hidden="true"></span>${av(mvp.p, 56)}<div><div class="k">MVP</div><b>${esc(mvp.p.name)}</b><span>${esc((ROLE[mvp.p.role] || {}).n || '')} · ${mvp.total} 分</span></div></div>` : '';
+  const { rows, mvp, me, early, myId, loseMvp } = settleParts(r);
+  const title = winTitle(r.winner);
+  const reason = outcomeText(r);
+  const you = youHtml(me, r);
+  const honor = loseMvp && me && loseMvp.p.id === me.p.id ? '<div class="settle-honor">你是敗方 MVP · 雖敗猶榮</div>' : '';
+  const mvpCard = mvp ? `<div class="settle-mvp"><span class="settle-crown" aria-hidden="true"></span><span class="k">本局 MVP</span>${av(mvp.p, 36)}<div class="mv-mid"><b>${esc(mvp.p.name)}</b><span>${esc((ROLE[mvp.p.role] || {}).n || '')}</span></div><strong class="mv-pts">${mvp.total} 分</strong></div>` : '';
   const list = early ? '<p class="settle-none">本局不計分，沒有排名。</p>' : `<ol class="settle-list">${rows.map(x => {
     const role = (ROLE[x.p.role] || {}).n || '';
     const sum = x.items.reduce((a, it) => a + it[1], 0);
-    return `<li class="settle-row ${x.p.id === r.mvp ? 'is-mvp' : ''}" data-rank="${x.rank}" data-id="${esc(x.p.id)}"><details><summary><span class="rk">${x.rank}</span>${av(x.p, 40)}<span class="who"><b>${esc(x.p.name)}</b>${x.p.id === myId ? '<i class="me">我</i>' : ''}<em class="${x.side}">${esc(role)}</em></span><strong class="pts">${x.total}</strong></summary><ul class="settle-break" data-sum="${sum}" data-total="${x.total}">${x.items.map(([l, v]) => `<li data-label="${esc(l)}" data-pts="${v}"><span>${esc(l)}</span><b>+${v}</b></li>`).join('')}<li class="sum"><span>合計</span><b>${x.total}</b></li></ul></details></li>`;
+    const crown = x.p.id === r.mvp ? '<span class="settle-crown sm" aria-hidden="true"></span>' : '';
+    return `<li class="settle-row ${x.p.id === r.mvp ? 'is-mvp' : ''}" data-rank="${x.rank}" data-id="${esc(x.p.id)}"><details><summary>${av(x.p, 40)}<span class="who"><span class="ln"><b>${esc(x.p.name)}</b>${crown}${x.p.id === myId ? '<i class="me">我</i>' : ''}</span><em class="${x.side}">${esc(role)}</em></span><strong class="pts">${x.total}</strong></summary><ul class="settle-break" data-sum="${sum}" data-total="${x.total}">${x.items.map(([l, v]) => `<li data-label="${esc(l)}" data-pts="${v}"><span>${esc(l)}</span><b>+${v}</b></li>`).join('')}<li class="sum"><span>合計</span><b>${x.total}</b></li></ul></details></li>`;
   }).join('')}</ol>`;
-  return { title, you, mvpCard, list, cls: r.winner || 'none' };
+  return { title, reason, you, honor, mvpCard, list, cls: r.winner || 'none', me, mvp, loseMvp, early };
+}
+function endSummaryHtml(r) {
+  const body = settleBody(r);
+  const artRole = (body.me && body.me.p.role) || (body.mvp && body.mvp.p.role) || '';
+  const art = artRole && ROLE[artRole] ? `<img class="endsum-art" src="${img(artRole)}" alt="">` : '';
+  let personal = '';
+  if (!body.early && body.me) {
+    const mineLose = body.loseMvp && body.loseMvp.p.id === body.me.p.id;
+    const title = mineLose ? '你是敗方 MVP · 雖敗猶榮' : (body.mvp && body.mvp.p.id === body.me.p.id ? '你是本局 MVP' : '我的分數');
+    const role = esc((ROLE[body.me.p.role] || {}).n || '');
+    personal = `<div class="endsum-me ${mineLose ? 'is-lose' : ''}"><div class="endsum-me-h"><span class="k">${mineLose ? '<span class="settle-crown" aria-hidden="true"></span>' : ''}${title}</span><button type="button" class="endsum-link" data-a="scores">積分詳情</button></div><div class="endsum-me-b">${av(body.me.p, 48)}<div class="mid"><b>${esc(body.me.p.name)}</b><span>${esc(body.me.p.seat)}號 · ${role} · 第 ${body.me.rank} 名</span></div><div class="sc"><b>${body.me.total}</b><i>分</i></div></div></div>`;
+  } else if (!body.early) {
+    personal = `<div class="endsum-me"><div class="endsum-me-h"><span class="k">本局分數</span><button type="button" class="endsum-link" data-a="scores">積分詳情</button></div></div>`;
+  }
+  const mvpRow = body.mvp ? `<div class="endsum-mvp"><span class="settle-crown" aria-hidden="true"></span><span class="k">本局 MVP</span>${av(body.mvp.p, 28)}<span class="nm">${esc(body.mvp.p.name)} · ${esc((ROLE[body.mvp.p.role] || {}).n || '')}</span><b>${body.mvp.total} 分</b></div>` : '';
+  const acts = r.winner === 'none' ? '' : `<div class="endsum-acts"><button type="button" class="endsum-act" data-a="sharecard">${ICO_SHARE}分享戰績</button><button type="button" class="endsum-act" data-a="poster">${ICO_POSTER}生成海報</button></div>`;
+  return `<section class="endsum ${body.cls}"><div class="endsum-hero ${body.cls}">${art}<div><h2>${body.title}</h2><p class="endsum-reason">${esc(body.reason)}</p><p class="endsum-you">${body.you}</p></div></div>${acts}<p class="endsum-meta">${esc(endMeta(r))}</p>${personal}${mvpRow}</section>`;
+}
+function openScoreSheet(rec) {
+  if (!rec) return;
+  window.__lastRecord = rec;
+  const body = settleBody(rec);
+  const root = document.scrollingElement || document.documentElement;
+  const backY = root ? root.scrollTop : 0;
+  if (root && backY) root.scrollTop = 0;
+  openModal(`<div class="settle ${body.cls}"><div class="settle-scroll"><header class="settle-head ${body.cls}"><button type="button" class="settle-x" id="settle-x" aria-label="關閉">×</button><h2>${body.title}</h2><p>${esc(body.reason)}</p><div class="settle-you">${body.you}</div>${body.honor}</header>${body.mvpCard}${body.list}</div><div class="settle-foot"><button type="button" class="btn" id="settle-poster">生成海報</button><button type="button" class="btn ghost" id="settle-ok">知道了</button></div></div>`, (el) => {
+    const poster = $('#settle-poster', el);
+    if (rec.winner === 'none') poster.disabled = true;
+    poster.onclick = () => saveCard(rec, true);
+    const close = () => { closeModal(); if (root) root.scrollTop = backY; };
+    $('#settle-ok', el).onclick = close;
+    const x = $('#settle-x', el); if (x) x.onclick = close;
+  });
 }
 function showEnd() {
   const g = S && S.game; if (!g || g.phase !== 'end') return;
   refreshStats();
-  const rec = liveRecord(g);
-  window.__lastRecord = rec;
-  const body = settleBody(rec);
-  openModal(`<div class="settle ${body.cls}"><div class="settle-scroll"><header class="settle-head ${body.cls}"><h2>${body.title}</h2><p>${esc(g.reason || (g.winner === 'none' ? '不計勝負、不計分' : ''))}</p><div class="settle-you">${esc(body.you)}</div></header>${body.mvpCard}${body.list}</div><div class="settle-foot"><button type="button" class="btn" id="settle-poster">生成海報</button><button type="button" class="btn ghost" id="settle-ok">知道了</button></div></div>`, (el) => {
-    const poster = $('#settle-poster', el);
-    if (g.winner === 'none') poster.disabled = true;
-    poster.onclick = () => saveCard(rec, true);
-    $('#settle-ok', el).onclick = closeModal;
-    const ok = $('#settle-ok', el);
-    if (ok && ok.focus) ok.focus({ preventScroll: true });
-  });
+  openScoreSheet(liveRecord(g));
 }
 
 // ================= views =================
@@ -1679,7 +1754,7 @@ function gameHtml() {
     panel = (g.earlyAssassin ? `<div class="phase evilbar">🗡️ 刺殺階段 — 紅方已亮明身份，刺客選擇目標中</div><div class="small muted">刺客 ${as ? chip(as.id) : ''} 發動提前刺殺：刺中梅林紅方即勝，刺錯藍方即勝（奧伯倫仍然隱藏）</div>` : `<div class="phase">🗡️ 刺客的最後一擊</div><div class="small muted">壞人可以公開討論，由刺客 ${as ? chip(as.id) : ''} 指認梅林</div>`) +
       (amA ? `<div class="small muted" style="margin-top:6px">點選目標：${selCount ? esc(P([...selected][0]).name) : '未選'}</div><button class="btn evil" data-a="assassinate" ${selCount === 1 ? '' : 'disabled'}>確認刺殺</button>` : '');
   } else if (g.phase === 'end') {
-    center = `<b>${g.winner === 'none' ? '提前結束' : g.winner === 'good' ? '好人勝' : '壞人勝'}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}`;
+    center = `<b>${winTitle(g.winner)}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}`;
     panel = `${S.isHost ? '<button class="btn" data-a="lobby" style="margin-top:0">🔁 再來一局（保留座位）</button>' : '<div class="center muted small">等待房主開新一局（座位保留）</div>'}`;
   }
   const teamOpen = g.phase === 'team' && isLeader && (!(S.settings && S.settings.mic === true) || (S.floor && S.floor.status === 'select'));
@@ -1836,27 +1911,21 @@ function liveRecord(g) {
     players: g.seats.map((s, i) => ({ ...s, seat: i + 1 })), quests: g.quests, rounds: g.rounds,
     ladyLog: g.ladyLog, ladyStartId: g.ladyStartId, ladyUsed: g.ladyUsed,
     assassinTarget: g.assassinTarget, scores: g.scores || {}, mvp: g.mvp, runnerUp: g.runnerUp,
-    highlights: g.highlights || [], review: g.review, myId: S.meId, room: S.code, endedAt: Date.now() };
+    highlights: g.highlights || [], review: g.review, myId: S.meId, room: S.code,
+    startedAt: g.startedAt || null, endedAt: g.endedAt || Date.now(), mineHost: !!(S && S.isHost) };
 }
 function detailHtml(r) {
-  const seats = r.players; const me = seats.find(s => s.id === r.myId); const sc = r.scores || {};
-  const goodWin = r.winner === 'good'; const merlin = seats.find(s => s.role === 'merlin');
-  const at = r.assassinTarget && seats.find(s => s.id === r.assassinTarget);
+  const seats = r.players;
+  const goodWin = r.winner === 'good';
   window.__lastRecord = r;
   const settled = settleBody(r);
-  setTimeout(() => renderCardPreview(r), 30);
-  return `<div class="card"><h3>戰果卡</h3><div id="cardprev" class="cardprev"><div class="center muted small">生成中…</div></div>
-    <div class="btns"><button class="btn" data-a="savecard">💾 儲存圖片</button><button class="btn ghost" data-a="sharecard">📤 分享</button></div><button class="btn story" data-a="story">📸 分享到 IG 限時動態 / Threads</button></div>
-  <div class="card"><div class="banner ${r.winner}"><div class="tiny" style="letter-spacing:3px;opacity:.8">${r.room ? '房間 ' + esc(r.room) + ' · ' : ''}${r.n} 人局</div><h2>${r.winner === 'none' ? '🏳️ 提前結束' : goodWin ? '🛡️ 亞瑟陣營勝利' : '🗡️ 莫德雷德陣營勝利'}</h2><div class="small">${esc(r.reason)}</div>
-      ${at ? `<div class="small" style="margin-top:6px">刺客刺殺了 ${esc(at.name)}（${ROLE[at.role].n}）· 梅林是 ${esc(merlin ? merlin.name : '?')}</div>` : ''}
-      <div style="margin-top:8px;font-size:20px">${r.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join(' ')}</div></div>
-    ${me && sc[me.id] ? `<div class="row between" style="margin-top:12px"><div class="row">${av(me, 36)}<div><b>我的表現</b><div class="small muted">${ROLE[me.role].n} · 座位 ${me.seat} · ${ROLE[me.role].side === r.winner ? '<span class="badge ok">勝利</span>' : '<span class="badge evil">落敗</span>'}</div></div></div><div class="center"><div class="code" style="font-size:22px;letter-spacing:1px">${sc[me.id].total} 分</div><div class="tiny muted">第 ${sc[me.id].rank} 名</div></div></div>` : ''}
-  </div>
-  <div class="card settle-page">${settled.mvpCard}${settled.list}</div>
-  <div class="card"><h3>全員身份</h3>${roundTable(seats, { label: s => `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>`, marker: s => (s.id === r.assassinTarget ? '🗡️' : '') + (s.id === r.mvp ? '🏅' : '') + (s.id === r.myId ? '⭐' : ''), center: `<b>${goodWin ? '好人勝' : '壞人勝'}</b>🗡️ 被刺殺　🏅 MVP` })}</div>
+  return `${endSummaryHtml(r)}
+  <div class="card settle-page">${settled.list}</div>
+  <div class="card"><h3>全員身份</h3>${roundTable(seats, { label: s => `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>`, marker: s => (s.id === r.assassinTarget ? '🗡️' : '') + (s.id === r.mvp ? '🏅' : '') + (s.id === r.myId ? '⭐' : ''), center: `<b>${r.winner === 'none' ? '提前結束' : goodWin ? '藍方勝利' : '紅方勝利'}</b>🗡️ 被刺殺　🏅 MVP` })}</div>
   ${reviewHtml(r)}
   ${r.highlights && r.highlights.length ? `<div class="card"><h3>精彩時刻</h3><ul class="hl">${r.highlights.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
   <div class="card"><h3>組隊 / 投票全記錄</h3>${voteGrid(seats, r.rounds || [], r.quests, r.myId)}</div>
+  <button class="btn story" data-a="story">📸 分享到 IG 限時動態 / Threads</button>
   <button class="btn ghost" data-a="poster">🖼️ 生成戰報海報</button>`;
 }
 async function loadDetail(gid) {
@@ -1870,7 +1939,7 @@ async function loadHistory() {
   $('#app').innerHTML = list.length ? list.map(g => {
     const r = ROLE[g.myRole] || ROLE.servant; const won = r.side === g.winner; const me = g.players.find(p => p.id === g.myId) || {};
     return `<div class="card hitem" data-a="detail" data-g="${g.gid}"><img src="${thumb(g.myRole)}" alt=""><div class="grow"><div><b class="serif">${r.n}</b> ${g.winner === 'none' ? '<span class="badge">提前結束</span>' : won ? '<span class="badge ok">勝</span>' : '<span class="badge evil">負</span>'}${g.mvp === g.myId ? '<span class="badge">🏅 MVP</span>' : ''}</div>
-      <div class="small muted">${g.n} 人局 · 座位 ${me.seat || '-'} · ${g.winner === 'none' ? '提前結束' : g.winner === 'good' ? '好人勝' : '壞人勝'}</div><div class="tiny muted">${fmtTime(g.endedAt)}　${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}</div></div><span class="gold">›</span></div>`;
+      <div class="small muted">${g.n} 人局 · 座位 ${me.seat || '-'} · ${winTitle(g.winner)}</div><div class="tiny muted">${fmtTime(g.endedAt)}　${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}</div></div><span class="gold">›</span></div>`;
   }).join('') : '<div class="card center muted">還未有完成的對局<br><span class="small">完成一局後會自動記錄</span></div>';
 }
 async function loadStats() {
@@ -2101,7 +2170,7 @@ async function makePoster(r, personal = true) {
   x.textAlign = 'left'; x.fillStyle = accent; x.font = 'bold 54px sans-serif'; x.fillText(early ? '提前結束' : good ? '藍方勝利' : '紅方勝利', pad + 176, 150);
   x.font = '20px sans-serif'; x.fillStyle = C.sub;
   const merlin = ps.find(p => p.role === 'merlin'); const at = r.assassinTarget && ps.find(p => p.id === r.assassinTarget);
-  const sub = early ? '房主提前結束本局 · 不計勝負' : at ? (at.role === 'merlin' ? `刺客刺中梅林（${at.seat}號 ${at.name}）` : `刺客刺中的是 ${at.seat}號${roleN(at.role)}·${at.name}　梅林（${merlin ? merlin.seat : '?'}號）安然無恙`) : r.reason;
+  const sub = early ? '房主提前結束本局 · 不計勝負' : at ? (at.role === 'merlin' ? `刺客刺中梅林（${at.seat}號 ${at.name}）` : `刺客刺中的是 ${at.seat}號${roleN(at.role)}，梅林（${merlin ? merlin.seat : '?'}號）安然無恙`) : factionText(r.reason);
   const wrap = (txt, X, Y, maxW, lh) => { let line = ''; for (const ch of Array.from(String(txt || ''))) { if (x.measureText(line + ch).width > maxW) { x.fillText(line, X, Y); line = ch; Y += lh; } else line += ch; } x.fillText(line, X, Y); return Y; };
   wrap(sub, pad + 176, 190, W - pad * 2 - 200, 26);
   x.font = '18px sans-serif'; x.fillStyle = C.mute; x.fillText(`${n} 人局 · ${fmtTime(r.endedAt || Date.now())}${r.room ? ' · 房間 ' + r.room : ''}`, pad + 176, 262);
@@ -2467,6 +2536,7 @@ document.addEventListener('click', async (e) => {
     case 'assassinate': return openActConfirm('assassinate');
     case 'detail': return go('detail', { gid: el.dataset.g, from: 'history' });
     case 'poster': return posterDialog();
+    case 'scores': return openScoreSheet(window.__lastRecord);
     case 'story': return storySheet(window.__lastRecord);
     case 'storystats': return storySheet(null);
     case 'skin': return openSkinPreview(el.dataset.r, el.dataset.s);

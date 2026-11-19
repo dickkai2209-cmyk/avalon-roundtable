@@ -1707,11 +1707,13 @@ function floorBar() {
   if (!f || f.status === 'select') return f && f.status === 'select' ? '' : (S.isHost ? '<div class="card floorbar"><button type="button" class="btn sm" data-a="floorrestart">開始發言</button></div>' : '');
   const who = (S.game.seats || []).find(s => s.id === f.speaker);
   const mine = S.meId === f.speaker;
+  const paused = !!f.paused;
   const label = f.ms === 90000 ? '1 分 30 秒' : (Math.round(f.ms / 1000) + ' 秒');
+  const clock = paused ? floorClock(f.remainingMs || 0) : floorClock((f.deadline || 0) - Date.now());
   return `<div class="card floorbar" data-floor="${f.id}" data-token="${f.token}">
-    <div class="floor-who"><b>${esc(who ? who.name : '發言')}</b> · ${f.seat}號座 · <span class="floor-time" role="timer" data-deadline="${f.deadline}">${floorClock(f.deadline - Date.now())}</span></div>
+    <div class="floor-who"><b>${esc(who ? who.name : '發言')}</b> · ${f.seat}號座 · <span class="floor-time" role="timer" data-deadline="${paused ? 0 : f.deadline}">${clock}</span>${paused ? '<span class="floor-pause">已暫停</span>' : ''}</div>
     <div class="tiny muted">隊長面向圓心，右手邊先講，沿座位逆時針，隊長最後。每人 ${label}。</div>
-    <div class="floor-acts">${mine ? `<button type="button" class="btn sm" data-a="floorend" data-token="${f.token}">結束發言</button>` : ''}${S.isHost ? `<button type="button" class="btn ghost sm" data-a="floorrestart">重新開始發言</button>` : ''}</div>
+    <div class="floor-acts">${mine && !paused ? `<button type="button" class="btn sm" data-a="floorend" data-token="${f.token}">結束發言</button>` : ''}${S.isHost ? `<button type="button" class="btn ghost sm" data-a="${paused ? 'floorresume' : 'floorpause'}" data-token="${f.token}">${paused ? '繼續' : '暫停'}</button><button type="button" class="btn ghost sm" data-a="floorrestart">重新開始發言</button>` : ''}</div>
   </div>`;
 }
 function ladyChainHtml(log, seats) {
@@ -2384,6 +2386,8 @@ document.addEventListener('click', async (e) => {
     case 'mic': e.stopPropagation(); if (window.AvalonVoice) AvalonVoice.toggle(); return;
     case 'listen': e.stopPropagation(); if (window.AvalonVoice) AvalonVoice.listen(); return;
     case 'floorend': return act('floor', { op: 'end', token: Number(el.dataset.token) });
+    case 'floorpause': return act('floor', { op: 'pause', token: Number(el.dataset.token) });
+    case 'floorresume': return act('floor', { op: 'resume', token: Number(el.dataset.token) });
     case 'floorrestart': return act('floor', { op: 'restart' });
     case 'discover': {
       if (!S || !S.isHost) return;

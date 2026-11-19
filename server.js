@@ -456,11 +456,19 @@ async function act(room, pid, type, data) {
         beginFloor(room);
         return null;
       }
+      if (data.op === 'pause' || data.op === 'resume') {
+        if (room.hostPid !== pid) return '只有房主可以暫停計時';
+        const f = floors.get(room.code);
+        if (!f || f.status !== 'speak' || !f.speaker) return '現在沒有發言輪次';
+        if (Number(data.token) !== f.token) return null;
+        return data.op === 'pause' ? pauseFloor(room) : resumeFloor(room);
+      }
       if (data.op === 'end') {
         const f = floors.get(room.code);
         if (!f || f.status === 'select' || !f.speaker) return null;
         if (seat.id !== f.speaker) return '現在不是你的發言';
         if (Number(data.token) !== f.token) return null;
+        if (f.paused) return '計時暫停中，請房主先繼續';
         advanceFloor(room, f.token);
         return null;
       }
@@ -1004,7 +1012,7 @@ function markMaybeOffline(room, pid) {
     const cur = presenceGone.get(room.code);
     if (!cur || cur.get(pid) !== at || socketsInRoom(room, pid) > 0) return;
     const f = floors.get(room.code);
-    const speaking = f && f.order[f.index] && f.order[f.index].pid === pid;
+    const speaking = f && !f.paused && f.order[f.index] && f.order[f.index].pid === pid;
     if (speaking) advanceFloor(room, f.token);
     broadcast(room);
   }, PRESENCE_GRACE_MS);
@@ -1013,9 +1021,10 @@ function floorView(room) {
   const f = floors.get(room.code);
   if (!f) return null;
   const base = { id: f.id, token: f.token, discuss: f.discuss, index: f.index, order: f.order.map(x => x.id), seats: f.order.map(x => x.seat), ms: f.ms, status: f.status, selectId: f.selectId || null, skipped: !!f.skipped };
-  if (f.status === 'select') return { ...base, speaker: null, seat: null, deadline: 0 };
+  if (f.status === 'select') return { ...base, speaker: null, seat: null, deadline: 0, paused: false, remainingMs: 0 };
   if (!f.speaker) return null;
-  return { ...base, speaker: f.speaker, seat: f.seat, deadline: f.deadline };
+  const paused = !!f.paused;
+  return { ...base, speaker: f.speaker, seat: f.seat, paused, remainingMs: paused ? Math.max(0, Math.round(f.remainingMs || 0)) : Math.max(0, (f.deadline || 0) - Date.now()), deadline: paused ? 0 : f.deadline };
 }
 function muteExcept(room, speakerPid) {
   const m = voicePub.get(room.code);
@@ -1060,15 +1069,49 @@ function armFloor(room) {
   f.speaker = cur.id;
   f.speakerPid = cur.pid;
   f.seat = cur.seat;
+  f.paused = false;
+  f.remainingMs = f.ms;
   f.deadline = Date.now() + f.ms;
   f.token += 1;
   const token = f.token;
   f.timer = setTimeout(() => {
     if (!rooms.has(room.code)) return;
+    const cur = floors.get(room.code);
+    if (!cur || cur.paused || cur.token !== token) return;
     if (advanceFloor(room, token)) broadcast(room);
   }, f.ms);
   if (prevPid && prevPid !== cur.pid) voiceDrop(room, prevPid);
   muteExcept(room, cur.pid);
+}
+function pauseFloor(room) {
+  const f = floors.get(room.code);
+  if (!f || f.status !== 'speak' || !f.speaker) return '現在沒有發言輪次';
+  if (f.paused) return null;
+  clearTimeout(f.timer);
+  f.timer = null;
+  const left = f.deadline - Date.now();
+  if (left <= 0) { advanceFloor(room, f.token); return null; }
+  f.paused = true;
+  f.remainingMs = left;
+  f.deadline = 0;
+  return null;
+}
+function resumeFloor(room) {
+  const f = floors.get(room.code);
+  if (!f || f.status !== 'speak' || !f.speaker) return '現在沒有發言輪次';
+  if (!f.paused) return null;
+  if (!(f.remainingMs > 0)) { f.paused = false; advanceFloor(room, f.token); return null; }
+  f.paused = false;
+  const wait = f.remainingMs;
+  f.deadline = Date.now() + wait;
+  const token = f.token;
+  f.timer = setTimeout(() => {
+    if (!rooms.has(room.code)) return;
+    const cur = floors.get(room.code);
+    if (!cur || cur.paused || cur.token !== token) return;
+    if (advanceFloor(room, token)) broadcast(room);
+  }, wait);
+  return null;
 }
 function advanceFloor(room, token) {
   const f = floors.get(room.code);
@@ -1095,7 +1138,7 @@ function beginFloor(room) {
   const idxs = speakOrder(g.n, g.leader, g.seats.map(s => !!s));
   const order = idxs.map(i => ({ id: g.seats[i].id, pid: g.seats[i].pid, seat: i + 1 }));
   if (!order.length) return;
-  floors.set(room.code, { id: floorSerial++, token: 0, discuss: g.discuss || 0, key: g.gid + ':' + (g.discuss || 0), status: 'speak', selectId: null, skipped: false, order, index: 0, ms: SPEAK_TURN_MS, timer: null, speaker: null, speakerPid: null, seat: null, deadline: 0 });
+  floors.set(room.code, { id: floorSerial++, token: 0, discuss: g.discuss || 0, key: g.gid + ':' + (g.discuss || 0), status: 'speak', selectId: null, skipped: false, paused: false, remainingMs: SPEAK_TURN_MS, order, index: 0, ms: SPEAK_TURN_MS, timer: null, speaker: null, speakerPid: null, seat: null, deadline: 0 });
   armFloor(room);
 }
 function syncFloor(room) {

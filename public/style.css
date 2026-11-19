@@ -1257,6 +1257,7 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .floorbar{display:flex;flex-direction:column;gap:6px}
 .floor-who{font-size:16px;font-weight:800;color:#1d2333}
 .floor-time{font-variant-numeric:tabular-nums}
+.floor-pause{margin-left:8px;color:#9a3412;font-size:13px}
 .floor-acts{display:flex;gap:8px;flex-wrap:wrap}
 .floor-acts .btn{margin:0}
 .card.pick-ready{border:2px solid #9a3412}

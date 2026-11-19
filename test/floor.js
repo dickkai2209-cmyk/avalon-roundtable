@@ -238,6 +238,63 @@ async function fifthReject() {
   assert(after.played === 1 && after.mvp === before.mvp && games2.filter(x => x.gid === done.gid).length === 1, 'a repeated final vote does not award the game again');
   cs.forEach(c => { try { c.s.close(); } catch (err) {} });
 }
+async function pauseClock() {
+  const gate = await boot(42100 + (process.pid % 200), { SPEAK_MS: '800', PRESENCE_GRACE_MS: '5000' });
+  const host = await mk(gate.url, '主');
+  const room = (await host.emit('create')).room;
+  await host.act('capacity', { n: 5 });
+  await host.act('settings', { mic: true });
+  const cs = [host];
+  for (let i = 2; i <= 5; i++) {
+    const p = await mk(gate.url, '暫停' + i);
+    await p.emit('join', { code: room });
+    await p.act('sit', { seat: i });
+    cs.push(p);
+  }
+  assert((await host.act('start')).ok, 'pause game starts');
+  await until(() => host.st.floor && host.st.floor.speaker);
+  const speaker = cs.find(c => c.st.meId === host.st.floor.speaker);
+  const voices = speaker.voice.length;
+  assert((await speaker.emit('voice:mic', { on: true })).ok, 'speaker opts in before the pause');
+  await sleep(120);
+  const token = host.st.floor.token;
+  const idx = host.st.floor.index;
+  const who = host.st.floor.speaker;
+  assert((await cs[1].act('floor', { op: 'pause', token })).error, 'a non-host cannot pause');
+  assert((await host.act('floor', { op: 'pause', token })).ok, 'host pauses');
+  await until(() => host.st.floor && host.st.floor.paused);
+  const held = host.st.floor.remainingMs;
+  assert(held > 500 && held < 800 && host.st.floor.speaker === who && host.st.floor.deadline === 0, 'pause keeps the speaker and the leftover budget ' + held);
+  const again = await host.act('floor', { op: 'pause', token });
+  assert(again.ok && host.st.floor.remainingMs === held, 'a second pause does not change the budget');
+  assert((await speaker.act('floor', { op: 'end', token })).error, 'ending the turn is refused while paused');
+  await sleep(900);
+  assert(host.st.floor.paused && host.st.floor.index === idx && host.st.floor.speaker === who && host.st.floor.remainingMs === held, 'waiting past the full budget does not advance a paused turn');
+  assert(cs[2].st.floor.paused && cs[2].st.floor.remainingMs === held, 'another client sees the same pause');
+  const back = cs[3];
+  back.s.disconnect();
+  await sleep(40);
+  back.s.connect();
+  await new Promise(r => back.s.once('connect', r));
+  await back.emit('hello', { pid: back.pid, name: '暫停3', avatar: 'fox' });
+  await until(() => back.st && back.st.floor && back.st.floor.paused && back.st.floor.remainingMs === held);
+  assert(speaker.voice.filter(v => v && v.on === false).length === 0, 'pausing does not mute the speaker');
+  assert((await host.act('floor', { op: 'resume', token: token + 9 })) .ok && host.st.floor.paused, 'a stale resume does not continue the turn');
+  assert((await host.act('floor', { op: 'resume', token })).ok, 'host resumes');
+  await until(() => host.st.floor && !host.st.floor.paused && host.st.floor.deadline);
+  const left = host.st.floor.deadline - Date.now();
+  assert(left > held - 80 && left <= held && host.st.floor.speaker === who && host.st.floor.ms === 800, 'resume continues the leftover time and does not restart the full turn ' + left);
+  assert((await host.act('floor', { op: 'pause', token })).ok, 'host pauses again');
+  await until(() => host.st.floor.paused && host.st.floor.remainingMs < held);
+  const smaller = host.st.floor.remainingMs;
+  assert((await host.act('floor', { op: 'resume', token })).ok, 'host resumes again');
+  await until(() => !host.st.floor.paused);
+  assert(host.st.floor.deadline - Date.now() <= smaller + 30, 'the second resume uses the newer leftover');
+  await host.act('settings', { mic: false });
+  await until(() => host.st.floor == null);
+  assert((await host.act('floor', { op: 'pause', token })).error, 'a cleared turn cannot be paused');
+  cs.forEach(c => { try { c.s.close(); } catch (e) {} });
+}
 async function domSkip(url, pid) {
   const port = 53300 + (process.pid % 200);
   const dir = '/tmp/chrome-floor-skip-' + process.pid;
@@ -404,6 +461,7 @@ async function table(url) {
   e.cs.forEach(c => { try { c.s.close(); } catch (err) {} });
   await rejectionGate();
   await fifthReject();
+  await pauseClock();
   killAll();
   console.log('FLOOR TESTS PASSED');
   process.exit(0);

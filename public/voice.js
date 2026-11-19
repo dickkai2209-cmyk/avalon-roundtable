@@ -44,6 +44,12 @@
   function tickFloor() {
     const el = document.querySelector('.floor-time');
     if (!floor || !modeOn()) return;
+    if (floor.paused) {
+      const sec = Math.max(0, Math.ceil((floor.remainingMs || 0) / 1000));
+      const held = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+      if (el && el.textContent !== held) el.textContent = held;
+      return;
+    }
     const left = Math.max(0, floor.deadline - Date.now());
     const sec = Math.ceil(left / 1000);
     const text = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');

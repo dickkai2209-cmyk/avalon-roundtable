@@ -453,7 +453,7 @@ async function act(room, pid, type, data) {
       }
       if (data.op === 'end') {
         const f = floors.get(room.code);
-        if (!f || !f.speaker) return '現在沒有發言輪次';
+        if (!f || f.status === 'select' || !f.speaker) return null;
         if (seat.id !== f.speaker) return '現在不是你的發言';
         if (Number(data.token) !== f.token) return null;
         advanceFloor(room, f.token);
@@ -469,6 +469,11 @@ async function act(room, pid, type, data) {
       if (ids.length !== need || !ids.every(id => g.seats.some(s => s.id === id))) return `需要選擇 ${need} 位隊員`;
       const blocked = g.vetoBlocked[g.round] || [];
       if (ids.some(id => blocked.includes(id))) return '本輪被回避的玩家不能再入隊';
+      if (micMode(room)) {
+        const f = floors.get(room.code);
+        const key = g.gid + ':' + (g.discuss || 0);
+        if (!f || f.status !== 'select' || f.key !== key) return '請先完成發言，再選擇隊伍';
+      }
       g.team = ids; g.votes = {}; g.phase = 'vote';
       return null;
     }
@@ -995,8 +1000,11 @@ function markMaybeOffline(room, pid) {
 }
 function floorView(room) {
   const f = floors.get(room.code);
-  if (!f || !f.speaker) return null;
-  return { id: f.id, token: f.token, discuss: f.discuss, index: f.index, order: f.order.map(x => x.id), seats: f.order.map(x => x.seat), speaker: f.speaker, seat: f.seat, deadline: f.deadline, ms: f.ms };
+  if (!f) return null;
+  const base = { id: f.id, token: f.token, discuss: f.discuss, index: f.index, order: f.order.map(x => x.id), seats: f.order.map(x => x.seat), ms: f.ms, status: f.status, selectId: f.selectId || null };
+  if (f.status === 'select') return { ...base, speaker: null, seat: null, deadline: 0 };
+  if (!f.speaker) return null;
+  return { ...base, speaker: f.speaker, seat: f.seat, deadline: f.deadline };
 }
 function muteExcept(room, speakerPid) {
   const m = voicePub.get(room.code);
@@ -1010,15 +1018,31 @@ function clearFloor(room) {
   floors.delete(room.code);
   if (f.speakerPid) voiceDrop(room, f.speakerPid);
 }
+function finishSpeaking(room) {
+  const f = floors.get(room.code);
+  if (!f || f.status === 'select') return false;
+  clearTimeout(f.timer);
+  f.timer = null;
+  const prev = f.speakerPid;
+  f.status = 'select';
+  f.selectId = f.id + ':' + f.key;
+  f.speaker = null;
+  f.speakerPid = null;
+  f.seat = null;
+  f.deadline = 0;
+  f.token += 1;
+  if (prev) voiceDrop(room, prev);
+  muteExcept(room, null);
+  return true;
+}
 function armFloor(room) {
   const f = floors.get(room.code);
-  if (!f) return;
+  if (!f || f.status === 'select') return;
   clearTimeout(f.timer);
   const prevPid = f.speakerPid;
   while (f.index < f.order.length && !playerOnline(room, f.order[f.index].pid)) f.index++;
   if (f.index >= f.order.length) {
-    floors.delete(room.code);
-    if (prevPid) voiceDrop(room, prevPid);
+    finishSpeaking(room);
     return;
   }
   const cur = f.order[f.index];
@@ -1037,7 +1061,7 @@ function armFloor(room) {
 }
 function advanceFloor(room, token) {
   const f = floors.get(room.code);
-  if (!f || f.token !== token) return false;
+  if (!f || f.status === 'select' || f.token !== token) return false;
   clearTimeout(f.timer);
   f.index += 1;
   armFloor(room);
@@ -1050,7 +1074,7 @@ function beginFloor(room) {
   const idxs = speakOrder(g.n, g.leader, g.seats.map(s => !!s));
   const order = idxs.map(i => ({ id: g.seats[i].id, pid: g.seats[i].pid, seat: i + 1 }));
   if (!order.length) return;
-  floors.set(room.code, { id: floorSerial++, token: 0, discuss: g.discuss || 0, key: g.gid + ':' + (g.discuss || 0), order, index: 0, ms: SPEAK_TURN_MS, timer: null, speaker: null, speakerPid: null, seat: null, deadline: 0 });
+  floors.set(room.code, { id: floorSerial++, token: 0, discuss: g.discuss || 0, key: g.gid + ':' + (g.discuss || 0), status: 'speak', selectId: null, order, index: 0, ms: SPEAK_TURN_MS, timer: null, speaker: null, speakerPid: null, seat: null, deadline: 0 });
   armFloor(room);
 }
 function syncFloor(room) {

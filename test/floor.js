@@ -77,6 +77,30 @@ async function domTalk(url, q) {
   assert(gone === 1, 'mic mode off removes presence, glow, and the speaking bar');
   try { dev.ws.close(); } catch (e) {}
 }
+async function speakUntilSelect(host, cs) {
+  for (let n = 0; n < 12 && !(host.st.floor && host.st.floor.status === 'select'); n++) {
+    const f = host.st.floor;
+    if (!f || !f.speaker) break;
+    const who = cs.find(c => c.st && c.st.meId === f.speaker) || host;
+    await who.act('floor', { op: 'end', token: f.token });
+    await until(() => host.st.floor && (host.st.floor.status === 'select' || host.st.floor.token !== f.token), 4000);
+  }
+  return host.st.floor;
+}
+async function domPick(url, q) {
+  const port = 53200 + (process.pid % 200);
+  const dir = '/tmp/chrome-floor-pick-' + process.pid;
+  fs.mkdirSync(dir, { recursive: true });
+  track(spawn('google-chrome', ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=' + port, '--user-data-dir=' + dir, 'about:blank'], { detached: true, stdio: 'ignore' }));
+  let tab; for (let i = 0; i < 40 && !tab; i++) { try { tab = JSON.parse(await get('http://127.0.0.1:' + port + '/json/list')).find(t => t.type === 'page'); } catch (e) { await sleep(120); } }
+  if (!tab) throw new Error('no chrome');
+  const dev = new Dev(tab.webSocketDebuggerUrl); await dev.ready(); await dev.send('Runtime.enable'); await dev.send('Page.enable');
+  await dev.send('Page.addScriptToEvaluateOnNewDocument', { source: `localStorage.setItem('cc.pid', ${JSON.stringify(q.host.pid)}); localStorage.removeItem('cc.token'); localStorage.setItem('cc.profile', ${JSON.stringify(JSON.stringify({ name: '主', avatar: 'fox', bg: '#fff', fx: 'none', pendant: 'none' }))});` });
+  await dev.send('Page.navigate', { url });
+  const view = await dev.eval(`new Promise(r => { const t0=Date.now(); const t=setInterval(() => { const prompt=document.querySelector('.pick-team'); const modal=document.querySelector('#modal:not(.hidden)'); if (prompt) { clearInterval(t); r({ prompt: prompt.textContent, propose: !!document.querySelector('[data-a="propose"]:not([disabled])') || !!document.querySelector('[data-a="propose"]'), glow: document.querySelectorAll('.is-speak').length, clock: !!document.querySelector('.floor-time'), modal: !!(modal && modal.innerText.includes('請選擇隊伍')), ready: document.querySelectorAll('.pick-ready').length }); } else if (Date.now()-t0>8000) { clearInterval(t); r({ text: document.body.innerText.slice(0, 180) }); } }, 40); })`);
+  assert(view.prompt === '請選擇隊伍' && view.glow === 0 && !view.clock && !view.modal && view.ready === 1, 'leader sees one selection prompt and no speaking chrome ' + JSON.stringify(view));
+  try { dev.ws.close(); } catch (e) {}
+}
 async function table(url) {
   const host = await mk(url, '主');
   const room = (await host.emit('create')).room;
@@ -149,9 +173,14 @@ async function table(url) {
   await until(() => game.host.st.floor && game.host.st.floor.index === 0 && game.host.st.floor.seat === 10);
   assert(!game.cs.some(c => c.voice.some(v => v && v.on)), 'a new turn does not unmute anyone');
   const team = game.host.st.game.seats.slice(0, 3).map(s => s.id);
-  assert((await game.host.act('propose', { team })).ok, 'proposal');
+  const leaderBefore = game.host.st.game.leaderId;
+  const blocked = await game.host.act('propose', { team });
+  assert(blocked.error && game.host.st.game.phase === 'team' && game.host.st.game.leaderId === leaderBefore && !(game.host.st.game.team || []).length, 'mic mode rejects a team before speaking finishes');
+  assert((await game.host.act('settings', { mic: false })).ok, 'mic off removes the speech gate');
+  await until(() => game.host.st.floor == null && game.host.st.settings.mic === false);
+  assert((await game.host.act('propose', { team })).ok, 'mic off keeps immediate team selection');
   await until(() => game.host.st.game.phase === 'vote' && game.host.st.floor == null);
-  assert(game.host.st.floor == null, 'voting clears the speaking turn');
+  assert(game.host.st.floor == null && game.host.st.game.leaderId === leaderBefore, 'voting clears the speaking turn without changing the leader');
   game.cs.forEach(c => c.s.close()); late.s.close();
 
   const quick = await boot(41400 + (process.pid % 200), { SPEAK_MS: '2000', PRESENCE_GRACE_MS: '350' });
@@ -182,7 +211,46 @@ async function table(url) {
   await cur.emit('hello', { pid: cur.pid, name: '回', avatar: 'fox' });
   await sleep(120);
   assert(q.host.st.floor.index === index + 1 && q.host.st.floor.speaker === skipped, 'coming back does not reclaim the skipped turn');
+  const early = await speakUntilSelect(q.host, q.cs);
+  assert(early.status === 'select' && early.seat == null && !early.deadline && early.selectId, 'early end opens selection once ' + JSON.stringify(early));
+  assert(q.host.st.game.phase === 'team' && q.host.st.game.leaderId === q.host.st.meId && !(q.host.st.game.team || []).length, 'selection stays with the same leader and does not pick a team');
+  assert(!JSON.stringify(early).match(/merlin|role|assassin|percival/), 'the speaking state does not carry roles');
+  const selectId = early.selectId;
+  const again = await Promise.all([q.host.act('floor', { op: 'end', token: early.token }), q.host.act('floor', { op: 'end', token: 1 })]);
+  assert(again.every(r => r && r.ok), 'duplicate finish is a no-op');
+  await sleep(60);
+  assert(q.host.st.floor.selectId === selectId && q.host.st.floor.status === 'select' && q.host.st.game.phase === 'team', 'a late finish does not reopen selection or skip to voting');
+  await domPick(quick.url, q);
+  const picked = q.host.st.game.seats.slice(0, 3).map(s => s.id);
+  assert((await q.host.act('propose', { team: picked })).ok, 'leader submits after the prompt');
+  await until(() => q.host.st.game.phase === 'vote' && q.host.st.floor == null);
+  assert((await q.host.act('propose', { team: picked })).error, 'a second submit does not reopen selection');
   q.cs.forEach(c => { try { c.s.close(); } catch (e) {} });
+  const exp = await boot(41600 + (process.pid % 200), { SPEAK_MS: '200', PRESENCE_GRACE_MS: '300' });
+  const e = await table(exp.url);
+  const leaderId = e.host.st.game.leaderId;
+  await until(() => e.host.st.floor && e.host.st.floor.status === 'select', 5000);
+  const sid = e.host.st.floor.selectId;
+  assert(e.host.st.floor.status === 'select' && sid && !e.host.st.floor.speaker && e.host.st.game.phase === 'team' && e.host.st.game.leaderId === leaderId && !(e.host.st.game.team || []).length, 'expiry opens selection for the same leader');
+  await e.host.act('floor', { op: 'end', token: e.host.st.floor.token });
+  await sleep(40);
+  assert(e.host.st.floor.selectId === sid && e.host.st.game.phase === 'team', 'a late expiry finish does not skip to voting');
+  assert((await e.host.act('endearly')).ok, 'clear the expiry game');
+  await until(() => e.host.st.game.phase === 'end');
+  assert((await e.host.act('start')).ok, 'start the next discussion');
+  await until(() => e.host.st.floor && e.host.st.floor.status === 'speak');
+  const sameLeader = e.host.st.game.leaderId;
+  e.host.s.disconnect();
+  await until(() => e.cs[1].st.floor && e.cs[1].st.floor.status === 'select', 5000);
+  assert(e.cs[1].st.game.leaderId === sameLeader && e.cs[1].st.game.phase === 'team' && !(e.cs[1].st.game.team || []).length, 'an offline leader is not replaced or given a secret team');
+  e.host.s.connect();
+  await new Promise(r => e.host.s.once('connect', r));
+  await e.host.emit('hello', { pid: e.host.pid, name: '主', avatar: 'fox' });
+  await until(() => e.host.st && e.host.st.floor && e.host.st.floor.status === 'select');
+  const ids = e.host.st.game.seats.slice(0, 3).map(s => s.id);
+  assert((await e.host.act('propose', { team: ids })).ok, 'the same leader can select after reconnecting');
+  await until(() => e.host.st.game.phase === 'vote');
+  e.cs.forEach(c => { try { c.s.close(); } catch (err) {} });
   killAll();
   console.log('FLOOR TESTS PASSED');
   process.exit(0);

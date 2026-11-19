@@ -59,9 +59,21 @@
     if (!floorTimer) floorTimer = setInterval(tickFloor, 250);
     tickFloor();
   }
+  function stopOwnedMic() {
+    token++; micOn = false; starting = false;
+    stopLocal(); dropSenders();
+    if (socket) socket.emit('voice:mic', { on: false }, () => {});
+  }
   function applyFloor(next) {
-    const on = modeOn() && next && next.speaker ? next : null;
+    const speaking = !!(modeOn() && next && next.status !== 'select' && next.speaker);
+    const on = speaking ? next : null;
+    const prev = floor;
     floor = on;
+    if (prev && prev.speaker && (!on || on.speaker !== prev.speaker)) {
+      if (micOn && prev.speaker === myId()) stopOwnedMic();
+      if (prev.speaker === myId()) { for (const id of [...pcs.keys()]) closePeer(id); }
+      else closePeer(prev.speaker);
+    }
     if (!on) { paintGlow(); return; }
     if (on.speaker !== myId() && micOn) {
       token++; micOn = false; starting = false;

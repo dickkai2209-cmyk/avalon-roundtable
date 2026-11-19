@@ -911,7 +911,7 @@ function joinDialog() {
       if (!r || r.error) { box.innerHTML = `<div class="near-status bad" role="status">${esc((r && r.error) || '搜尋失敗')}</div>`; return; }
       const rooms = r.rooms || [];
       if (!rooms.length) box.innerHTML = '<div class="near-status" role="status">附近 5 公里內沒有開放搜尋的等待房間。</div>';
-      else box.innerHTML = `<div class="near-list">${rooms.map(rm => `<button type="button" class="near-item" data-code="${esc(rm.code)}"><b>${esc(rm.name || ('房間 ' + rm.code))}</b><span>${esc(rm.hostName || '房主')} · ${esc(rm.seated)}/${esc(rm.capacity)} · ${esc(rm.distance || '')}</span></button>`).join('')}</div>`;
+      else box.innerHTML = `<div class="near-list">${rooms.map(rm => `<button type="button" class="near-item" data-code="${esc(rm.code)}">${av({ name: rm.hostName || '房主', avatar: rm.hostAvatar || 'fox', bg: rm.hostBg || '#f3d9a4', photoUrl: rm.hostPhoto }, 40)}<span class="near-copy"><b>${esc(rm.name || ('房間 ' + rm.code))}</b><span>${esc(rm.hostName || '房主')}</span><span>${Number(rm.capacity) || 0}人局 · ${Number(rm.seated) || 0}/${Number(rm.capacity) || 0}人 · ${esc(rm.distance || '')}</span></span></button>`).join('')}</div>`;
       $$('.near-item', box).forEach(b => b.onclick = () => joinRoom(b.dataset.code));
     };
     nearBtn.onclick = () => runNear();

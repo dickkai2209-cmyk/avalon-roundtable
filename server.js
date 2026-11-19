@@ -375,7 +375,8 @@ async function act(room, pid, type, data) {
       const p = seated(room).find(x => x.id === data.id);
       if (!p) return '對方必須已就座';
       room.hostPid = p.pid; p.ready = false;
-      discovery.delete(room.code);
+      const pin = discovery.get(room.code);
+      if (pin) discovery.set(room.code, { ...pin, hostPid: p.pid });
       room.lastEvent = { seq: ++room.eventSeq, type: 'host', id: p.id, name: p.name };
       return null;
     }
@@ -1122,21 +1123,31 @@ function haversineKm(a, b) {
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(s1 + s2)));
 }
 function distanceLabel(km) { if (km <= 0.5) return '約 500 公尺內'; if (km <= 1) return '約 1 公里內'; if (km <= 2) return '約 2 公里內'; return '約 5 公里內'; }
-function hostDisplayName(room) {
+function hostPublic(room) {
   const p = findPlayer(room, room.hostPid);
-  if (p && p.name) return p.name;
-  for (const s of io.sockets.sockets.values()) if (s.data.pid === room.hostPid && s.data.name) return s.data.name;
-  return '房主';
+  let sock = null;
+  if (!p) { for (const s of io.sockets.sockets.values()) if (s.data.pid === room.hostPid) { sock = s; break; } }
+  const hostName = (p && p.name) || (sock && sock.data.name) || '房主';
+  const hostAvatar = cleanAvatar((p && p.avatar) || (sock && sock.data.avatar) || 'fox');
+  const hostBg = cleanBg((p && p.bg) || (sock && sock.data.bg));
+  const id = (p && p.id) || (sock ? pubId(sock.data.pid) : '');
+  const pv = Number((p && p.pv) || (sock && sock.data.pv) || 0) || 0;
+  const hostPhoto = hostAvatar === 'photo' && /^[a-f0-9]{10}$/.test(id)
+    ? `/api/avatar/${id}?v=${pv}`
+    : `/img/av/${hostAvatar}.webp`;
+  return { hostName, hostAvatar, hostBg, hostPhoto };
 }
 function searchNearby(origin) {
   const now = Date.now(), out = [];
   for (const [code, pin] of discovery) {
     if (!pin || now - pin.at > DISCOVER_TTL_MS) { discovery.delete(code); continue; }
     const room = rooms.get(code);
-    if (!room || room.game || pin.hostPid !== room.hostPid || !hostInRoom(room)) { discovery.delete(code); continue; }
+    if (!room || room.game || !hostInRoom(room)) { discovery.delete(code); continue; }
+    if (pin.hostPid !== room.hostPid) pin.hostPid = room.hostPid;
     const km = haversineKm(origin, pin);
     if (km > DISCOVER_RADIUS_KM) continue;
-    out.push({ code: room.code, name: '房間 ' + room.code, hostName: hostDisplayName(room), seated: seated(room).length, capacity: room.capacity, distance: distanceLabel(km), _km: km });
+    const seatedN = seated(room).length;
+    out.push({ code: room.code, name: '房間 ' + room.code, ...hostPublic(room), seated: seatedN, capacity: room.capacity, distance: distanceLabel(km), _km: km });
   }
   out.sort((a, b) => a._km - b._km || (a.code < b.code ? -1 : 1));
   return out.slice(0, DISCOVER_MAX).map(({ _km, ...pub }) => pub);

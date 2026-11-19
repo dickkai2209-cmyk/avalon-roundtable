@@ -172,7 +172,13 @@ socket.on('connect', () => {
     });
   }).catch(e => toast(e.message || '無法連線至伺服器'));
 });
-socket.on('disconnect', () => $('#conn').classList.remove('on'));
+socket.on('disconnect', () => { $('#conn').classList.remove('on'); if (window.AvalonVoice) AvalonVoice.roomOff(); });
+if (window.AvalonVoice) AvalonVoice.attach(socket, {
+  myId: () => (S && S.meId) || '',
+  seated: () => !!(S && S.mySeat && !S.spectating),
+  inRoom: () => !!(S && S.code),
+  mode: () => !!(S && S.settings && S.settings.mic === true),
+});
 let wakeT = setTimeout(() => { if (!socket.connected) $('#wake').classList.remove('hidden'); }, 2500);
 socket.on('connect', () => { clearTimeout(wakeT); $('#wake').classList.add('hidden'); });
 function refreshRoom() {
@@ -224,6 +230,7 @@ socket.on('state', (st) => {
   if (st.game && ['vote', 'quest', 'end'].includes(st.game.phase)) selected = new Set();
   if (st.game && prev && prev.game && prev.game.phase !== st.game.phase) selected = new Set();
   S = st;
+  if (window.AvalonVoice) AvalonVoice.sync(st);
   if (st && st.myAvoidResult && st.myAvoidResult.gid) {
     const prevR = prev && prev.myAvoidResult;
     if (!prevR || prevR.gid !== st.myAvoidResult.gid) {
@@ -866,12 +873,48 @@ function editProfile(after, startTab) {
 function ensureName(fn) { if (profile.name) fn(); else editProfile(fn); }
 async function createRoom() { await ensureSession(); const r = await emit('create'); if (r.room) go('room'); }
 async function joinRoom(code) { await ensureSession(); const r = await emit('join', { code }); if (r.room) { closeModal(); go('room'); if (r.spectating) toast('已進入觀戰'); } }
+let discoverOn = false, sitPend = 0, sitGen = 0;
+function requestPosition() {
+  return new Promise((resolve) => {
+    if (!window.isSecureContext) return resolve({ ok: false, msg: '需要 HTTPS 先可以搜尋附近房間' });
+    if (!navigator.geolocation) return resolve({ ok: false, msg: '此瀏覽器不支援定位' });
+    let done = false; const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    const timer = setTimeout(() => finish({ ok: false, msg: '定位逾時，請再試。仍可用房間號加入。' }), 9000);
+    navigator.geolocation.getCurrentPosition((pos) => {
+      clearTimeout(timer);
+      const lat = pos && pos.coords && pos.coords.latitude, lng = pos && pos.coords && pos.coords.longitude;
+      if (typeof lat !== 'number' || typeof lng !== 'number') finish({ ok: false, msg: '無法取得位置。仍可用房間號加入。' });
+      else finish({ ok: true, lat, lng });
+    }, (err) => {
+      clearTimeout(timer);
+      const c = err && err.code;
+      finish({ ok: false, msg: c === 1 ? '未允許位置權限。仍可用 4 位房間號加入。' : (c === 2 ? '暫時無法取得位置。仍可用房間號加入。' : '定位逾時，請再試。仍可用房間號加入。') });
+    }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 });
+  });
+}
 function joinDialog() {
-  openModal(`<h2>加入房間</h2><input class="inp code-inp" id="cd" maxlength="4" placeholder="····" autocomplete="off">
-  <p class="muted small center">輸入同枱朋友的 4 位房間號，或用相機掃描他們的二維碼</p><button class="btn" id="ok">進入圓桌</button>`, (el) => {
+  openModal(`<h2>加入房間</h2><input class="inp code-inp" id="cd" maxlength="4" placeholder="····" autocomplete="off" aria-label="4 位房間號">
+  <p class="muted small center">輸入同枱朋友的 4 位房間號，或用相機掃描他們的二維碼</p><button class="btn" id="ok">進入圓桌</button>
+  <button type="button" class="btn ghost" id="near">搜尋附近房間</button>
+  <p class="tiny muted center">搜尋半徑 5 公里。要按一下先會問位置。</p><div id="nearbox"></div>`, (el) => {
     const cd = $('#cd', el); setTimeout(() => cd.focus(), 60);
     const go2 = () => { const c = cd.value.trim().toUpperCase(); if (c.length !== 4) return toast('房間號為 4 位'); joinRoom(c); };
     $('#ok', el).onclick = go2; cd.onkeydown = (e) => { if (e.key === 'Enter') go2(); };
+    const box = $('#nearbox', el), nearBtn = $('#near', el);
+    const runNear = async () => {
+      nearBtn.disabled = true; box.innerHTML = '<div class="near-status" role="status">正在取得位置…</div>';
+      const loc = await requestPosition();
+      if (!loc.ok) { nearBtn.disabled = false; box.innerHTML = `<div class="near-status bad" role="status">${esc(loc.msg)}</div>`; return; }
+      box.innerHTML = '<div class="near-status" role="status">正在搜尋 5 公里內的房間…</div>';
+      const r = await emit('nearby', { lat: loc.lat, lng: loc.lng });
+      nearBtn.disabled = false;
+      if (!r || r.error) { box.innerHTML = `<div class="near-status bad" role="status">${esc((r && r.error) || '搜尋失敗')}</div>`; return; }
+      const rooms = r.rooms || [];
+      if (!rooms.length) box.innerHTML = '<div class="near-status" role="status">附近 5 公里內沒有開放搜尋的等待房間。</div>';
+      else box.innerHTML = `<div class="near-list">${rooms.map(rm => `<button type="button" class="near-item" data-code="${esc(rm.code)}">${av({ name: rm.hostName || '房主', avatar: rm.hostAvatar || 'fox', bg: rm.hostBg || '#f3d9a4', photoUrl: rm.hostPhoto }, 40)}<span class="near-copy"><b>${esc(rm.name || ('房間 ' + rm.code))}</b><span>${esc(rm.hostName || '房主')}</span><span>${Number(rm.capacity) || 0}人局 · ${Number(rm.seated) || 0}/${Number(rm.capacity) || 0}人 · ${esc(rm.distance || '')}</span></span></button>`).join('')}</div>`;
+      $$('.near-item', box).forEach(b => b.onclick = () => joinRoom(b.dataset.code));
+    };
+    nearBtn.onclick = () => runNear();
   });
 }
 function inviteDialog() {
@@ -1059,9 +1102,12 @@ function roundTable(seats, o = {}) {
     }
     const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '') + (enterIds.has(s.id) ? ` enter fx-${s.fx || 'spot'}` : '');
     const action = o.action || 'sel';
-    const extra = o.click && o.click(s, i) ? `data-a="${action}" data-id="${s.id}"` : (o.seatClick ? `data-a="${o.seatClick}" data-id="${s.id}" data-seat="${seatNo}"` : '');
-    return `<div class="st ${cls}" style="${pos}" data-sid="${s.id}" ${extra}>
-      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${o.marks ? o.marks(s, i) : ''}${av(s, avSize)}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
+    const actAttr = o.click && o.click(s, i) ? `data-a="${action}"` : (o.seatClick ? `data-a="${o.seatClick}"` : '');
+    const mic = (window.AvalonVoice && AvalonVoice.glyph(s.id)) || '';
+    const pres = (window.AvalonVoice && AvalonVoice.presence(!!s.online)) || '';
+    const speakCls = (S && S.settings && S.settings.mic === true && S.floor && S.floor.speaker === s.id) ? ' is-speak' : '';
+    return `<div class="st ${cls}${speakCls}" style="${pos}" data-sid="${s.id}" data-id="${s.id}" data-seat="${seatNo}" ${actAttr}>
+      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${o.marks ? o.marks(s, i) : ''}${av(s, avSize)}${mic}${pres}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
   }).join('');
   return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="currentColor"/><circle cx="13.8" cy="10.3" r="1.2" fill="currentColor"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${nums.join('')}${st}</div>`;
 }
@@ -1406,16 +1452,31 @@ function render() {
     const scroller = document.scrollingElement;
     const mainEl = document.querySelector('main');
     const keepScroll = { w: scroller ? scroller.scrollTop : 0, m: mainEl ? mainEl.scrollTop : 0 };
-    const before = {}; $$('.rt .st[data-id]').forEach(e => { const r = e.getBoundingClientRect(); before[e.dataset.id] = [r.left, r.top]; });
+    const before = {};
+    if (!S.game) $$('.rt .st[data-id]').forEach(e => { const r = e.getBoundingClientRect(); before[e.dataset.id] = [r.left, r.top]; });
+    const faces = new Map();
+    $$('.rt .st[data-id] .av-wrap').forEach(wrap => { const id = wrap.closest('.st').dataset.id; if (id && !faces.has(id)) { faces.set(id, wrap); wrap.remove(); } });
     setHTML(app, S.game ? gameHtml() : lobbyHtml()); enterIds.clear();
+    faces.forEach((wrap, id) => {
+      const st = document.querySelector('.rt .st[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+      const cur = st && st.querySelector('.av-wrap');
+      if (!st || !cur) return;
+      const a = wrap.querySelector('img'), b = cur.querySelector('img');
+      if (a && b && a.getAttribute('src') === b.getAttribute('src') && a.getAttribute('width') === b.getAttribute('width')) cur.replaceWith(wrap);
+    });
     if (scroller) scroller.scrollTop = keepScroll.w;
     if (mainEl) mainEl.scrollTop = keepScroll.m;
-    if (!S.game) $$('.rt .st[data-id]').forEach(e => {
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!S.game && !reduceMotion) $$('.rt .st[data-id]').forEach(e => {
       const b = before[e.dataset.id]; if (!b) return; const r = e.getBoundingClientRect(); const dx = b[0] - r.left, dy = b[1] - r.top;
       if (Math.abs(dx) + Math.abs(dy) < 4) return;
       e.style.transition = 'none'; e.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`; e.style.zIndex = 5;
-      requestAnimationFrame(() => requestAnimationFrame(() => { e.style.transition = 'transform .55s cubic-bezier(.3,1.3,.5,1)'; e.style.transform = ''; setTimeout(() => { e.style.zIndex = ''; e.style.transition = ''; }, 600); }));
+      requestAnimationFrame(() => { e.style.transition = 'transform .14s ease-out'; e.style.transform = ''; setTimeout(() => { e.style.zIndex = ''; e.style.transition = ''; }, 170); });
     });
+    if (window.AvalonVoice) {
+      if (!(S && S.settings && S.settings.mic === true)) AvalonVoice.stripIcons();
+      else AvalonVoice.afterRender();
+    }
   }
   else if (view === 'rules') { app.innerHTML = rulesHtml(); mountRules(); }
   else if (view === 'history') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadHistory(); }
@@ -1500,7 +1561,7 @@ function achHtml() {
     `<div class="card ach">${ACHS.map(([k, n, d, f, prog]) => `<div class="ach-i ${f(s) ? 'on' : ''}"><span class="medal">${f(s) ? (k === 'mvp10' ? '🌈' : '🏅') : '🔒'}</span><div class="grow"><b>${n}</b><div class="tiny muted">${d}</div>${prog && !isGM() ? `<div class="bar sm"><i style="width:${pct(prog(s)[0], prog(s)[1])}%"></i></div><div class="tiny muted">${prog(s)[0]}/${prog(s)[1]}</div>` : ''}</div></div>`).join('')}</div>`;
 }
 function expStatus(s) {
-  return [['蘭斯洛特', s.lancelot], ['湖中仙女', s.lady], ['王者之劍', s.excalibur], ['回避卡', s.veto]]
+  return [['蘭斯洛特', s.lancelot], ['湖中仙女', s.lady], ['王者之劍', s.excalibur], ['回避卡', s.veto], ['麥克風模式', s && s.mic]]
     .map(([n, on]) => `<span class="xp ${on ? 'on' : ''}">${n}<i>${on ? '已開啟' : '未開啟'}</i></span>`).join('');
 }
 function cfgSheetHtml() {
@@ -1513,6 +1574,8 @@ function cfgSheetHtml() {
     ${presetCard(S.preset)}
     <div class="tiny muted" style="margin-top:6px">任務人數：${(S.teamSizes || []).join(' / ')}${n >= 7 ? '（第 4 輪需 2 張失敗）' : ''}　減少人數時，多出座位上的玩家會自動離座</div>
     ${tg('lady', '湖中仙女', '第 2–4 個任務後查驗一人陣營（8 人以上預設開啟）', `<img src="${thumb('lady')}" alt="">`)}
+    ${tg('mic', '麥克風模式', '預設關閉。開啟後，已就座的玩家先各自點自己頭像右下角的咪，不會自動開咪。關閉時頭像上不會有咪圖示。', '')}
+    ${host ? `<button type="button" class="disc-row" data-a="discover" aria-pressed="${discoverOn ? 'true' : 'false'}"><b>讓附近玩家搜尋到此房間</b><span class="tiny muted">${discoverOn ? '已開放 · 約 5 公里內，不公開精確位置' : '預設關閉 · 開啟先會問你的位置'}</span></button>` : ''}
     ${tg('veto', '允許使用回避卡', '投票時可用一張回避卡退出隊伍，不計否決（每贏一局得 1 張，上限 10）')}
     ${tg('excalibur', '王者之劍', '隊長把劍交給隊員，任務後可翻轉一張任務卡')}
     ${tg('lancelot', '蘭斯洛特', '正邪各一，忠誠牌可能互換陣營（11 人以上預設開啟）')}
@@ -1525,7 +1588,7 @@ function lobbyHtml() {
   const me = (S.seats || []).find(p => p && p.id === S.meId);
   const vc = S.myVetoCards == null ? (account && account.vetoCards) : S.myVetoCards;
   const specBar = S.spectating ? `<div class="specbar">👁 觀戰中${(S.spectators||[]).length ? ' · ' + S.spectators.length + ' 人' : ''}</div>${(S.spectators||[]).length ? `<div class="speclist">${S.spectators.map(p => `<span class="spec-i">${av(p,22)}<i>${esc(p.name)}</i></span>`).join('')}</div>` : ''}` : ((S.spectators||[]).length ? `<div class="speclist">${S.spectators.map(p => `<span class="spec-i">${av(p,22)}<i>${esc(p.name)}</i></span>`).join('')}</div>` : '');
-  return `${roomHead()}${specBar}
+  return `${roomHead()}${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${specBar}
   <div class="card tbl">${roundTable(S.seats, {
       seatClick: 'seat', emote: true,
       marker: p => (p.ready ? '✅' : ''),
@@ -1548,9 +1611,20 @@ function gameHtml() {
   const need = g.teamSizes[g.round]; const isLeader = g.leaderId === meId; const isLady = g.ladyId === meId;
   let panel = '', center = '';
   const selCount = selected.size;
+  let pickLive = false;
   if (g.phase === 'team') {
+    const micOn = !!(S.settings && S.settings.mic === true);
+    const picking = micOn && S.floor && S.floor.status === 'select';
+    const talking = micOn && S.floor && S.floor.status !== 'select';
+    const skipped = picking && S.floor.skipped;
+    pickLive = picking && isLeader;
     center = `<b>第 ${g.round + 1} 輪</b>隊長 ${esc(P(g.leaderId).name)}<br>需要 ${need} 人`;
-    panel = isLeader ? `<div class="phase">👑 你是隊長</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>` : '';
+    if (isLeader && skipped) panel = `<div class="phase pick-team">請選擇隊伍</div><div class="small skip-note">已連續兩次派隊不通過，直接由隊長選隊</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>`;
+    else if (isLeader && picking) panel = `<div class="phase pick-team">請選擇隊伍</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>`;
+    else if (isLeader && talking) panel = `<div class="phase">👑 你是隊長</div><div class="small muted">全員發言後先可以選擇隊伍</div><button class="btn" data-a="propose" disabled>提交隊伍</button>`;
+    else if (isLeader) panel = `<div class="phase">👑 你是隊長</div><div class="small muted">在圓桌上點選 ${need} 位隊員（已選 ${selCount}/${need}），可以選自己</div><button class="btn" data-a="propose" ${selCount === need ? '' : 'disabled'}>提交隊伍</button>`;
+    else if (skipped) panel = `<div class="phase">已連續兩次派隊不通過，直接由隊長選隊</div>`;
+    else if (picking) panel = `<div class="phase">隊長正在選擇隊伍</div>`;
   } else if (g.phase === 'vote') {
     center = `<b>投票中</b>${g.voted.length}/${g.n} 已投`;
     panel = `<div class="phase">是否同意此隊伍出任務？</div><div>${g.team.map(id => chip(id)).join('')}</div><div class="small muted" style="margin-top:6px">全員投完後同時公開</div>` +
@@ -1585,7 +1659,8 @@ function gameHtml() {
     center = `<b>${g.winner === 'none' ? '提前結束' : g.winner === 'good' ? '好人勝' : '壞人勝'}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}`;
     panel = `${S.isHost ? '<button class="btn" data-a="lobby" style="margin-top:0">🔁 再來一局（保留座位）</button>' : '<div class="center muted small">等待房主開新一局（座位保留）</div>'}`;
   }
-  const selectable = (s) => (g.phase === 'team' && isLeader) || (g.phase === 'assassin' && me && me.role === 'assassin' && s.id !== meId && !s.evil) || (g.phase === 'lady' && isLady && s.id !== meId && !g.ladyUsed.includes(s.id)) || (g.phase === 'sword' && isLeader && g.team.includes(s.id) && s.id !== meId) || (g.phase === 'swordflip' && g.sword === meId && g.team.includes(s.id) && s.id !== meId);
+  const teamOpen = g.phase === 'team' && isLeader && (!(S.settings && S.settings.mic === true) || (S.floor && S.floor.status === 'select'));
+  const selectable = (s) => teamOpen || (g.phase === 'assassin' && me && me.role === 'assassin' && s.id !== meId && !s.evil) || (g.phase === 'lady' && isLady && s.id !== meId && !g.ladyUsed.includes(s.id)) || (g.phase === 'sword' && isLeader && g.team.includes(s.id) && s.id !== meId) || (g.phase === 'swordflip' && g.sword === meId && g.team.includes(s.id) && s.id !== meId);
   const ended = g.phase === 'end';
   const liveMark = (s) => {
     if (ended) return '';
@@ -1595,6 +1670,7 @@ function gameHtml() {
       + (g.phase === 'vote' && (g.voted || []).includes(s.id) ? MARK_CAST : '');
     return ((g.team || []).includes(s.id) ? MARK_RING : '') + (front ? `<span class="mfront">${front}</span>` : '');
   };
+  const floorCard = floorBar();
   const table = roundTable(g.seats, { emote: true,
     click: selectable,
     cls: s => [
@@ -1611,15 +1687,34 @@ function gameHtml() {
     label: s => ended ? `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>` : (s.evil ? '<span class="lbl e">壞人</span>' : ''),
     center,
   });
-  return `${!me ? '<div class="specbar">👁 觀戰中</div>' : ''}<div class="card">${trackHtml(g)}</div>
-  <div class="card" style="padding:22px 10px 16px">${table}${ended ? '' : markLegend()}</div>
+  return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : ''}${!me ? '<div class="specbar">👁 觀戰中</div>' : ''}<div class="card">${trackHtml(g)}</div>
+  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:22px 10px 16px">${table}${ended ? '' : markLegend()}</div>
   <div class="card thist" id="teamhist">${teamHistoryHtml(g)}</div>
   ${ladyChainHtml(g.ladyLog, g.seats) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats)}</div>` : ''}
-  ${panel ? `<div class="card">${panel}</div>` : ''}
+  ${panel ? `<div class="card${pickLive ? ' pick-ready' : ''}">${panel}</div>` : ''}
   ${me ? '' : '<div class="specbar">👁 觀戰中 · 唔會看到隱藏身分</div>'}
   ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : ''}
   ${g.settings.veto && me && !ended ? `<button type="button" class="veto-fab ${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'ready' : 'dim'}" data-a="${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'veto' : 'vetoinfo'}" aria-label="回避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>回避卡</span><b>${vetoAmt(me.vetoCards != null ? me.vetoCards : S.myVetoCards)}</b></button>` : ''}
   ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}`;
+}
+function floorClock(msLeft) {
+  const sec = Math.max(0, Math.ceil(msLeft / 1000));
+  return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+}
+function floorBar() {
+  if (!S || !S.game || S.game.phase !== 'team' || !S.settings || S.settings.mic !== true) return '';
+  const f = S.floor;
+  if (!f || f.status === 'select') return f && f.status === 'select' ? '' : (S.isHost ? '<div class="card floorbar"><button type="button" class="btn sm" data-a="floorrestart">開始發言</button></div>' : '');
+  const who = (S.game.seats || []).find(s => s.id === f.speaker);
+  const mine = S.meId === f.speaker;
+  const paused = !!f.paused;
+  const label = f.ms === 90000 ? '1 分 30 秒' : (Math.round(f.ms / 1000) + ' 秒');
+  const clock = paused ? floorClock(f.remainingMs || 0) : floorClock((f.deadline || 0) - Date.now());
+  return `<div class="card floorbar" data-floor="${f.id}" data-token="${f.token}">
+    <div class="floor-who"><b>${esc(who ? who.name : '發言')}</b> · ${f.seat}號座 · <span class="floor-time" role="timer" data-deadline="${paused ? 0 : f.deadline}">${clock}</span>${paused ? '<span class="floor-pause">已暫停</span>' : ''}</div>
+    <div class="tiny muted">隊長面向圓心，右手邊先講，沿座位逆時針，隊長最後。每人 ${label}。</div>
+    <div class="floor-acts">${mine && !paused ? `<button type="button" class="btn sm" data-a="floorend" data-token="${f.token}">結束發言</button>` : ''}${S.isHost ? `<button type="button" class="btn ghost sm" data-a="${paused ? 'floorresume' : 'floorpause'}" data-token="${f.token}">${paused ? '繼續' : '暫停'}</button><button type="button" class="btn ghost sm" data-a="floorskip" data-token="${f.token}">跳過</button><button type="button" class="btn ghost sm" data-a="floorrestart">重新開始發言</button>` : ''}</div>
+  </div>`;
 }
 function ladyChainHtml(log, seats) {
   if (!log || !log.length) return '';
@@ -2266,7 +2361,11 @@ document.addEventListener('click', async (e) => {
     case 'reloadboard': return loadBoard();
     case 'invite': return inviteDialog();
     case 'role': return showRole(false);
-    case 'tg': return act('settings', { [el.dataset.k]: !S.settings[el.dataset.k] });
+    case 'tg': {
+      const k = el.dataset.k; const next = !S.settings[k];
+      if (k === 'mic' && !next && window.AvalonVoice) AvalonVoice.roomOff();
+      return act('settings', { [k]: next });
+    }
     case 'kick': if (confirm('移除這位玩家？')) act('kick', { id: el.dataset.id }); return;
     case 'swap': { const id = el.dataset.id; if (selected.has(id)) selected.delete(id); else selected.add(id);
       if (selected.size === 2) { const [x, y] = [...selected]; selected = new Set(); await act('swap', { a: x, b: y }); } return render(); }
@@ -2276,7 +2375,30 @@ document.addEventListener('click', async (e) => {
     case 'login': return authDialog('login');
     case 'logout': return doLogout();
     case 'cap': return act('capacity', { n: Number(el.dataset.n) });
-    case 'sit': return act('sit', { seat: Number(el.dataset.seat) });
+    case 'sit': {
+      const seat = Number(el.dataset.seat); const gen = ++sitGen; sitPend = seat;
+      el.classList.add('pend');
+      const r = await act('sit', { seat });
+      if (gen !== sitGen) return;
+      if (!r || !r.ok) { sitPend = 0; el.classList.remove('pend'); }
+      return;
+    }
+    case 'mic': e.stopPropagation(); if (window.AvalonVoice) AvalonVoice.toggle(); return;
+    case 'listen': e.stopPropagation(); if (window.AvalonVoice) AvalonVoice.listen(); return;
+    case 'floorend': return act('floor', { op: 'end', token: Number(el.dataset.token) });
+    case 'floorpause': return act('floor', { op: 'pause', token: Number(el.dataset.token) });
+    case 'floorresume': return act('floor', { op: 'resume', token: Number(el.dataset.token) });
+    case 'floorskip': return act('floor', { op: 'skip', token: Number(el.dataset.token) });
+    case 'floorrestart': return act('floor', { op: 'restart' });
+    case 'discover': {
+      if (!S || !S.isHost) return;
+      if (discoverOn) { discoverOn = false; render(); await act('discover', { on: false }); return; }
+      const loc = await requestPosition();
+      if (!loc.ok) { toast(loc.msg); return; }
+      const r = await act('discover', { on: true, lat: loc.lat, lng: loc.lng });
+      if (r && r.ok) { discoverOn = true; render(); toast('已讓附近玩家搜尋到這個房間'); }
+      return;
+    }
     case 'ready': { const me = (S.seats||[]).find(p => p && p.id === S.meId); return act('ready', { ready: !(me && me.ready) }); }
     case 'adv': return act('settings', { advanced: !S.settings.advanced });
     case 'seat': {

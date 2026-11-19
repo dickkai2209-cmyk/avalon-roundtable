@@ -10,6 +10,7 @@ const { build: buildReview } = require('./review');
 const {
   TEAM_SIZES, EVIL_COUNT, ROLE_SIDE, ROLE_NAME,
   defaultSettings, presetRoles, currentSide, canPlayFail, needTwoFails, knowledge, resolveAvoidance,
+  SPEAK_MS, speakOrder,
 } = require('./rules');
 
 const PORT = process.env.PORT || 3000;
@@ -123,6 +124,7 @@ function pickNextHost(room, oldPid) {
 function standUp(room, pid) {
   const i = findSeat(room, pid);
   if (i >= 0) room.seats[i] = null;
+  voiceDrop(room, pid);
 }
 
 function setCapacity(room, n) {
@@ -133,7 +135,7 @@ function setCapacity(room, n) {
   room.seats = next;
   room.capacity = n;
   // standing extra seats already dropped
-  room.settings = { ...room.settings, ...defaultSettings(n), excalibur: !!room.settings.excalibur, veto: !!room.settings.veto, lancelot: n >= 11 ? (room.settings.lancelot !== false) : !!room.settings.lancelot };
+  room.settings = { ...room.settings, ...defaultSettings(n), excalibur: !!room.settings.excalibur, veto: !!room.settings.veto, mic: !!room.settings.mic, lancelot: n >= 11 ? (room.settings.lancelot !== false) : !!room.settings.lancelot };
   room.seats.forEach(p => { if (p) p.ready = false; });
 }
 
@@ -165,7 +167,10 @@ async function startGame(room) {
     if (raw[i] && cards[i] <= 0) result[i] = { role: raw[i], status: 'insufficient' };
   }
   const seats = players.map((p, i) => ({ pid: p.pid, id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx, pendant: p.pendant, pv: p.pv || 0, role: assign[i] }));
-  const leader = crypto.randomInt(n);
+  const forcedLeader = process.env.FORCE_LEADER;
+  const leader = forcedLeader != null && forcedLeader !== '' && Number.isInteger(Number(forcedLeader))
+    ? ((Number(forcedLeader) % n) + n) % n
+    : crypto.randomInt(n);
   const lance = !!(room.settings.lancelot && seats.some(s => s.role === 'lancelot_good'));
   room.game = {
     gid: crypto.randomUUID(), startedAt: Date.now(), n, seats, settings: { ...room.settings },
@@ -174,7 +179,7 @@ async function startGame(room) {
     ladyStartId: room.settings.lady ? seats[(leader - 1 + n) % n].id : null,
     ladyUsed: room.settings.lady ? [seats[(leader - 1 + n) % n].id] : [],
     ladyLog: [],
-    phase: 'team', team: [], votes: {}, questVotes: {},
+    phase: 'team', discuss: 1, team: [], votes: {}, questVotes: {},
     quests: [null, null, null, null, null],
     rounds: [[], [], [], [], []],
     assassinTarget: null, winner: null, reason: '', endedAt: null,
@@ -243,7 +248,11 @@ function scoreGame(g) {
 
 async function endGame(room, winner, reason) {
   const g = room.game;
+  if (!g || g.settled) return;
+  g.settled = true;
   g.phase = 'end'; g.winner = winner; g.reason = reason; g.endedAt = Date.now();
+  clearFloor(room);
+  muteExcept(room, null);
   const early = winner === 'none';
   if (early) g.early = true;
   const { scores, mvp, runnerUp, highlights } = early ? { scores: null, mvp: null, runnerUp: null, highlights: [] } : scoreGame(g);
@@ -269,6 +278,11 @@ async function endGame(room, winner, reason) {
   setTimeout(() => rooms.has(room.code) && broadcast(room), 800);
 }
 
+function openDiscussion(g) {
+  g.phase = 'team';
+  g.discuss = (g.discuss || 0) + 1;
+}
+
 function afterQuest(room, qev) {
   const g = room.game;
   const goodWins = g.quests.filter(q => q && q.success).length;
@@ -284,11 +298,11 @@ function afterQuest(room, qev) {
     qev.lance = { card, switched: g.lanceSwitched };
     room.lastEvent = { seq: ++room.eventSeq, ...qev };
     if (g.lady >= 0 && g.round >= 1 && g.round <= 3) g.phase = 'lady';
-    else { g.round++; g.phase = 'team'; g.leader = (g.leader + 1) % g.n; }
+    else { g.round++; g.leader = (g.leader + 1) % g.n; openDiscussion(g); }
     return;
   }
   if (g.lady >= 0 && g.round >= 1 && g.round <= 3) g.phase = 'lady';
-  else { g.round++; g.phase = 'team'; g.leader = (g.leader + 1) % g.n; }
+  else { g.round++; g.leader = (g.leader + 1) % g.n; openDiscussion(g); }
 }
 
 async function act(room, pid, type, data) {
@@ -303,7 +317,15 @@ async function act(room, pid, type, data) {
     }
     case 'settings': {
       if (!isHost) return '只有房主可以修改';
-      if (g && g.phase !== 'end') return '遊戲進行中';
+      const live = g && g.phase !== 'end';
+      const keys = Object.keys(data || {});
+      const onlyMic = keys.length === 1 && keys[0] === 'mic';
+      if (live && !onlyMic) return '遊戲進行中';
+      if ('mic' in data) {
+        room.settings.mic = !!data.mic;
+        if (!room.settings.mic) silenceRoom(room);
+      }
+      if (onlyMic) return null;
       for (const k of ['lady', 'excalibur', 'lancelot', 'veto', 'advanced', 'percival', 'morgana', 'mordred', 'oberon'])
         if (k in data) room.settings[k] = !!data[k];
       if (['percival', 'morgana', 'mordred', 'oberon'].some(k => k in data)) room.settings.advanced = true;
@@ -353,6 +375,8 @@ async function act(room, pid, type, data) {
       const p = seated(room).find(x => x.id === data.id);
       if (!p) return '對方必須已就座';
       room.hostPid = p.pid; p.ready = false;
+      const pin = discovery.get(room.code);
+      if (pin) discovery.set(room.code, { ...pin, hostPid: p.pid });
       room.lastEvent = { seq: ++room.eventSeq, type: 'host', id: p.id, name: p.name };
       return null;
     }
@@ -384,6 +408,7 @@ async function act(room, pid, type, data) {
       if (g && g.phase !== 'end') return '遊戲已開始';
       const e = await startGame(room);
       if (!e && room.game) {
+        discovery.delete(room.code);
         room.game.vetoInv = {};
         for (const s of room.game.seats) { const c = await db.getVetoCards(s.pid).catch(() => 0); room.game.vetoInv[s.id] = c; vetoCache.set(s.pid, c); }
       }
@@ -409,11 +434,54 @@ async function act(room, pid, type, data) {
       room.game = null; room.seats.forEach(p => { if (p) p.ready = false; });
       return null;
     }
+    case 'discover': {
+      if (!isHost) return '只有房主可以公開房間';
+      if (g && g.phase !== 'end') return '遊戲進行中不能公開搜尋';
+      if (!data.on) { discovery.delete(room.code); return null; }
+      if (g) return '請先回到等待大廳再開啟搜尋';
+      const c = coarseCoord(data.lat, data.lng);
+      if (!c) return '位置不正確';
+      discovery.set(room.code, { lat: c.lat, lng: c.lng, at: Date.now(), hostPid: pid });
+      return null;
+    }
   }
   if (!g) return '遊戲未開始';
   const seatIdx = g.seats.findIndex(s => s.pid === pid); const seat = g.seats[seatIdx];
   if (!seat) return '你不在這局遊戲中';
   switch (type) {
+    case 'floor': {
+      if (!micMode(room) || g.phase !== 'team') return '現在沒有發言輪次';
+      if (data.op === 'restart') {
+        if (room.hostPid !== pid) return '只有房主可以重開發言';
+        beginFloor(room);
+        return null;
+      }
+      if (data.op === 'pause' || data.op === 'resume') {
+        if (room.hostPid !== pid) return '只有房主可以暫停計時';
+        const f = floors.get(room.code);
+        if (!f || f.status !== 'speak' || !f.speaker) return '現在沒有發言輪次';
+        if (Number(data.token) !== f.token) return null;
+        return data.op === 'pause' ? pauseFloor(room) : resumeFloor(room);
+      }
+      if (data.op === 'skip') {
+        if (room.hostPid !== pid) return '只有房主可以跳過發言';
+        const f = floors.get(room.code);
+        if (!f || f.status !== 'speak' || !f.speaker || f.key !== (g.gid + ':' + (g.discuss || 0))) return '現在沒有發言輪次';
+        if (Number(data.token) !== f.token) return null;
+        advanceFloor(room, f.token);
+        return null;
+      }
+      if (data.op === 'end') {
+        const f = floors.get(room.code);
+        if (!f || f.status === 'select' || !f.speaker) return null;
+        if (seat.id !== f.speaker) return '現在不是你的發言';
+        if (Number(data.token) !== f.token) return null;
+        if (f.paused) return '計時暫停中，請房主先繼續';
+        advanceFloor(room, f.token);
+        return null;
+      }
+      return '無效操作';
+    }
     case 'propose': {
       if (g.phase !== 'team') return '現在不是組隊階段';
       if (seatIdx !== g.leader) return '只有隊長可以組隊';
@@ -422,6 +490,11 @@ async function act(room, pid, type, data) {
       if (ids.length !== need || !ids.every(id => g.seats.some(s => s.id === id))) return `需要選擇 ${need} 位隊員`;
       const blocked = g.vetoBlocked[g.round] || [];
       if (ids.some(id => blocked.includes(id))) return '本輪被回避的玩家不能再入隊';
+      if (micMode(room)) {
+        const f = floors.get(room.code);
+        const key = g.gid + ':' + (g.discuss || 0);
+        if (!f || f.status !== 'select' || f.key !== key) return '請先完成發言，再選擇隊伍';
+      }
       g.team = ids; g.votes = {}; g.phase = 'vote';
       return null;
     }
@@ -436,7 +509,7 @@ async function act(room, pid, type, data) {
       g.vetoUsed.push(seat.id);
       g.vetoBlocked[g.round] = (g.vetoBlocked[g.round] || []).concat(seat.id);
       room.lastEvent = { seq: ++room.eventSeq, type: 'veto', who: seat.id, name: seat.name, round: g.round };
-      g.phase = 'team'; g.team = []; g.votes = {};
+      g.team = []; g.votes = {}; openDiscussion(g);
       return null;
     }
     case 'vote': {
@@ -454,10 +527,16 @@ async function act(room, pid, type, data) {
           if (g.settings.excalibur) { g.phase = 'sword'; g.sword = null; }
           else { g.phase = 'quest'; g.questVotes = {}; }
         } else {
-          g.leader = (g.leader + 1) % g.n;
           g.rejects++;
-          if (g.rejects >= 5) { g.team = []; await endGame(room, 'evil', '連續 5 次組隊被否決，壞人勝利'); room.lastEvent = { ...room.lastEvent, prev: rec }; }
-          else { g.phase = 'team'; g.team = []; }
+          if (g.rejects >= 5) {
+            g.team = [];
+            await endGame(room, 'evil', '連續 5 次組隊被否決，壞人勝利');
+            room.lastEvent = { ...room.lastEvent, prev: rec };
+          } else {
+            g.leader = (g.leader + 1) % g.n;
+            g.team = [];
+            openDiscussion(g);
+          }
         }
         g.votes = {};
       }
@@ -507,7 +586,7 @@ async function act(room, pid, type, data) {
       g.ladyLog.push({ round: g.round, holder: seat.id, target: t.id, side: currentSide(t.role, g.lanceSwitched) });
       g.ladyUsed.push(t.id); g.lady = ti;
       room.lastEvent = { seq: ++room.eventSeq, type: 'lady', holder: seat.id, target: t.id };
-      g.round++; g.phase = 'team'; g.leader = (g.leader + 1) % g.n;
+      g.round++; g.leader = (g.leader + 1) % g.n; openDiscussion(g);
       return null;
     }
     case 'earlyassassin': {
@@ -544,8 +623,6 @@ async function finishQuest(room) {
 }
 
 function viewFor(room, pid) {
-  const online = new Set();
-  for (const s of io.sockets.sockets.values()) if (s.data.room === room.code && s.data.pid) online.add(s.data.pid);
   const meSeated = findPlayer(room, pid);
   const specs = spectatorList(room);
   const preset = presetRoles(room.capacity, room.settings);
@@ -558,7 +635,8 @@ function viewFor(room, pid) {
     myAvoid: (room.avoid && room.avoid[pid]) || null,
     myAvoidResult: (room.avoidResult && room.avoidResult[pid]) || null,
     spectating: !isSeatedPid(room, pid), spectators: specs,
-    seats: room.seats.map((p, i) => p ? { ...pubPlayer({ ...p, seat: i + 1 }), online: online.has(p.pid), isHost: p.pid === room.hostPid } : { empty: true, seat: i + 1 }),
+    seats: room.seats.map((p, i) => p ? { ...pubPlayer({ ...p, seat: i + 1 }), online: playerOnline(room, p.pid), isHost: p.pid === room.hostPid } : { empty: true, seat: i + 1 }),
+    floor: floorView(room),
     preset, teamSizes: TEAM_SIZES[room.capacity], evilCount: EVIL_COUNT[room.capacity],
     game: null,
   };
@@ -576,7 +654,7 @@ function viewFor(room, pid) {
         seat: i + 1,
         id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, fx: s.fx, pendant: s.pendant,
         photoUrl: s.avatar === 'photo' ? `/api/avatar/${s.id}?v=${s.pv || 0}` : `/img/av/${s.avatar || 'fox'}.webp`,
-        online: online.has(s.pid),
+        online: playerOnline(room, s.pid),
         role: ended ? s.role : undefined,
         side: ended ? currentSide(s.role, g.lanceSwitched) : undefined,
         evil: (revealEvil && currentSide(s.role, g.lanceSwitched) === 'evil' && s.role !== 'oberon') ? true : undefined,
@@ -619,6 +697,13 @@ function persistRoom(room) {
   }, 600));
 }
 function dropRoom(code) {
+  const f = floors.get(code);
+  if (f) clearTimeout(f.timer);
+  floors.delete(code);
+  presenceGone.delete(code);
+  const vm = voicePub.get(code);
+  if (vm) { for (const pid of vm.keys()) io.to(code).emit('voice:gone', { id: pubId(pid) }); voicePub.delete(code); }
+  discovery.delete(code);
   rooms.delete(code); clearTimeout(persistT.get(code)); persistT.delete(code);
   db.deleteRoom(code).catch(() => {});
 }
@@ -880,6 +965,278 @@ async function bindSocketUser(socket, token, guestKey, profile) {
   return u;
 }
 
+const voicePub = new Map();
+const discovery = new Map();
+const floors = new Map();
+const presenceGone = new Map();
+const PRESENCE_GRACE_MS = Number(process.env.PRESENCE_GRACE_MS) > 0 ? Number(process.env.PRESENCE_GRACE_MS) : 4000;
+const SPEAK_TURN_MS = Number(process.env.SPEAK_MS) > 0 ? Number(process.env.SPEAK_MS) : SPEAK_MS;
+let floorSerial = 1;
+const DISCOVER_RADIUS_KM = 5;
+const DISCOVER_TTL_MS = Number(process.env.DISCOVER_TTL_MS) > 0 ? Number(process.env.DISCOVER_TTL_MS) : 15 * 60 * 1000;
+const DISCOVER_MAX = 12;
+function voiceBucket(code) { let m = voicePub.get(code); if (!m) { m = new Map(); voicePub.set(code, m); } return m; }
+function silenceRoom(room) {
+  if (!room) return;
+  clearFloor(room);
+  const m = voicePub.get(room.code);
+  voicePub.delete(room.code);
+  if (m) for (const pid of m.keys()) { const id = pubId(pid); io.to(room.code).emit('voice:state', { id, on: false }); io.to(room.code).emit('voice:gone', { id }); }
+  io.to(room.code).emit('voice:mode', { on: false });
+}
+function micMode(room) { return !!(room && room.settings && room.settings.mic === true); }
+function voiceDrop(room, pid, sid) {
+  if (!room || !pid) return;
+  const m = voicePub.get(room.code); if (!m) return;
+  const cur = m.get(pid); if (!cur || (sid && cur.sid !== sid)) return;
+  m.delete(pid); if (!m.size) voicePub.delete(room.code);
+  const id = pubId(pid);
+  io.to(room.code).emit('voice:state', { id, on: false });
+  io.to(room.code).emit('voice:gone', { id });
+}
+function socketsInRoom(room, pid) {
+  let n = 0;
+  for (const s of io.sockets.sockets.values()) if (s.data.room === room.code && s.data.pid === pid) n++;
+  return n;
+}
+function markOnline(room, pid) {
+  const m = presenceGone.get(room.code);
+  if (m) m.delete(pid);
+}
+function playerOnline(room, pid) {
+  if (!room || !pid) return false;
+  if (socketsInRoom(room, pid) > 0) return true;
+  const at = presenceGone.get(room.code) && presenceGone.get(room.code).get(pid);
+  return !!(at && Date.now() - at < PRESENCE_GRACE_MS);
+}
+function markMaybeOffline(room, pid) {
+  if (!room || !pid || socketsInRoom(room, pid) > 0) return;
+  let m = presenceGone.get(room.code);
+  if (!m) { m = new Map(); presenceGone.set(room.code, m); }
+  if (!m.has(pid)) m.set(pid, Date.now());
+  const at = m.get(pid);
+  setTimeout(() => {
+    if (!rooms.has(room.code)) return;
+    const cur = presenceGone.get(room.code);
+    if (!cur || cur.get(pid) !== at || socketsInRoom(room, pid) > 0) return;
+    const f = floors.get(room.code);
+    const speaking = f && !f.paused && f.order[f.index] && f.order[f.index].pid === pid;
+    if (speaking) advanceFloor(room, f.token);
+    broadcast(room);
+  }, PRESENCE_GRACE_MS);
+}
+function floorView(room) {
+  const f = floors.get(room.code);
+  if (!f) return null;
+  const base = { id: f.id, token: f.token, discuss: f.discuss, index: f.index, order: f.order.map(x => x.id), seats: f.order.map(x => x.seat), ms: f.ms, status: f.status, selectId: f.selectId || null, skipped: !!f.skipped };
+  if (f.status === 'select') return { ...base, speaker: null, seat: null, deadline: 0, paused: false, remainingMs: 0 };
+  if (!f.speaker) return null;
+  const paused = !!f.paused;
+  return { ...base, speaker: f.speaker, seat: f.seat, paused, remainingMs: paused ? Math.max(0, Math.round(f.remainingMs || 0)) : Math.max(0, (f.deadline || 0) - Date.now()), deadline: paused ? 0 : f.deadline };
+}
+function muteExcept(room, speakerPid) {
+  const m = voicePub.get(room.code);
+  if (!m) return;
+  for (const pid of [...m.keys()]) if (pid !== speakerPid) voiceDrop(room, pid);
+}
+function clearFloor(room) {
+  const f = room && floors.get(room.code);
+  if (!f) return;
+  clearTimeout(f.timer);
+  floors.delete(room.code);
+  if (f.speakerPid) voiceDrop(room, f.speakerPid);
+}
+function finishSpeaking(room) {
+  const f = floors.get(room.code);
+  if (!f || f.status === 'select') return false;
+  clearTimeout(f.timer);
+  f.timer = null;
+  const prev = f.speakerPid;
+  f.status = 'select';
+  f.selectId = f.id + ':' + f.key;
+  f.speaker = null;
+  f.speakerPid = null;
+  f.seat = null;
+  f.deadline = 0;
+  f.token += 1;
+  if (prev) voiceDrop(room, prev);
+  muteExcept(room, null);
+  return true;
+}
+function armFloor(room) {
+  const f = floors.get(room.code);
+  if (!f || f.status === 'select') return;
+  clearTimeout(f.timer);
+  const prevPid = f.speakerPid;
+  while (f.index < f.order.length && !playerOnline(room, f.order[f.index].pid)) f.index++;
+  if (f.index >= f.order.length) {
+    finishSpeaking(room);
+    return;
+  }
+  const cur = f.order[f.index];
+  f.speaker = cur.id;
+  f.speakerPid = cur.pid;
+  f.seat = cur.seat;
+  f.paused = false;
+  f.remainingMs = f.ms;
+  f.deadline = Date.now() + f.ms;
+  f.token += 1;
+  const token = f.token;
+  f.timer = setTimeout(() => {
+    if (!rooms.has(room.code)) return;
+    const cur = floors.get(room.code);
+    if (!cur || cur.paused || cur.token !== token) return;
+    if (advanceFloor(room, token)) broadcast(room);
+  }, f.ms);
+  if (prevPid && prevPid !== cur.pid) voiceDrop(room, prevPid);
+  muteExcept(room, cur.pid);
+}
+function pauseFloor(room) {
+  const f = floors.get(room.code);
+  if (!f || f.status !== 'speak' || !f.speaker) return '現在沒有發言輪次';
+  if (f.paused) return null;
+  clearTimeout(f.timer);
+  f.timer = null;
+  const left = f.deadline - Date.now();
+  if (left <= 0) { advanceFloor(room, f.token); return null; }
+  f.paused = true;
+  f.remainingMs = left;
+  f.deadline = 0;
+  return null;
+}
+function resumeFloor(room) {
+  const f = floors.get(room.code);
+  if (!f || f.status !== 'speak' || !f.speaker) return '現在沒有發言輪次';
+  if (!f.paused) return null;
+  if (!(f.remainingMs > 0)) { f.paused = false; advanceFloor(room, f.token); return null; }
+  f.paused = false;
+  const wait = f.remainingMs;
+  f.deadline = Date.now() + wait;
+  const token = f.token;
+  f.timer = setTimeout(() => {
+    if (!rooms.has(room.code)) return;
+    const cur = floors.get(room.code);
+    if (!cur || cur.paused || cur.token !== token) return;
+    if (advanceFloor(room, token)) broadcast(room);
+  }, wait);
+  return null;
+}
+function advanceFloor(room, token) {
+  const f = floors.get(room.code);
+  if (!f || f.status === 'select' || f.token !== token) return false;
+  clearTimeout(f.timer);
+  f.index += 1;
+  armFloor(room);
+  return true;
+}
+function speechSkipped(g) { return !!(g && g.phase === 'team' && g.rejects >= 2); }
+function beginDirectSelect(room) {
+  clearFloor(room);
+  muteExcept(room, null);
+  const g = room.game;
+  const key = g.gid + ':' + (g.discuss || 0);
+  const id = floorSerial++;
+  floors.set(room.code, { id, token: 1, discuss: g.discuss || 0, key, status: 'select', selectId: id + ':' + key, skipped: true, order: [], index: 0, ms: SPEAK_TURN_MS, timer: null, speaker: null, speakerPid: null, seat: null, deadline: 0 });
+}
+function beginFloor(room) {
+  const g = room.game;
+  if (!g || g.phase !== 'team' || !micMode(room)) return;
+  if (speechSkipped(g)) { beginDirectSelect(room); return; }
+  clearFloor(room);
+  const idxs = speakOrder(g.n, g.leader, g.seats.map(s => !!s));
+  const order = idxs.map(i => ({ id: g.seats[i].id, pid: g.seats[i].pid, seat: i + 1 }));
+  if (!order.length) return;
+  floors.set(room.code, { id: floorSerial++, token: 0, discuss: g.discuss || 0, key: g.gid + ':' + (g.discuss || 0), status: 'speak', selectId: null, skipped: false, paused: false, remainingMs: SPEAK_TURN_MS, order, index: 0, ms: SPEAK_TURN_MS, timer: null, speaker: null, speakerPid: null, seat: null, deadline: 0 });
+  armFloor(room);
+}
+function syncFloor(room) {
+  if (!room) return;
+  const g = room.game;
+  if (!micMode(room) || !g || g.phase !== 'team') { clearFloor(room); return; }
+  const key = g.gid + ':' + (g.discuss || 0);
+  const cur = floors.get(room.code);
+  if (cur && cur.key === key) return;
+  beginFloor(room);
+}
+function floorActive(room) {
+  const f = room && floors.get(room.code);
+  return f && f.speaker ? f : null;
+}
+function hostInRoom(room) { for (const s of io.sockets.sockets.values()) if (s.data.room === room.code && s.data.pid === room.hostPid) return true; return false; }
+function coarseCoord(lat, lng) {
+  if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat: Math.round(lat * 1000) / 1000, lng: Math.round(lng * 1000) / 1000 };
+}
+function haversineKm(a, b) {
+  const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+  const s1 = Math.sin(dLat / 2) ** 2, s2 = Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s1 + s2)));
+}
+function distanceLabel(km) { if (km <= 0.5) return '約 500 公尺內'; if (km <= 1) return '約 1 公里內'; if (km <= 2) return '約 2 公里內'; return '約 5 公里內'; }
+function hostPublic(room) {
+  const p = findPlayer(room, room.hostPid);
+  let sock = null;
+  if (!p) { for (const s of io.sockets.sockets.values()) if (s.data.pid === room.hostPid) { sock = s; break; } }
+  const hostName = (p && p.name) || (sock && sock.data.name) || '房主';
+  const hostAvatar = cleanAvatar((p && p.avatar) || (sock && sock.data.avatar) || 'fox');
+  const hostBg = cleanBg((p && p.bg) || (sock && sock.data.bg));
+  const id = (p && p.id) || (sock ? pubId(sock.data.pid) : '');
+  const pv = Number((p && p.pv) || (sock && sock.data.pv) || 0) || 0;
+  const hostPhoto = hostAvatar === 'photo' && /^[a-f0-9]{10}$/.test(id)
+    ? `/api/avatar/${id}?v=${pv}`
+    : `/img/av/${hostAvatar}.webp`;
+  return { hostName, hostAvatar, hostBg, hostPhoto };
+}
+function searchNearby(origin) {
+  const now = Date.now(), out = [];
+  for (const [code, pin] of discovery) {
+    if (!pin || now - pin.at > DISCOVER_TTL_MS) { discovery.delete(code); continue; }
+    const room = rooms.get(code);
+    if (!room || room.game || !hostInRoom(room)) { discovery.delete(code); continue; }
+    if (pin.hostPid !== room.hostPid) pin.hostPid = room.hostPid;
+    const km = haversineKm(origin, pin);
+    if (km > DISCOVER_RADIUS_KM) continue;
+    const seatedN = seated(room).length;
+    out.push({ code: room.code, name: '房間 ' + room.code, ...hostPublic(room), seated: seatedN, capacity: room.capacity, distance: distanceLabel(km), _km: km });
+  }
+  out.sort((a, b) => a._km - b._km || (a.code < b.code ? -1 : 1));
+  return out.slice(0, DISCOVER_MAX).map(({ _km, ...pub }) => pub);
+}
+function roomSocketIds(room, exceptPid) {
+  const ids = [], seen = new Set();
+  for (const s of io.sockets.sockets.values()) {
+    if (s.data.room !== room.code || !s.data.pid || s.data.pid === exceptPid || seen.has(s.data.pid)) continue;
+    seen.add(s.data.pid); ids.push(pubId(s.data.pid));
+  }
+  return ids;
+}
+function voiceRoster(room) {
+  const m = voicePub.get(room.code), rows = [];
+  if (m) for (const [pid, v] of m) if (v && v.on) rows.push({ id: pubId(pid), on: true });
+  return rows;
+}
+function iceConfig() {
+  const servers = [];
+  const stun = process.env.STUN_URL == null ? 'stun:stun.l.google.com:19302' : String(process.env.STUN_URL);
+  if (stun && stun !== '0' && stun !== 'off') servers.push({ urls: stun.split(',').map(s => s.trim()).filter(Boolean) });
+  const turn = !!(process.env.TURN_URL && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL);
+  if (turn) servers.push({ urls: String(process.env.TURN_URL).split(',').map(s => s.trim()).filter(Boolean), username: process.env.TURN_USERNAME, credential: process.env.TURN_CREDENTIAL });
+  return { iceServers: servers, turn };
+}
+function allowBurst(socket, key, limit, windowMs) {
+  const now = Date.now();
+  const bag = socket.data.rl || (socket.data.rl = {});
+  const b = bag[key] || (bag[key] = { t: now, n: 0 });
+  if (now - b.t > windowMs) { b.t = now; b.n = 0; }
+  b.n += 1; return b.n <= limit;
+}
+function voiceCtx(socket) {
+  const pid = socket.data.pid, room = socket.data.room && rooms.get(socket.data.room);
+  if (!pid || !room || !room.members.has(pid)) return null;
+  return { pid, room };
+}
+
 io.on('connection', (socket) => {
   socket.on('hello', async ({ token, guestKey, pid: rawPid, name, avatar, bg, fx, pendant } = {}, cb = () => {}) => {
     socket.data.sent = null;
@@ -891,7 +1248,7 @@ io.on('connection', (socket) => {
       const p = findPlayer(room, pid);
       if (p && (!room.game || room.game.phase === 'end')) applyProfile(p, socket.data);
       if (!p) rememberWatcher(room, socket);
-      socket.join(code); socket.data.room = code; broadcast(room);
+      socket.join(code); socket.data.room = code; markOnline(room, pid); broadcast(room);
       return cb({ room: code, user: db.pubUser(u) });
     }
     cb({ room: null, user: db.pubUser(u) });
@@ -913,7 +1270,7 @@ io.on('connection', (socket) => {
     if (cur && cur.game && cur.game.phase !== 'end') return cb({ error: '你正在另一局遊戲中' });
     leaveCurrent(socket, pid, true);
     const room = makeRoom(socket.data);
-    pidRoom.set(pid, room.code); socket.join(room.code); socket.data.room = room.code;
+    pidRoom.set(pid, room.code); socket.join(room.code); socket.data.room = room.code; markOnline(room, pid);
     broadcast(room); cb({ room: room.code });
   });
   socket.on('join', ({ code } = {}, cb = () => {}) => {
@@ -927,7 +1284,7 @@ io.on('connection', (socket) => {
     if (cur !== room) leaveCurrent(socket, pid, true);
     room.members.add(pid); pidRoom.set(pid, code);
     rememberWatcher(room, socket);
-    socket.join(code); socket.data.room = code; broadcast(room);
+    socket.join(code); socket.data.room = code; markOnline(room, pid); broadcast(room);
     cb({ room: code, spectating: !isSeatedPid(room, pid) });
   });
   socket.on('leave', (_, cb = () => {}) => {
@@ -948,6 +1305,7 @@ io.on('connection', (socket) => {
     try { err = await act(room, pid, String(type), data || {}); } catch (e) { console.error(e); err = '伺服器錯誤'; }
     if (err === 'dissolved') return cb({ ok: true, dissolved: true });
     if (err) return cb({ error: err });
+    if (rooms.has(room.code)) syncFloor(room);
     broadcast(room); cb({ ok: true });
   });
   socket.on('resync', () => { socket.data.sent = null; const room = socket.data.room && rooms.get(socket.data.room); if (room) broadcast(room); });
@@ -958,10 +1316,87 @@ io.on('connection', (socket) => {
     const now = Date.now(); if (now - (emoteAt.get(pid) || 0) < 1900) return; emoteAt.set(pid, now);
     io.to(room.code).emit('emote', { id: pubId(pid), e });
   });
+  socket.on('voice:mic', ({ on } = {}, cb = () => {}) => {
+    if (!allowBurst(socket, 'vm', 8, 10000)) return cb({ error: '操作太頻密' });
+    const ctx = voiceCtx(socket);
+    if (!ctx) return cb({ error: '你不在房間中' });
+    if (!micMode(ctx.room)) return cb({ error: '麥克風模式未開啟' });
+    const want = !!on;
+    if (want && !isSeatedPid(ctx.room, ctx.pid)) return cb({ error: '觀戰中不能開咪' });
+    if (want && speechSkipped(ctx.room.game)) return cb({ error: '已連續兩次派隊不通過，現在不能發言' });
+    const turn = floorActive(ctx.room);
+    if (want && turn && turn.speaker !== pubId(ctx.pid)) return cb({ error: '現在不是你的發言' });
+    const m = voiceBucket(ctx.room.code);
+    if (want) m.set(ctx.pid, { on: true, sid: socket.id });
+    else { m.delete(ctx.pid); if (!m.size) voicePub.delete(ctx.room.code); }
+    io.to(ctx.room.code).emit('voice:state', { id: pubId(ctx.pid), on: want });
+    const ice = iceConfig();
+    cb({ ok: true, on: want, listeners: want ? roomSocketIds(ctx.room, ctx.pid) : [], roster: voiceRoster(ctx.room), iceServers: ice.iceServers, turn: ice.turn });
+  });
+  socket.on('voice:listen', (_, cb = () => {}) => {
+    const ctx = voiceCtx(socket);
+    if (!ctx) return cb({ error: '你不在房間中' });
+    if (!micMode(ctx.room)) return cb({ error: '麥克風模式未開啟' });
+    const id = pubId(ctx.pid);
+    const m = voicePub.get(ctx.room.code);
+    if (m && !speechSkipped(ctx.room.game)) for (const [pid, v] of m) {
+      if (!v || !v.on || pid === ctx.pid) continue;
+      const s = [...io.sockets.sockets.values()].find(x => x.id === v.sid && x.data.room === ctx.room.code);
+      if (s) s.emit('voice:please-offer', { id });
+    }
+    const ice = iceConfig();
+    cb({ ok: true, roster: voiceRoster(ctx.room), iceServers: ice.iceServers, turn: ice.turn });
+  });
+  socket.on('voice:signal', (msg = {}, cb = () => {}) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!allowBurst(socket, 'vs', 40, 1000)) return cb({ error: '語音訊號太頻密' });
+    const ctx = voiceCtx(socket);
+    if (!ctx) return cb({ error: '你不在房間中' });
+    if (!micMode(ctx.room)) return cb({ error: '麥克風模式未開啟' });
+    if (speechSkipped(ctx.room.game)) return cb({ error: '已連續兩次派隊不通過，現在不能發言' });
+    const kind = msg.kind;
+    if (kind !== 'offer' && kind !== 'answer' && kind !== 'ice') return cb({ error: '無效訊號' });
+    if (kind === 'offer') {
+      const v = voicePub.get(ctx.room.code) && voicePub.get(ctx.room.code).get(ctx.pid);
+      if (!v || !v.on || !isSeatedPid(ctx.room, ctx.pid)) return cb({ error: '請先開啟麥克風' });
+    }
+    const turn = floorActive(ctx.room);
+    if (turn) {
+      const me = pubId(ctx.pid);
+      if (kind === 'offer' && me !== turn.speaker) return cb({ error: '現在不是你的發言' });
+      if (kind !== 'offer' && me !== turn.speaker && String(msg.to || '') !== turn.speaker) return cb({ error: '現在不是你的發言' });
+    }
+    const to = String(msg.to || '');
+    const target = [...io.sockets.sockets.values()].find(s => s.data.room === ctx.room.code && s.data.pid && pubId(s.data.pid) === to);
+    if (!target || target.id === socket.id) return cb({ error: '對方不在這個房間' });
+    let sdp;
+    if (kind !== 'ice') {
+      if (typeof msg.sdp !== 'string' || msg.sdp.length < 8 || msg.sdp.length > 20000) return cb({ error: '缺少連線資料' });
+      sdp = msg.sdp;
+    }
+    let candidate;
+    if (kind === 'ice' && msg.candidate && typeof msg.candidate === 'object') {
+      const cand = String(msg.candidate.candidate || '');
+      if (!cand || cand.length > 1000) return cb({ error: '無效候選' });
+      candidate = { candidate: cand, sdpMid: msg.candidate.sdpMid ?? null, sdpMLineIndex: msg.candidate.sdpMLineIndex ?? null };
+    }
+    target.emit('voice:signal', { from: pubId(ctx.pid), kind, sdp, candidate });
+    cb({ ok: true });
+  });
+  socket.on('nearby', ({ lat, lng } = {}, cb = () => {}) => {
+    if (!socket.data.pid) return cb({ error: '請先登入' });
+    if (!allowBurst(socket, 'near', 8, 60000)) return cb({ error: '搜尋太頻密，請稍後再試' });
+    const c = coarseCoord(lat, lng);
+    if (!c) return cb({ error: '需要位置先可以搜尋附近房間' });
+    cb({ ok: true, radiusKm: DISCOVER_RADIUS_KM, rooms: searchNearby(c) });
+  });
   socket.on('disconnect', () => {
     const room = socket.data.room && rooms.get(socket.data.room);
     if (process.env.DEBUG_HOST) console.log('disc', socket.data.pid, socket.data.room, !!room, room && room.hostPid);
     if (!room) return;
+    voiceDrop(room, socket.data.pid, socket.id);
+    markMaybeOffline(room, socket.data.pid);
+    if (room.hostPid === socket.data.pid) discovery.delete(room.code);
     setTimeout(() => rooms.has(room.code) && broadcast(room), 100);
     if (room.hostPid === socket.data.pid) {
       clearTimeout(hostAway.get(room.code));

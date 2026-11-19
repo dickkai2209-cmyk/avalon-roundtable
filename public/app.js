@@ -874,6 +874,29 @@ function ensureName(fn) { if (profile.name) fn(); else editProfile(fn); }
 async function createRoom() { await ensureSession(); const r = await emit('create'); if (r.room) go('room'); }
 async function joinRoom(code) { await ensureSession(); const r = await emit('join', { code }); if (r.room) { closeModal(); go('room'); if (r.spectating) toast('已進入觀戰'); } }
 let discoverOn = false, sitPend = 0, sitGen = 0;
+function clearSitPreview() {
+  document.querySelectorAll('.rt .st.sit-preview').forEach(el => {
+    el.classList.remove('sit-preview');
+    el.style.transition = '';
+    el.style.transform = '';
+    el.style.zIndex = '';
+  });
+}
+function previewSit(emptyEl) {
+  clearSitPreview();
+  if (!S || !S.meId || !emptyEl || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const me = document.querySelector('.rt .st[data-id="' + (window.CSS && CSS.escape ? CSS.escape(S.meId) : S.meId) + '"]');
+  if (!me || me === emptyEl) return;
+  const a = me.getBoundingClientRect();
+  const b = emptyEl.getBoundingClientRect();
+  const dx = (b.left + b.width / 2) - (a.left + a.width / 2);
+  const dy = (b.top + b.height / 2) - (a.top + a.height / 2);
+  if (Math.abs(dx) + Math.abs(dy) < 2) return;
+  me.classList.add('sit-preview');
+  me.style.transition = 'none';
+  me.style.transform = `translate(${dx}px, ${dy}px)`;
+  me.style.zIndex = '6';
+}
 function requestPosition() {
   return new Promise((resolve) => {
     if (!window.isSecureContext) return resolve({ ok: false, msg: '需要 HTTPS 先可以搜尋附近房間' });
@@ -1469,9 +1492,9 @@ function render() {
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!S.game && !reduceMotion) $$('.rt .st[data-id]').forEach(e => {
       const b = before[e.dataset.id]; if (!b) return; const r = e.getBoundingClientRect(); const dx = b[0] - r.left, dy = b[1] - r.top;
-      if (Math.abs(dx) + Math.abs(dy) < 4) return;
-      e.style.transition = 'none'; e.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`; e.style.zIndex = 5;
-      requestAnimationFrame(() => { e.style.transition = 'transform .14s ease-out'; e.style.transform = ''; setTimeout(() => { e.style.zIndex = ''; e.style.transition = ''; }, 170); });
+      if (Math.abs(dx) + Math.abs(dy) < 24) return;
+      e.style.transition = 'none'; e.style.transform = `translate(${dx}px, ${dy}px)`; e.style.zIndex = 5;
+      requestAnimationFrame(() => { e.style.transition = 'transform .05s ease-out'; e.style.transform = ''; setTimeout(() => { e.style.zIndex = ''; e.style.transition = ''; }, 70); });
     });
     if (window.AvalonVoice) {
       if (!(S && S.settings && S.settings.mic === true)) AvalonVoice.stripIcons();
@@ -2378,9 +2401,10 @@ document.addEventListener('click', async (e) => {
     case 'sit': {
       const seat = Number(el.dataset.seat); const gen = ++sitGen; sitPend = seat;
       el.classList.add('pend');
+      previewSit(el);
       const r = await act('sit', { seat });
       if (gen !== sitGen) return;
-      if (!r || !r.ok) { sitPend = 0; el.classList.remove('pend'); }
+      if (!r || !r.ok) { sitPend = 0; el.classList.remove('pend'); clearSitPreview(); }
       return;
     }
     case 'mic': e.stopPropagation(); if (window.AvalonVoice) AvalonVoice.toggle(); return;

@@ -1,5 +1,6 @@
 'use strict';
 const { spawn } = require('child_process');
+const { io } = require('socket.io-client');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -53,8 +54,10 @@ class Dev {
     const tgt = empty.querySelector('.av-empty').getBoundingClientRect();
     const target = { x: tgt.left+tgt.width/2, y: tgt.top+tgt.height/2 };
     const imgsBefore = new Set([...document.querySelectorAll('.rt img')]);
-    const tClick = performance.now(); let headAt=null, settled=null, pendAt=null;
+    const tClick = performance.now(); let headAt=null, settled=null, pendAt=null, nearAt=null;
     empty.click(); if (document.querySelector('.rt .st.pend')) pendAt = performance.now();
+    const movedNow = [...document.querySelectorAll('.rt .st .av')].some(n => { const r = n.getBoundingClientRect(); return Math.hypot((r.left+r.width/2)-target.x, (r.top+r.height/2)-target.y) < 8; });
+    if (movedNow) nearAt = performance.now();
     const step = () => {
       const now = performance.now();
       const head = (document.querySelector('.rhead')||{}).textContent || '';
@@ -62,11 +65,15 @@ class Dev {
       const node = document.querySelector('.rt .st[data-seat="${seat}"]');
       const av = node && (node.querySelector('.av') || node.querySelector('.av-empty'));
       let dist = null; if (av) { const r = av.getBoundingClientRect(); dist = Math.hypot((r.left+r.width/2)-target.x, (r.top+r.height/2)-target.y); }
+      if (nearAt==null) {
+        const moved = [...document.querySelectorAll('.rt .st .av')].some(n => { const r = n.getBoundingClientRect(); return Math.hypot((r.left+r.width/2)-target.x, (r.top+r.height/2)-target.y) < 8; });
+        if (moved) nearAt = now;
+      }
       const inline = node && (node.style.transform || node.style.transition);
       if (headAt!=null && dist!=null && dist<8 && !inline && settled==null) settled = now;
       if (now-tClick>2500 || (settled && now-settled>30)) {
         const imgs = [...document.querySelectorAll('.rt img')];
-        return res({ clickToHead: headAt==null?null:Math.round(headAt-tClick), headToSettled: (headAt&&settled)?Math.round(settled-headAt):null, clickToPend: pendAt==null?null:Math.round(pendAt-tClick), newImgs: imgs.filter(im => !imgsBefore.has(im)).length, icons: document.querySelectorAll('.seat-mic').length });
+        return res({ clickToHead: headAt==null?null:Math.round(headAt-tClick), headToSettled: (headAt&&settled)?Math.round(settled-headAt):null, clickToAvatar: nearAt==null?null:Math.round(nearAt-tClick), clickToPend: pendAt==null?null:Math.round(pendAt-tClick), newImgs: imgs.filter(im => !imgsBefore.has(im)).length, icons: document.querySelectorAll('.seat-mic').length });
       }
       requestAnimationFrame(step);
     };
@@ -74,14 +81,57 @@ class Dev {
   })`);
   for (const seat of [9, 6]) {
     const m = await measure(seat);
-    assert(m.clickToHead != null && m.clickToHead < 800, 'header ' + m.clickToHead);
-    assert(m.headToSettled != null && m.headToSettled < 400, 'slide ' + m.headToSettled + ' not ~630');
+    assert(m.clickToHead != null && m.clickToHead < 80, 'header ' + m.clickToHead);
+    assert(m.clickToAvatar != null && m.clickToAvatar < 20, 'pending avatar is on the seat before the round trip ' + m.clickToAvatar);
+    assert(m.headToSettled != null && m.headToSettled < 40, 'confirmed seat settles in ' + m.headToSettled + 'ms');
     assert(m.newImgs === 0, 'image reused');
     assert(m.icons === 0, 'move does not add mic icons while mode is off');
     console.log('ok -', seat, JSON.stringify(m));
   }
   const numsAfter = await cdp.eval(`(() => [...document.querySelectorAll('.rt > .no')].map(n => { const r=n.getBoundingClientRect(); return { seat:n.dataset.seat, x:r.left+r.width/2, y:r.top+r.height/2, inside:!!n.closest('.st') }; }))()`);
   assert(numsBefore.length === 10 && numsAfter.every(n => { const w = numsBefore.find(x => x.seat === n.seat); return w && !n.inside && Math.hypot(n.x-w.x, n.y-w.y) <= 1.5; }), 'numbers stayed on their physical seats');
+  const rival = io(APP, { transports: ['websocket'], forceNew: true });
+  const rid = 'seatb' + Math.random().toString(36).slice(2, 8);
+  await new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('rival')), 8000); rival.on('connect', () => { clearTimeout(t); res(); }); });
+  const ack = (ev, data) => new Promise(r => rival.emit(ev, data, r));
+  await ack('hello', { pid: rid, name: '佔座', avatar: 'panda' });
+  const code = await cdp.eval(`document.querySelector('.top-code').textContent`);
+  assert((await ack('join', { code })).room === code, 'rival joined');
+  const rivalSit = ack('act', { type: 'sit', data: { seat: 4 } });
+  const chromeSit = cdp.eval(`new Promise(res => {
+    const empty = document.querySelector('.rt .st.empty[data-seat="4"]');
+    if (!empty) return res({ missing: 1 });
+    empty.click();
+    const t0 = Date.now();
+    const step = () => {
+      const mine = [...document.querySelectorAll('.rt .st')].find(n => n.querySelector('.mepill'));
+      const pend = document.querySelector('.rt .st.pend, .rt .st.sit-preview');
+      const head = (document.querySelector('.rhead')||{}).textContent || '';
+      if (!pend && mine && (head.includes('4號座') || head.includes('6號座') || head.includes('7號座'))) return res({ seat: mine.dataset.seat, head });
+      if (Date.now() - t0 > 4000) return res({ timeout: 1, seat: mine && mine.dataset.seat, head });
+      setTimeout(step, 20);
+    };
+    setTimeout(step, 30);
+  })`);
+  const [rivalRes, chromeRes] = await Promise.all([rivalSit, chromeSit]);
+  const winners = (rivalRes && rivalRes.ok ? 1 : 0) + (chromeRes && chromeRes.seat === '4' ? 1 : 0);
+  assert(winners === 1 && !chromeRes.timeout, 'only one player keeps seat 4 ' + JSON.stringify({ rivalRes, chromeRes }));
+  const burst = await cdp.eval(`new Promise(res => {
+    const a = document.querySelector('.rt .st.empty[data-seat="8"]');
+    const b = document.querySelector('.rt .st.empty[data-seat="7"]');
+    a.click(); b.click();
+    const t0 = Date.now();
+    const step = () => {
+      const mine = [...document.querySelectorAll('.rt .st')].find(n => n.querySelector('.mepill'));
+      const head = (document.querySelector('.rhead')||{}).textContent || '';
+      if (mine && mine.dataset.seat === '7' && head.includes('7號座') && !document.querySelector('.rt .st.pend')) return res(1);
+      if (Date.now() - t0 > 4000) return res(0);
+      setTimeout(step, 30);
+    };
+    setTimeout(step, 40);
+  })`);
+  assert(burst === 1, 'the later tap wins and the earlier one does not stick');
+  rival.close();
   try { cdp.ws.close(); } catch (e) {}
   killAll();
   console.log('SEAT FEEDBACK PASSED');

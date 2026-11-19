@@ -248,7 +248,11 @@ function scoreGame(g) {
 
 async function endGame(room, winner, reason) {
   const g = room.game;
+  if (!g || g.settled) return;
+  g.settled = true;
   g.phase = 'end'; g.winner = winner; g.reason = reason; g.endedAt = Date.now();
+  clearFloor(room);
+  muteExcept(room, null);
   const early = winner === 'none';
   if (early) g.early = true;
   const { scores, mvp, runnerUp, highlights } = early ? { scores: null, mvp: null, runnerUp: null, highlights: [] } : scoreGame(g);
@@ -506,10 +510,16 @@ async function act(room, pid, type, data) {
           if (g.settings.excalibur) { g.phase = 'sword'; g.sword = null; }
           else { g.phase = 'quest'; g.questVotes = {}; }
         } else {
-          g.leader = (g.leader + 1) % g.n;
           g.rejects++;
-          if (g.rejects >= 5) { g.team = []; await endGame(room, 'evil', '連續 5 次組隊被否決，壞人勝利'); room.lastEvent = { ...room.lastEvent, prev: rec }; }
-          else { g.team = []; openDiscussion(g); }
+          if (g.rejects >= 5) {
+            g.team = [];
+            await endGame(room, 'evil', '連續 5 次組隊被否決，壞人勝利');
+            room.lastEvent = { ...room.lastEvent, prev: rec };
+          } else {
+            g.leader = (g.leader + 1) % g.n;
+            g.team = [];
+            openDiscussion(g);
+          }
         }
         g.votes = {};
       }
@@ -1067,7 +1077,7 @@ function advanceFloor(room, token) {
   armFloor(room);
   return true;
 }
-function speechSkipped(g) { return !!(g && g.rejects >= 2); }
+function speechSkipped(g) { return !!(g && g.phase === 'team' && g.rejects >= 2); }
 function beginDirectSelect(room) {
   clearFloor(room);
   muteExcept(room, null);

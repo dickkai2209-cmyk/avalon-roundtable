@@ -198,6 +198,46 @@ async function rejectionGate() {
   assert(sid !== cs[0].st.floor.selectId, 'the new mission is not the skipped selection');
   cs.forEach(c => { try { c.s.close(); } catch (err) {} });
 }
+async function fifthReject() {
+  const gate = await boot(41900 + (process.pid % 200), { SPEAK_MS: '200', PRESENCE_GRACE_MS: '300' });
+  const g = await five(gate.url);
+  const cs = g.cs;
+  for (let n = 1; n <= 4; n++) {
+    if (!(cs[0].st.floor && cs[0].st.floor.skipped)) await speakUntilSelect(cs[0], cs);
+    await proposeNow(cs);
+    await voteAll(cs, false);
+    await until(() => cs[0].st.game.rejects === n && cs[0].st.game.phase === 'team');
+    assert(cs[0].st.game.winner == null && cs[0].st.game.phase !== 'end' && cs[0].st.game.phase !== 'assassin', 'rejection ' + n + ' does not end the game');
+  }
+  assert(cs[0].st.game.rejects === 4 && cs[0].st.floor.skipped && cs[0].st.floor.status === 'select' && !cs[0].st.floor.speaker, 'four rejections skip speech and wait for the leader');
+  await proposeNow(cs);
+  await voteAll(cs, false);
+  await until(() => cs[0].st.game.phase === 'end');
+  const done = cs[0].st.game;
+  assert(done.winner === 'evil' && done.phase === 'end' && done.phase !== 'assassin' && !done.assassinTarget, 'the fifth rejection is an immediate red victory');
+  assert(String(done.reason || '').includes('連續 5 次'), 'settlement names the five rejections');
+  assert(done.mvp && done.scores && cs[0].st.floor == null, 'one settlement is published and the speaking turn is gone');
+  assert((done.rounds[0] || []).length === 5 && (done.rounds[0] || []).every(r => r && r.approved === false), 'exactly five rejected proposals were recorded');
+  const again = await cs[0].act('vote', { approve: false });
+  const extra = await cs[0].act('propose', { team: cs[0].st.game.seats.slice(0, 2).map(s => s.id) });
+  const spoke = await cs[1].act('floor', { op: 'end', token: 1 });
+  const mic = await cs[2].emit('voice:mic', { on: true });
+  assert(again.error && extra.error && spoke.error, 'late vote, proposal, and speaking are refused');
+  await sleep(50);
+  assert(cs[0].st.game.phase === 'end' && cs[0].st.game.winner === 'evil' && cs[0].st.game.mvp === done.mvp, 'duplicates do not open a sixth proposal or change the result');
+  const stats = async () => JSON.parse(await get(gate.url + '/api/stats?pid=' + encodeURIComponent(cs[0].pid)));
+  const hist = async () => JSON.parse(await get(gate.url + '/api/history?pid=' + encodeURIComponent(cs[0].pid)));
+  const before = await stats();
+  const games = await hist();
+  assert(before.played === 1 && games.filter(x => x.gid === done.gid).length === 1, 'the record and MVP are stored once');
+  await cs[0].act('vote', { approve: true });
+  await cs[2].emit('voice:signal', { to: cs[1].st.meId, kind: 'offer', sdp: 'v=0\r\n' + 'y'.repeat(16) });
+  await sleep(40);
+  const after = await stats();
+  const games2 = await hist();
+  assert(after.played === 1 && after.mvp === before.mvp && games2.filter(x => x.gid === done.gid).length === 1, 'a repeated final vote does not award the game again');
+  cs.forEach(c => { try { c.s.close(); } catch (err) {} });
+}
 async function domSkip(url, pid) {
   const port = 53300 + (process.pid % 200);
   const dir = '/tmp/chrome-floor-skip-' + process.pid;
@@ -363,6 +403,7 @@ async function table(url) {
   await until(() => e.host.st.game.phase === 'vote');
   e.cs.forEach(c => { try { c.s.close(); } catch (err) {} });
   await rejectionGate();
+  await fifthReject();
   killAll();
   console.log('FLOOR TESTS PASSED');
   process.exit(0);

@@ -463,6 +463,14 @@ async function act(room, pid, type, data) {
         if (Number(data.token) !== f.token) return null;
         return data.op === 'pause' ? pauseFloor(room) : resumeFloor(room);
       }
+      if (data.op === 'skip') {
+        if (room.hostPid !== pid) return '只有房主可以跳過發言';
+        const f = floors.get(room.code);
+        if (!f || f.status !== 'speak' || !f.speaker || f.key !== (g.gid + ':' + (g.discuss || 0))) return '現在沒有發言輪次';
+        if (Number(data.token) !== f.token) return null;
+        advanceFloor(room, f.token);
+        return null;
+      }
       if (data.op === 'end') {
         const f = floors.get(room.code);
         if (!f || f.status === 'select' || !f.speaker) return null;

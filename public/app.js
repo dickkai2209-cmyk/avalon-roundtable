@@ -1713,7 +1713,7 @@ function floorBar() {
   return `<div class="card floorbar" data-floor="${f.id}" data-token="${f.token}">
     <div class="floor-who"><b>${esc(who ? who.name : '發言')}</b> · ${f.seat}號座 · <span class="floor-time" role="timer" data-deadline="${paused ? 0 : f.deadline}">${clock}</span>${paused ? '<span class="floor-pause">已暫停</span>' : ''}</div>
     <div class="tiny muted">隊長面向圓心，右手邊先講，沿座位逆時針，隊長最後。每人 ${label}。</div>
-    <div class="floor-acts">${mine && !paused ? `<button type="button" class="btn sm" data-a="floorend" data-token="${f.token}">結束發言</button>` : ''}${S.isHost ? `<button type="button" class="btn ghost sm" data-a="${paused ? 'floorresume' : 'floorpause'}" data-token="${f.token}">${paused ? '繼續' : '暫停'}</button><button type="button" class="btn ghost sm" data-a="floorrestart">重新開始發言</button>` : ''}</div>
+    <div class="floor-acts">${mine && !paused ? `<button type="button" class="btn sm" data-a="floorend" data-token="${f.token}">結束發言</button>` : ''}${S.isHost ? `<button type="button" class="btn ghost sm" data-a="${paused ? 'floorresume' : 'floorpause'}" data-token="${f.token}">${paused ? '繼續' : '暫停'}</button><button type="button" class="btn ghost sm" data-a="floorskip" data-token="${f.token}">跳過</button><button type="button" class="btn ghost sm" data-a="floorrestart">重新開始發言</button>` : ''}</div>
   </div>`;
 }
 function ladyChainHtml(log, seats) {
@@ -2388,6 +2388,7 @@ document.addEventListener('click', async (e) => {
     case 'floorend': return act('floor', { op: 'end', token: Number(el.dataset.token) });
     case 'floorpause': return act('floor', { op: 'pause', token: Number(el.dataset.token) });
     case 'floorresume': return act('floor', { op: 'resume', token: Number(el.dataset.token) });
+    case 'floorskip': return act('floor', { op: 'skip', token: Number(el.dataset.token) });
     case 'floorrestart': return act('floor', { op: 'restart' });
     case 'discover': {
       if (!S || !S.isHost) return;

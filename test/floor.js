@@ -295,6 +295,56 @@ async function pauseClock() {
   assert((await host.act('floor', { op: 'pause', token })).error, 'a cleared turn cannot be paused');
   cs.forEach(c => { try { c.s.close(); } catch (e) {} });
 }
+async function skipTurn() {
+  const gate = await boot(42200 + (process.pid % 200), { SPEAK_MS: '500', PRESENCE_GRACE_MS: '5000' });
+  const host = await mk(gate.url, '主');
+  const room = (await host.emit('create')).room;
+  await host.act('capacity', { n: 5 });
+  await host.act('settings', { mic: true });
+  const cs = [host];
+  for (let i = 2; i <= 5; i++) {
+    const p = await mk(gate.url, '跳' + i);
+    await p.emit('join', { code: room });
+    await p.act('sit', { seat: i });
+    cs.push(p);
+  }
+  assert((await host.act('start')).ok, 'skip game starts');
+  await until(() => host.st.floor && host.st.floor.speaker);
+  assert(host.st.floor.seats.join(',') === '5,4,3,2,1', 'five-seat order ends with the leader');
+  const first = cs.find(c => c.st.meId === host.st.floor.speaker);
+  assert((await first.emit('voice:mic', { on: true })).ok, 'current speaker is live before skip');
+  const token = host.st.floor.token;
+  assert((await cs[1].act('floor', { op: 'skip', token })).error, 'a non-host cannot skip');
+  const both = await Promise.all([host.act('floor', { op: 'skip', token }), host.act('floor', { op: 'skip', token })]);
+  assert(both.filter(r => r && r.ok).length >= 1, 'host skip accepted');
+  await until(() => host.st.floor && host.st.floor.seat === 4);
+  assert(host.st.floor.index === 1 && !host.st.floor.paused && host.st.floor.deadline - Date.now() > 350, 'skip moves one speaker onto a fresh running turn');
+  assert(first.voice.some(v => v && v.on === false), 'the skipped speaker is silenced');
+  await sleep(420);
+  assert(host.st.floor.seat === 4 && host.st.floor.index === 1, 'the cleared timer does not also expire the next turn');
+  assert((await host.act('floor', { op: 'pause', token: host.st.floor.token })).ok, 'pause the second speaker');
+  await until(() => host.st.floor.paused && host.st.floor.seat === 4);
+  const pausedToken = host.st.floor.token;
+  assert((await host.act('floor', { op: 'skip', token: pausedToken })).ok, 'host can skip while paused');
+  await until(() => host.st.floor && host.st.floor.seat === 3 && !host.st.floor.paused);
+  assert(host.st.floor.deadline - Date.now() > 350 && !(host.st.game.team || []).length, 'the next turn is running for a full budget and no team was chosen');
+  assert((await host.act('floor', { op: 'skip', token: pausedToken })).ok && host.st.floor.seat === 3, 'a stale skip does not move another player');
+  const leaderId = host.st.meId;
+  while (host.st.floor && host.st.floor.status !== 'select' && host.st.floor.speaker !== leaderId) {
+    const tok = host.st.floor.token;
+    await host.act('floor', { op: 'skip', token: tok });
+    await until(() => host.st.floor && (host.st.floor.status === 'select' || host.st.floor.token !== tok));
+  }
+  assert(host.st.floor.speaker === leaderId && host.st.floor.seat === 1, 'the leader is reached last');
+  const leadToken = host.st.floor.token;
+  assert((await host.act('floor', { op: 'skip', token: leadToken })).ok, 'skipping the leader finishes the discussion');
+  await until(() => host.st.floor && host.st.floor.status === 'select');
+  assert(!host.st.floor.speaker && host.st.game.phase === 'team' && host.st.game.leaderId === leaderId && !(host.st.game.team || []).length, 'leader skip opens selection without another turn or a chosen team');
+  assert((await host.act('floor', { op: 'skip', token: leadToken })).error || host.st.floor.status === 'select', 'a delayed skip cannot reopen speaking');
+  const other = cs.find(c => c.st.meId !== leaderId);
+  assert(other.st.floor.status === 'select' && !other.st.floor.speaker, 'a reconnecting view matches the finished discussion');
+  cs.forEach(c => { try { c.s.close(); } catch (e) {} });
+}
 async function domSkip(url, pid) {
   const port = 53300 + (process.pid % 200);
   const dir = '/tmp/chrome-floor-skip-' + process.pid;
@@ -462,6 +512,7 @@ async function table(url) {
   await rejectionGate();
   await fifthReject();
   await pauseClock();
+  await skipTurn();
   killAll();
   console.log('FLOOR TESTS PASSED');
   process.exit(0);

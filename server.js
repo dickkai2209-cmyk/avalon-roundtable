@@ -123,6 +123,7 @@ function pickNextHost(room, oldPid) {
 function standUp(room, pid) {
   const i = findSeat(room, pid);
   if (i >= 0) room.seats[i] = null;
+  voiceDrop(room, pid);
 }
 
 function setCapacity(room, n) {
@@ -133,7 +134,7 @@ function setCapacity(room, n) {
   room.seats = next;
   room.capacity = n;
   // standing extra seats already dropped
-  room.settings = { ...room.settings, ...defaultSettings(n), excalibur: !!room.settings.excalibur, veto: !!room.settings.veto, lancelot: n >= 11 ? (room.settings.lancelot !== false) : !!room.settings.lancelot };
+  room.settings = { ...room.settings, ...defaultSettings(n), excalibur: !!room.settings.excalibur, veto: !!room.settings.veto, mic: !!room.settings.mic, lancelot: n >= 11 ? (room.settings.lancelot !== false) : !!room.settings.lancelot };
   room.seats.forEach(p => { if (p) p.ready = false; });
 }
 
@@ -303,7 +304,15 @@ async function act(room, pid, type, data) {
     }
     case 'settings': {
       if (!isHost) return '只有房主可以修改';
-      if (g && g.phase !== 'end') return '遊戲進行中';
+      const live = g && g.phase !== 'end';
+      const keys = Object.keys(data || {});
+      const onlyMic = keys.length === 1 && keys[0] === 'mic';
+      if (live && !onlyMic) return '遊戲進行中';
+      if ('mic' in data) {
+        room.settings.mic = !!data.mic;
+        if (!room.settings.mic) silenceRoom(room);
+      }
+      if (onlyMic) return null;
       for (const k of ['lady', 'excalibur', 'lancelot', 'veto', 'advanced', 'percival', 'morgana', 'mordred', 'oberon'])
         if (k in data) room.settings[k] = !!data[k];
       if (['percival', 'morgana', 'mordred', 'oberon'].some(k => k in data)) room.settings.advanced = true;
@@ -353,6 +362,7 @@ async function act(room, pid, type, data) {
       const p = seated(room).find(x => x.id === data.id);
       if (!p) return '對方必須已就座';
       room.hostPid = p.pid; p.ready = false;
+      discovery.delete(room.code);
       room.lastEvent = { seq: ++room.eventSeq, type: 'host', id: p.id, name: p.name };
       return null;
     }
@@ -384,6 +394,7 @@ async function act(room, pid, type, data) {
       if (g && g.phase !== 'end') return '遊戲已開始';
       const e = await startGame(room);
       if (!e && room.game) {
+        discovery.delete(room.code);
         room.game.vetoInv = {};
         for (const s of room.game.seats) { const c = await db.getVetoCards(s.pid).catch(() => 0); room.game.vetoInv[s.id] = c; vetoCache.set(s.pid, c); }
       }
@@ -407,6 +418,16 @@ async function act(room, pid, type, data) {
       if (!isHost) return '只有房主可以操作';
       if (g && g.phase !== 'end') return '遊戲進行中';
       room.game = null; room.seats.forEach(p => { if (p) p.ready = false; });
+      return null;
+    }
+    case 'discover': {
+      if (!isHost) return '只有房主可以公開房間';
+      if (g && g.phase !== 'end') return '遊戲進行中不能公開搜尋';
+      if (!data.on) { discovery.delete(room.code); return null; }
+      if (g) return '請先回到等待大廳再開啟搜尋';
+      const c = coarseCoord(data.lat, data.lng);
+      if (!c) return '位置不正確';
+      discovery.set(room.code, { lat: c.lat, lng: c.lng, at: Date.now(), hostPid: pid });
       return null;
     }
   }
@@ -619,6 +640,9 @@ function persistRoom(room) {
   }, 600));
 }
 function dropRoom(code) {
+  const vm = voicePub.get(code);
+  if (vm) { for (const pid of vm.keys()) io.to(code).emit('voice:gone', { id: pubId(pid) }); voicePub.delete(code); }
+  discovery.delete(code);
   rooms.delete(code); clearTimeout(persistT.get(code)); persistT.delete(code);
   db.deleteRoom(code).catch(() => {});
 }
@@ -880,6 +904,94 @@ async function bindSocketUser(socket, token, guestKey, profile) {
   return u;
 }
 
+const voicePub = new Map();
+const discovery = new Map();
+const DISCOVER_RADIUS_KM = 5;
+const DISCOVER_TTL_MS = Number(process.env.DISCOVER_TTL_MS) > 0 ? Number(process.env.DISCOVER_TTL_MS) : 15 * 60 * 1000;
+const DISCOVER_MAX = 12;
+function voiceBucket(code) { let m = voicePub.get(code); if (!m) { m = new Map(); voicePub.set(code, m); } return m; }
+function silenceRoom(room) {
+  if (!room) return;
+  const m = voicePub.get(room.code);
+  voicePub.delete(room.code);
+  if (m) for (const pid of m.keys()) { const id = pubId(pid); io.to(room.code).emit('voice:state', { id, on: false }); io.to(room.code).emit('voice:gone', { id }); }
+  io.to(room.code).emit('voice:mode', { on: false });
+}
+function micMode(room) { return !!(room && room.settings && room.settings.mic === true); }
+function voiceDrop(room, pid, sid) {
+  if (!room || !pid) return;
+  const m = voicePub.get(room.code); if (!m) return;
+  const cur = m.get(pid); if (!cur || (sid && cur.sid !== sid)) return;
+  m.delete(pid); if (!m.size) voicePub.delete(room.code);
+  const id = pubId(pid);
+  io.to(room.code).emit('voice:state', { id, on: false });
+  io.to(room.code).emit('voice:gone', { id });
+}
+function hostInRoom(room) { for (const s of io.sockets.sockets.values()) if (s.data.room === room.code && s.data.pid === room.hostPid) return true; return false; }
+function coarseCoord(lat, lng) {
+  if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat: Math.round(lat * 1000) / 1000, lng: Math.round(lng * 1000) / 1000 };
+}
+function haversineKm(a, b) {
+  const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+  const s1 = Math.sin(dLat / 2) ** 2, s2 = Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s1 + s2)));
+}
+function distanceLabel(km) { if (km <= 0.5) return '約 500 公尺內'; if (km <= 1) return '約 1 公里內'; if (km <= 2) return '約 2 公里內'; return '約 5 公里內'; }
+function hostDisplayName(room) {
+  const p = findPlayer(room, room.hostPid);
+  if (p && p.name) return p.name;
+  for (const s of io.sockets.sockets.values()) if (s.data.pid === room.hostPid && s.data.name) return s.data.name;
+  return '房主';
+}
+function searchNearby(origin) {
+  const now = Date.now(), out = [];
+  for (const [code, pin] of discovery) {
+    if (!pin || now - pin.at > DISCOVER_TTL_MS) { discovery.delete(code); continue; }
+    const room = rooms.get(code);
+    if (!room || room.game || pin.hostPid !== room.hostPid || !hostInRoom(room)) { discovery.delete(code); continue; }
+    const km = haversineKm(origin, pin);
+    if (km > DISCOVER_RADIUS_KM) continue;
+    out.push({ code: room.code, name: '房間 ' + room.code, hostName: hostDisplayName(room), seated: seated(room).length, capacity: room.capacity, distance: distanceLabel(km), _km: km });
+  }
+  out.sort((a, b) => a._km - b._km || (a.code < b.code ? -1 : 1));
+  return out.slice(0, DISCOVER_MAX).map(({ _km, ...pub }) => pub);
+}
+function roomSocketIds(room, exceptPid) {
+  const ids = [], seen = new Set();
+  for (const s of io.sockets.sockets.values()) {
+    if (s.data.room !== room.code || !s.data.pid || s.data.pid === exceptPid || seen.has(s.data.pid)) continue;
+    seen.add(s.data.pid); ids.push(pubId(s.data.pid));
+  }
+  return ids;
+}
+function voiceRoster(room) {
+  const m = voicePub.get(room.code), rows = [];
+  if (m) for (const [pid, v] of m) if (v && v.on) rows.push({ id: pubId(pid), on: true });
+  return rows;
+}
+function iceConfig() {
+  const servers = [];
+  const stun = process.env.STUN_URL == null ? 'stun:stun.l.google.com:19302' : String(process.env.STUN_URL);
+  if (stun && stun !== '0' && stun !== 'off') servers.push({ urls: stun.split(',').map(s => s.trim()).filter(Boolean) });
+  const turn = !!(process.env.TURN_URL && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL);
+  if (turn) servers.push({ urls: String(process.env.TURN_URL).split(',').map(s => s.trim()).filter(Boolean), username: process.env.TURN_USERNAME, credential: process.env.TURN_CREDENTIAL });
+  return { iceServers: servers, turn };
+}
+function allowBurst(socket, key, limit, windowMs) {
+  const now = Date.now();
+  const bag = socket.data.rl || (socket.data.rl = {});
+  const b = bag[key] || (bag[key] = { t: now, n: 0 });
+  if (now - b.t > windowMs) { b.t = now; b.n = 0; }
+  b.n += 1; return b.n <= limit;
+}
+function voiceCtx(socket) {
+  const pid = socket.data.pid, room = socket.data.room && rooms.get(socket.data.room);
+  if (!pid || !room || !room.members.has(pid)) return null;
+  return { pid, room };
+}
+
 io.on('connection', (socket) => {
   socket.on('hello', async ({ token, guestKey, pid: rawPid, name, avatar, bg, fx, pendant } = {}, cb = () => {}) => {
     socket.data.sent = null;
@@ -958,10 +1070,76 @@ io.on('connection', (socket) => {
     const now = Date.now(); if (now - (emoteAt.get(pid) || 0) < 1900) return; emoteAt.set(pid, now);
     io.to(room.code).emit('emote', { id: pubId(pid), e });
   });
+  socket.on('voice:mic', ({ on } = {}, cb = () => {}) => {
+    if (!allowBurst(socket, 'vm', 8, 10000)) return cb({ error: '操作太頻密' });
+    const ctx = voiceCtx(socket);
+    if (!ctx) return cb({ error: '你不在房間中' });
+    if (!micMode(ctx.room)) return cb({ error: '麥克風模式未開啟' });
+    const want = !!on;
+    if (want && !isSeatedPid(ctx.room, ctx.pid)) return cb({ error: '觀戰中不能開咪' });
+    const m = voiceBucket(ctx.room.code);
+    if (want) m.set(ctx.pid, { on: true, sid: socket.id });
+    else { m.delete(ctx.pid); if (!m.size) voicePub.delete(ctx.room.code); }
+    io.to(ctx.room.code).emit('voice:state', { id: pubId(ctx.pid), on: want });
+    const ice = iceConfig();
+    cb({ ok: true, on: want, listeners: want ? roomSocketIds(ctx.room, ctx.pid) : [], roster: voiceRoster(ctx.room), iceServers: ice.iceServers, turn: ice.turn });
+  });
+  socket.on('voice:listen', (_, cb = () => {}) => {
+    const ctx = voiceCtx(socket);
+    if (!ctx) return cb({ error: '你不在房間中' });
+    if (!micMode(ctx.room)) return cb({ error: '麥克風模式未開啟' });
+    const id = pubId(ctx.pid);
+    const m = voicePub.get(ctx.room.code);
+    if (m) for (const [pid, v] of m) {
+      if (!v || !v.on || pid === ctx.pid) continue;
+      const s = [...io.sockets.sockets.values()].find(x => x.id === v.sid && x.data.room === ctx.room.code);
+      if (s) s.emit('voice:please-offer', { id });
+    }
+    const ice = iceConfig();
+    cb({ ok: true, roster: voiceRoster(ctx.room), iceServers: ice.iceServers, turn: ice.turn });
+  });
+  socket.on('voice:signal', (msg = {}, cb = () => {}) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!allowBurst(socket, 'vs', 40, 1000)) return cb({ error: '語音訊號太頻密' });
+    const ctx = voiceCtx(socket);
+    if (!ctx) return cb({ error: '你不在房間中' });
+    if (!micMode(ctx.room)) return cb({ error: '麥克風模式未開啟' });
+    const kind = msg.kind;
+    if (kind !== 'offer' && kind !== 'answer' && kind !== 'ice') return cb({ error: '無效訊號' });
+    if (kind === 'offer') {
+      const v = voicePub.get(ctx.room.code) && voicePub.get(ctx.room.code).get(ctx.pid);
+      if (!v || !v.on || !isSeatedPid(ctx.room, ctx.pid)) return cb({ error: '請先開啟麥克風' });
+    }
+    const to = String(msg.to || '');
+    const target = [...io.sockets.sockets.values()].find(s => s.data.room === ctx.room.code && s.data.pid && pubId(s.data.pid) === to);
+    if (!target || target.id === socket.id) return cb({ error: '對方不在這個房間' });
+    let sdp;
+    if (kind !== 'ice') {
+      if (typeof msg.sdp !== 'string' || msg.sdp.length < 8 || msg.sdp.length > 20000) return cb({ error: '缺少連線資料' });
+      sdp = msg.sdp;
+    }
+    let candidate;
+    if (kind === 'ice' && msg.candidate && typeof msg.candidate === 'object') {
+      const cand = String(msg.candidate.candidate || '');
+      if (!cand || cand.length > 1000) return cb({ error: '無效候選' });
+      candidate = { candidate: cand, sdpMid: msg.candidate.sdpMid ?? null, sdpMLineIndex: msg.candidate.sdpMLineIndex ?? null };
+    }
+    target.emit('voice:signal', { from: pubId(ctx.pid), kind, sdp, candidate });
+    cb({ ok: true });
+  });
+  socket.on('nearby', ({ lat, lng } = {}, cb = () => {}) => {
+    if (!socket.data.pid) return cb({ error: '請先登入' });
+    if (!allowBurst(socket, 'near', 8, 60000)) return cb({ error: '搜尋太頻密，請稍後再試' });
+    const c = coarseCoord(lat, lng);
+    if (!c) return cb({ error: '需要位置先可以搜尋附近房間' });
+    cb({ ok: true, radiusKm: DISCOVER_RADIUS_KM, rooms: searchNearby(c) });
+  });
   socket.on('disconnect', () => {
     const room = socket.data.room && rooms.get(socket.data.room);
     if (process.env.DEBUG_HOST) console.log('disc', socket.data.pid, socket.data.room, !!room, room && room.hostPid);
     if (!room) return;
+    voiceDrop(room, socket.data.pid, socket.id);
+    if (room.hostPid === socket.data.pid) discovery.delete(room.code);
     setTimeout(() => rooms.has(room.code) && broadcast(room), 100);
     if (room.hostPid === socket.data.pid) {
       clearTimeout(hostAway.get(room.code));

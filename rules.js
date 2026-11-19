@@ -25,7 +25,7 @@ const PRESETS = {
 };
 
 function defaultSettings(n) {
-  return { lady: n >= 8, excalibur: false, lancelot: n >= 11, veto: false, advanced: false,
+  return { lady: n >= 8, excalibur: false, lancelot: n >= 11, veto: false, mic: false, advanced: false,
     percival: true, morgana: true, mordred: n >= 10, oberon: n >= 10 };
 }
 

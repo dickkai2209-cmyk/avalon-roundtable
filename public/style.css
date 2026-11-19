@@ -1238,3 +1238,22 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .modal:has(.actconf){z-index:80 !important;background:rgba(16,20,32,.62)}
 .sheet:has(.actconf){animation:none;opacity:1;background:#fff;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
 .toast{z-index:90}
+.voicebar{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e3e6ef;border-radius:14px;padding:8px 10px;margin:8px 0}
+.listen-btn{border:0;background:#1d2333;color:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:800;cursor:pointer}
+.voice-note{font-size:12px;color:#6b7286}.voice-note.bad{color:#a11d32}
+.rt .st .seat-mic{position:absolute;left:calc(50% + (var(--av, 52px) / 2) - 14px);top:calc(var(--av, 52px) - 14px);width:20px;height:20px;margin:0;padding:0;border-radius:50%;background:#fff;border:1px solid #cfd4e2;color:#8b919e;display:flex;align-items:center;justify-content:center;z-index:7;pointer-events:none;box-shadow:0 1px 2px rgba(20,30,60,.16);line-height:0}
+.rt .st button.seat-mic{pointer-events:auto;cursor:pointer;font:inherit;appearance:none;-webkit-appearance:none}
+.rt .st .seat-mic.status{pointer-events:none}
+.rt .st button.seat-mic:focus-visible{outline:2px solid #1d2333;outline-offset:2px}
+.rt .st .seat-mic svg{width:12px;height:12px;display:block;pointer-events:none}
+.rt .st .seat-mic.on{color:#146b3a;border-color:#bfe8d1;background:#f3fbf6}
+.rt .st .seat-mic.talk{box-shadow:0 0 0 2px rgba(31,157,92,.55)}
+.rt .st.pend .av-empty{box-shadow:0 0 0 3px #2f6be0}
+.disc-row{display:block;width:100%;text-align:left;background:#fff;border:1px solid #e3e6ef;border-radius:14px;padding:10px 12px;margin:8px 0;color:#1d2333;cursor:pointer}
+.disc-row[aria-pressed="true"]{border-color:#1f9d5c;background:#f3fbf6}
+.disc-row b{display:block;font-size:14px}
+.near-status{margin-top:10px;font-size:13px;color:#5d6472;text-align:center}
+.near-status.bad{color:#a11d32}
+.near-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.near-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;background:#fff;border:1px solid #e3e6ef;border-radius:12px;padding:10px 12px;color:#1d2333;cursor:pointer}
+.near-item span{font-size:12px;color:#6b7286}

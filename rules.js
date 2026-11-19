@@ -29,6 +29,23 @@ function defaultSettings(n) {
     percival: true, morgana: true, mordred: n >= 10, oberon: n >= 10 };
 }
 
+// Each seated player faces the table centre. Seat 1 is index 0 at the top and
+// seats increase clockwise, so that player's right hand points screen-left,
+// toward the previous physical seat (seat 10 when there are 10 seats). The
+// same inward-facing right hand is counterclockwise for every seat. Speaking
+// starts at the first occupied seat in that direction and continues through
+// the occupied seats, leader last, each seat at most once.
+const SPEAK_MS = 90 * 1000;
+function speakOrder(n, leaderIndex, present) {
+  const order = [];
+  for (let step = 1; step <= n; step++) {
+    const idx = (leaderIndex - (step % n) + n) % n;
+    if (present && !present[idx]) continue;
+    order.push(idx);
+  }
+  return order;
+}
+
 function presetRoles(n, settings = {}) {
   let p = PRESETS[n] || PRESETS[8];
   let good = p.good.slice(), evil = p.evil.slice();
@@ -126,4 +143,5 @@ function knowledge(seats, seat, switched) {
 module.exports = {
   TEAM_SIZES, EVIL_COUNT, ROLE_SIDE, ROLE_NAME, PRESETS,
   defaultSettings, presetRoles, currentSide, canPlayFail, needTwoFails, knowledge, resolveAvoidance,
+  SPEAK_MS, speakOrder,
 };

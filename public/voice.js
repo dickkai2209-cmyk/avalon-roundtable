@@ -17,7 +17,7 @@
   const pcs = new Map();
   const audios = new Map();
   const meters = new Map();
-  let audioCtx = null, meterTimer = null;
+  let audioCtx = null, meterTimer = null, floor = null, floorTimer = null, floorStopped = 0;
 
   const myId = () => { try { return hooks.myId() || ''; } catch (e) { return ''; } };
   const seated = () => { try { return !!hooks.seated(); } catch (e) { return false; } };
@@ -25,7 +25,58 @@
   const modeOn = () => { try { return hooks.mode() === true; } catch (e) { return false; } };
 
   function setNote(text, cls) { note = text || ''; noteCls = cls || ''; paint(); }
-  function stripIcons() { document.querySelectorAll('.seat-mic').forEach(el => el.remove()); }
+  function stripIcons() {
+    document.querySelectorAll('.seat-mic, .seat-presence').forEach(el => el.remove());
+    document.querySelectorAll('.rt .st.is-speak').forEach(el => el.classList.remove('is-speak'));
+  }
+  function presence(online) {
+    if (!modeOn()) return '';
+    const on = !!online;
+    return `<span class="seat-presence ${on ? 'on' : 'off'}" role="img" aria-label="${on ? '在線' : '離線'}"></span>`;
+  }
+  function paintGlow() {
+    const id = floor && modeOn() ? floor.speaker : '';
+    document.querySelectorAll('.rt .st').forEach(el => {
+      const sid = el.dataset.id || el.dataset.sid || '';
+      el.classList.toggle('is-speak', !!id && sid === id);
+    });
+  }
+  function tickFloor() {
+    const el = document.querySelector('.floor-time');
+    if (!floor || !modeOn()) return;
+    const left = Math.max(0, floor.deadline - Date.now());
+    const sec = Math.ceil(left / 1000);
+    const text = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+    if (el && el.textContent !== text) el.textContent = text;
+    if (left <= 0 && floor.token !== floorStopped && floor.speaker === myId() && micOn) {
+      floorStopped = floor.token;
+      token++; micOn = false; starting = false;
+      stopLocal(); dropSenders();
+      if (socket) socket.emit('voice:mic', { on: false }, () => {});
+    }
+  }
+  function ensureFloorClock() {
+    if (!floorTimer) floorTimer = setInterval(tickFloor, 250);
+    tickFloor();
+  }
+  function applyFloor(next) {
+    const on = modeOn() && next && next.speaker ? next : null;
+    floor = on;
+    if (!on) { paintGlow(); return; }
+    if (on.speaker !== myId() && micOn) {
+      token++; micOn = false; starting = false;
+      stopLocal(); dropSenders();
+      if (socket) socket.emit('voice:mic', { on: false }, () => {});
+    }
+    for (const id of [...pcs.keys()]) if (id !== on.speaker) closePeer(id);
+    paintGlow();
+    ensureFloorClock();
+  }
+  function afterRender() {
+    if (!modeOn()) { stripIcons(); return; }
+    paintGlow();
+    ensureFloorClock();
+  }
   function liveFor(id) { return !!(id && (id === myId() ? micOn : roster[id])); }
 
   function glyph(id) {
@@ -126,7 +177,7 @@
     for (const pc of pcs.values()) for (const sender of pc.getSenders()) if (sender.track) { try { await sender.replaceTrack(null); } catch (e) {} }
   }
   function roomOff() {
-    token++; micOn = false; starting = false;
+    token++; micOn = false; starting = false; floor = null; floorStopped = 0;
     const id = myId(); if (id) roster[id] = false;
     stopLocal(); dropSenders(); closeAll();
     for (const k of Object.keys(roster)) delete roster[k];
@@ -234,6 +285,7 @@
     try { await pc.addIceCandidate(candidate); } catch (e) {}
   }
   function onSignal(msg) {
+    if (floor && floor.speaker && msg && msg.from !== floor.speaker && myId() !== floor.speaker) return;
     if (!modeOn() || !msg || !msg.from || msg.from === myId()) return;
     if (msg.kind === 'offer') onOffer(msg.from, msg.sdp).catch(() => setNote('未能接通對方的語音。', 'bad'));
     else if (msg.kind === 'answer') onAnswer(msg.from, msg.sdp).catch(() => {});
@@ -247,7 +299,11 @@
     paint();
   }
   function onGone(msg) { if (msg && msg.id) { roster[msg.id] = false; closePeer(msg.id); paint(); } }
-  function onPlease(msg) { if (modeOn() && msg && msg.id && micOn) offer(msg.id); }
+  function onPlease(msg) {
+    if (!modeOn() || !msg || !msg.id || !micOn) return;
+    if (floor && floor.speaker && floor.speaker !== myId()) return;
+    offer(msg.id);
+  }
   function unlock() {
     listening = true; needsListen = false;
     const ctx = ensureCtx(); if (ctx && ctx.resume) ctx.resume().catch(() => {});
@@ -277,6 +333,7 @@
     }
     if (!inRoom()) { setNote('進入房間後先可以開咪。', 'bad'); return; }
     if (!seated()) { setNote('觀戰中不能開咪。', 'bad'); return; }
+    if (floor && floor.speaker && floor.speaker !== myId()) { setNote('現在不是你的發言。', 'bad'); return; }
     if (!window.isSecureContext) { setNote('需要 HTTPS 先可以用麥克風。', 'bad'); return; }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setNote('此瀏覽器不支援麥克風。', 'bad'); return; }
     const constraints = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }, video: false };
@@ -323,8 +380,9 @@
     sock.on('voice:mode', (m) => { if (!m || !m.on) roomOff(); });
     sock.on('disconnect', () => { roomOff(); });
   }
-  function sync() {
+  function sync(st) {
     if (!modeOn()) { roomOff(); return; }
+    applyFloor(st && st.floor);
     if (inRoom() && !seated() && !micOn && !starting) setNote('觀戰中不能開咪。', '');
     else paint();
   }
@@ -342,5 +400,5 @@
   function debug() {
     return { mode: modeOn(), micOn, starting, listening, needsListen, note, gumCalls, turn: !!config.turn, iceServers: config.iceServers || [], lastConstraints, videoTracks: localStream ? localStream.getVideoTracks().length : 0, localState: localTrack ? localTrack.readyState : 'none', peers: [...pcs.entries()].map(([id, pc]) => ({ id, conn: pc.connectionState, ice: pc.iceConnectionState, recv: pc.getReceivers().map(s => s.track && { kind: s.track.kind, state: s.track.readyState }) })) };
   }
-  window.AvalonVoice = { attach, sync, paint, toggle, listen, hardOff, roomOff, glyph, barHtml, debug, audioStats, stripIcons };
+  window.AvalonVoice = { attach, sync, paint, toggle, listen, hardOff, roomOff, glyph, presence, afterRender, barHtml, debug, audioStats, stripIcons };
 })();

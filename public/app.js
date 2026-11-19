@@ -1104,8 +1104,10 @@ function roundTable(seats, o = {}) {
     const action = o.action || 'sel';
     const actAttr = o.click && o.click(s, i) ? `data-a="${action}"` : (o.seatClick ? `data-a="${o.seatClick}"` : '');
     const mic = (window.AvalonVoice && AvalonVoice.glyph(s.id)) || '';
-    return `<div class="st ${cls}" style="${pos}" data-sid="${s.id}" data-id="${s.id}" data-seat="${seatNo}" ${actAttr}>
-      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${o.marks ? o.marks(s, i) : ''}${av(s, avSize)}${mic}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
+    const pres = (window.AvalonVoice && AvalonVoice.presence(!!s.online)) || '';
+    const speakCls = (S && S.settings && S.settings.mic === true && S.floor && S.floor.speaker === s.id) ? ' is-speak' : '';
+    return `<div class="st ${cls}${speakCls}" style="${pos}" data-sid="${s.id}" data-id="${s.id}" data-seat="${seatNo}" ${actAttr}>
+      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${o.marks ? o.marks(s, i) : ''}${av(s, avSize)}${mic}${pres}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
   }).join('');
   return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="currentColor"/><circle cx="13.8" cy="10.3" r="1.2" fill="currentColor"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${nums.join('')}${st}</div>`;
 }
@@ -1471,7 +1473,10 @@ function render() {
       e.style.transition = 'none'; e.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`; e.style.zIndex = 5;
       requestAnimationFrame(() => { e.style.transition = 'transform .14s ease-out'; e.style.transform = ''; setTimeout(() => { e.style.zIndex = ''; e.style.transition = ''; }, 170); });
     });
-    if (window.AvalonVoice && !(S && S.settings && S.settings.mic === true)) AvalonVoice.stripIcons();
+    if (window.AvalonVoice) {
+      if (!(S && S.settings && S.settings.mic === true)) AvalonVoice.stripIcons();
+      else AvalonVoice.afterRender();
+    }
   }
   else if (view === 'rules') { app.innerHTML = rulesHtml(); mountRules(); }
   else if (view === 'history') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadHistory(); }
@@ -1653,6 +1658,7 @@ function gameHtml() {
       + (g.phase === 'vote' && (g.voted || []).includes(s.id) ? MARK_CAST : '');
     return ((g.team || []).includes(s.id) ? MARK_RING : '') + (front ? `<span class="mfront">${front}</span>` : '');
   };
+  const floorCard = floorBar();
   const table = roundTable(g.seats, { emote: true,
     click: selectable,
     cls: s => [
@@ -1669,7 +1675,7 @@ function gameHtml() {
     label: s => ended ? `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>` : (s.evil ? '<span class="lbl e">壞人</span>' : ''),
     center,
   });
-  return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : ''}${!me ? '<div class="specbar">👁 觀戰中</div>' : ''}<div class="card">${trackHtml(g)}</div>
+  return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : ''}${!me ? '<div class="specbar">👁 觀戰中</div>' : ''}<div class="card">${trackHtml(g)}</div>
   <div class="card" style="padding:22px 10px 16px">${table}${ended ? '' : markLegend()}</div>
   <div class="card thist" id="teamhist">${teamHistoryHtml(g)}</div>
   ${ladyChainHtml(g.ladyLog, g.seats) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats)}</div>` : ''}
@@ -1678,6 +1684,23 @@ function gameHtml() {
   ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : ''}
   ${g.settings.veto && me && !ended ? `<button type="button" class="veto-fab ${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'ready' : 'dim'}" data-a="${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'veto' : 'vetoinfo'}" aria-label="回避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>回避卡</span><b>${vetoAmt(me.vetoCards != null ? me.vetoCards : S.myVetoCards)}</b></button>` : ''}
   ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}`;
+}
+function floorClock(msLeft) {
+  const sec = Math.max(0, Math.ceil(msLeft / 1000));
+  return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+}
+function floorBar() {
+  if (!S || !S.game || S.game.phase !== 'team' || !S.settings || S.settings.mic !== true) return '';
+  const f = S.floor;
+  if (!f) return S.isHost ? '<div class="card floorbar"><button type="button" class="btn sm" data-a="floorrestart">開始發言</button></div>' : '';
+  const who = (S.game.seats || []).find(s => s.id === f.speaker);
+  const mine = S.meId === f.speaker;
+  const label = f.ms === 90000 ? '1 分 30 秒' : (Math.round(f.ms / 1000) + ' 秒');
+  return `<div class="card floorbar" data-floor="${f.id}" data-token="${f.token}">
+    <div class="floor-who"><b>${esc(who ? who.name : '發言')}</b> · ${f.seat}號座 · <span class="floor-time" role="timer" data-deadline="${f.deadline}">${floorClock(f.deadline - Date.now())}</span></div>
+    <div class="tiny muted">隊長面向圓心，右手邊先講，沿座位逆時針，隊長最後。每人 ${label}。</div>
+    <div class="floor-acts">${mine ? `<button type="button" class="btn sm" data-a="floorend" data-token="${f.token}">結束發言</button>` : ''}${S.isHost ? `<button type="button" class="btn ghost sm" data-a="floorrestart">重新開始發言</button>` : ''}</div>
+  </div>`;
 }
 function ladyChainHtml(log, seats) {
   if (!log || !log.length) return '';
@@ -2348,6 +2371,8 @@ document.addEventListener('click', async (e) => {
     }
     case 'mic': e.stopPropagation(); if (window.AvalonVoice) AvalonVoice.toggle(); return;
     case 'listen': e.stopPropagation(); if (window.AvalonVoice) AvalonVoice.listen(); return;
+    case 'floorend': return act('floor', { op: 'end', token: Number(el.dataset.token) });
+    case 'floorrestart': return act('floor', { op: 'restart' });
     case 'discover': {
       if (!S || !S.isHost) return;
       if (discoverOn) { discoverOn = false; render(); await act('discover', { on: false }); return; }

@@ -87,7 +87,73 @@ function bot(key, name) {
   const send = (method, params = {}) => new Promise((res, rej) => { const i = ++idn; const t = setTimeout(() => rej(new Error(method)), 15000); pending.set(i, v => { clearTimeout(t); res(v); }); ws.send(JSON.stringify({ id: i, method, params })); });
   const evalj = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 400)); return r.result.value; };
   await send('Runtime.enable'); await send('Page.enable');
-  async function setSize(w, h) { await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true }); }
+  const SAFE = { 375: { top: 50, bottom: 34 }, 390: { top: 47, bottom: 34 } };
+  async function setSize(w, h) {
+    await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true });
+    const safe = SAFE[w] || { top: 0, bottom: 0 };
+    await send('Emulation.setSafeAreaInsetsOverride', { insets: { top: safe.top, left: 0, bottom: safe.bottom, right: 0 } });
+  }
+  async function assertFab(tag, safeBottom) {
+    const m = await evalj(`(() => {
+      const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+      const parse = (css) => { const m = String(css).match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/); return m ? [1, 2, 3].map(i => Number(m[i])) : null; };
+      const lum = (rgb) => 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
+      const ratio = (a, b) => { const l1 = lum(a), l2 = lum(b); const hi = Math.max(l1, l2), lo = Math.min(l1, l2); return (hi + 0.05) / (lo + 0.05); };
+      const blend = (fg, op, bg) => fg.map((c, i) => Math.round(c * op + bg[i] * (1 - op)));
+      const page = parse(getComputedStyle(document.body).backgroundColor);
+      const fab = document.querySelector('.myrole-fab');
+      const cs = getComputedStyle(fab);
+      const bg = parse(cs.backgroundColor);
+      const op = parseFloat(cs.opacity) || 1;
+      const label = fab.querySelector('span:last-child');
+      const lc = parse(getComputedStyle(label).color);
+      const fill = blend(bg, op, page);
+      const r = fab.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const main = document.querySelector('main').getBoundingClientRect();
+      const faces = [...document.querySelectorAll('.av')].filter(el => {
+        const b = el.getBoundingClientRect();
+        const top = Math.max(b.top, main.top), bot = Math.min(b.bottom, main.bottom);
+        const left = Math.max(b.left, main.left), right = Math.min(b.right, main.right);
+        if (bot - top < 4 || right - left < 4) return false;
+        return !(bot <= r.top + 1 || top >= r.bottom - 1 || right <= r.left + 1 || left >= r.right - 1);
+      }).length;
+      const veto = document.createElement('button');
+      veto.className = 'veto-fab dim';
+      veto.innerHTML = '<span>回避卡</span>';
+      document.body.appendChild(veto);
+      const vcs = getComputedStyle(veto);
+      const vfill = blend(parse(vcs.backgroundColor), parseFloat(vcs.opacity) || 1, page);
+      const vink = parse(getComputedStyle(veto.querySelector('span')).color);
+      const vbg = parse(vcs.backgroundColor);
+      veto.remove();
+      const probe = document.createElement('div');
+      probe.style.cssText = 'position:absolute;left:-999px;padding-bottom:env(safe-area-inset-bottom)';
+      document.body.appendChild(probe);
+      const inset = parseFloat(getComputedStyle(probe).paddingBottom) || 0;
+      probe.remove();
+      return {
+        fillRatio: ratio(fill, page), textRatio: ratio(lc, bg),
+        vetoFill: ratio(vfill, page), vetoText: ratio(vink, vbg),
+        rect: { l: r.left, t: r.top, r: r.right, b: r.bottom },
+        hit: !!(hit && fab.contains(hit)), faces,
+        mainBottom: main.bottom, ih: innerHeight, iw: innerWidth,
+        text: label.textContent, aria: fab.getAttribute('aria-label'),
+        thumb: getComputedStyle(fab.querySelector('.mini-back')).backgroundImage,
+        inset, pos: cs.position
+      };
+    })()`);
+    assert(m.fillRatio >= 3, tag + ' identity button chrome contrasts with the page (' + m.fillRatio.toFixed(2) + ')');
+    assert(m.textRatio >= 4.5, tag + ' identity label contrasts with the button (' + m.textRatio.toFixed(2) + ')');
+    assert(m.vetoFill >= 3 && m.vetoText >= 4.5, tag + ' avoid button keeps the same contrast (' + m.vetoFill.toFixed(2) + '/' + m.vetoText.toFixed(2) + ')');
+    assert(m.text === '我的身份' && m.aria === '我的身份' && /cardback/.test(m.thumb), tag + ' button keeps the card back and does not leak the role');
+    assert(m.pos === 'fixed' && m.hit, tag + ' identity button is visible and not clipped');
+    assert(m.rect.l > m.iw / 2 && m.rect.r <= m.iw - 8, tag + ' identity button stays in the bottom right');
+    assert(m.rect.t >= 0 && m.rect.b <= m.ih - safeBottom + 1, tag + ' identity button clears the home indicator (' + m.rect.b.toFixed(0) + '/' + m.ih + ')');
+    assert(m.faces === 0, tag + ' identity button does not cover a face');
+    assert(m.mainBottom <= m.rect.t + 1, tag + ' team record stays above the button');
+    assert(m.inset + 0.5 >= safeBottom, tag + ' safe-area inset is applied (' + m.inset + ')');
+  }
   async function asUser(person) {
     const profile = JSON.stringify({ name: person.name, avatar: person.name === '觀戰' ? 'cat' : 'fox', bg: '#fff', fx: 'spot', pendant: 'none' });
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -126,10 +192,18 @@ function bot(key, name) {
     })()`);
     assert(flow.next === 'teamhist' && flow.gap <= 12, 'team history follows the table (' + flow.gap + 'px)');
     assert(flow.sw <= flow.cw + 1, '375 does not overflow');
+    await evalj(`document.querySelector('main').scrollTop = 0`);
+    await assertFab('375', 34);
+    await shot('myrole-fab-375.png');
     await evalj(`document.querySelector('.myrole-fab').click()`);
     for (let i = 0; i < 20 && !(await evalj(`!!document.querySelector('#flip')`)); i++) await sleep(50);
     assert(await evalj(`!!document.querySelector('#flip')`), 'the floating button opens the private role');
     await quiet();
+    await setSize(390, 844);
+    await evalj(`document.querySelector('main').scrollTop = 0`);
+    await assertFab('390', 34);
+    await shot('myrole-fab-390.png');
+    await setSize(375, 812);
     await evalj(`document.querySelector('#teamhist').scrollIntoView({ block: 'start' })`);
     await shot('layout-wait-375.png');
 

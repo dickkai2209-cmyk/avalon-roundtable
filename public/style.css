@@ -431,7 +431,7 @@ main{padding:8px 16px 96px}
 .rv-h{color:#6b7286}
 .rinfo{color:#1d2333;font-size:15px}
 .reveal.good::before{background:#9cbcff}.reveal.evil::before{background:#ffadb9}
-.myrole-fab{background:#fff;color:#1d2333;border:1.5px solid #cfd4e2}
+.myrole-fab{background:#1d2333;color:#fff;border:1.5px solid #1d2333;font-weight:800;box-shadow:0 6px 16px rgba(20,30,60,.35)}
 .pick-i{background:#f6f7fb;border:1px solid var(--line)}
 .sh-i{color:#1d2333}
 .or{color:var(--muted)}.or::before,.or::after{background:var(--line)}
@@ -809,11 +809,11 @@ img,canvas,svg,video{max-width:100%}
 
 /* 我的身份 → right; 回避卡 FAB → left; iPhone safe-area; no overlap */
 .myrole-fab{left:auto !important;right:12px;bottom:calc(14px + env(safe-area-inset-bottom));}
-.veto-fab{position:fixed;left:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:15;display:flex;align-items:center;gap:6px;padding:6px 10px 6px 6px;border-radius:14px;background:#fff;border:1.5px solid #cfd4e2;color:#1d2333;font-size:12px;font-weight:700;box-shadow:0 6px 18px rgba(20,30,60,.16);cursor:pointer}
+.veto-fab{position:fixed;left:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:15;display:flex;align-items:center;gap:6px;padding:6px 10px 6px 6px;border-radius:14px;background:#1d2333;border:1.5px solid #1d2333;color:#fff;font-size:12px;font-weight:700;box-shadow:0 6px 16px rgba(20,30,60,.35);cursor:pointer}
 .veto-fab img{display:block;border-radius:3px}
 .veto-fab b{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#2f6be0;color:#fff;font-size:11px;line-height:18px;text-align:center}
 .veto-fab.ready{border-color:#2f6be0;box-shadow:0 0 0 2px rgba(47,107,224,.25),0 6px 18px rgba(20,30,60,.16)}
-.veto-fab.dim{opacity:.55}
+.veto-fab.dim{opacity:1}
 .bottombar .avoid-btn{position:relative;flex-shrink:0;width:48px;height:64px;padding:0;border-radius:8px;border:1.5px solid #c9d9ff;background:#eef3ff;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .bottombar .avoid-btn img{display:block;width:24px;height:32px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.18)}
 .bottombar .avoid-btn b{position:absolute;right:-6px;top:-6px;min-width:20px;height:20px;padding:0 4px;border-radius:10px;background:#2f6be0;color:#fff;font-size:12px;line-height:20px;text-align:center}

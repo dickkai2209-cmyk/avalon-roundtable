@@ -1553,12 +1553,21 @@ function render() {
     const before = {};
     if (!S.game) $$('.rt .st[data-id]').forEach(e => { const r = e.getBoundingClientRect(); before[e.dataset.id] = [r.left, r.top]; });
     const faces = new Map();
-    $$('.rt .st[data-id] .av-wrap').forEach(wrap => { const id = wrap.closest('.st').dataset.id; if (id && !faces.has(id)) { faces.set(id, wrap); wrap.remove(); } });
-    setHTML(app, S.game ? gameHtml() : lobbyHtml()); enterIds.clear();
+    const nextHtml = S.game ? gameHtml() : lobbyHtml();
+    // setHTML leaves the DOM alone when the markup string is unchanged. Lifting
+    // avatars first would then find no placeholder to swap back onto, and the
+    // next identical render would have nothing left to save.
+    if (app._html !== nextHtml) $$('.rt .st[data-id] .av-wrap').forEach(wrap => { const id = wrap.closest('.st').dataset.id; if (id && !faces.has(id)) { faces.set(id, wrap); wrap.remove(); } });
+    setHTML(app, nextHtml); enterIds.clear();
     faces.forEach((wrap, id) => {
       const st = document.querySelector('.rt .st[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
-      const cur = st && st.querySelector('.av-wrap');
-      if (!st || !cur) return;
+      if (!st) return;
+      const cur = st.querySelector('.av-wrap');
+      if (!cur) {
+        const meta = st.querySelector('.st-meta');
+        if (meta) st.insertBefore(wrap, meta); else st.appendChild(wrap);
+        return;
+      }
       const a = wrap.querySelector('img'), b = cur.querySelector('img');
       if (a && b && a.getAttribute('src') === b.getAttribute('src') && a.getAttribute('width') === b.getAttribute('width')) cur.replaceWith(wrap);
     });
@@ -2548,5 +2557,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
-window.__av = { makeStory, storySheet, get S() { return S; }, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
+window.__av = { makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

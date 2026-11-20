@@ -202,7 +202,9 @@ function pull(person, query) {
         overlap, badges: el.querySelectorAll('.badge').length,
         appBadges: document.querySelectorAll('#app .badge.good, #app .badge.evil').length,
         sw: Math.max(doc.scrollWidth, main ? main.scrollWidth : 0), cw: doc.clientWidth,
-        spec: !!document.querySelector('.specbar')
+        spec: !!document.querySelector('.specbar'),
+        recap: !!document.querySelector('.lady-recap, .vrec'),
+        camp: /藍方隊員|紅方隊員/.test((document.querySelector('#app') || document.body).innerText)
       };
     })()`);
   }
@@ -215,6 +217,7 @@ function pull(person, query) {
     assertChainHidden(info, who);
     assert(info.top >= -1 && info.bottom <= info.ih + 1 && !info.overlap, who + ' log is on screen and clear of chips ' + JSON.stringify({ top: info.top, bottom: info.bottom, ih: info.ih, overlap: info.overlap }));
     assert(info.sw <= info.cw + 1, who + ' does not overflow');
+    assert(!info.recap && !info.camp, who + ' mid-game does not mount the post-game recap or camp colors');
   }
   function assertHidden(view, who) {
     const g = view && view.game;
@@ -368,10 +371,19 @@ function pull(person, query) {
     }
     await setSize(375, 812);
     await asUser(otherPerson, '.lady-chain');
-    const revealed = await evalj(`new Promise(r => { const t = setInterval(() => { const chain = document.querySelector('.lady-chain'); if (chain && /[好壞]/.test(chain.innerText) && document.body.innerText.includes('查驗同傳遞')) { clearInterval(t); r(chain.innerText.replace(/\\s+/g,' ').trim()); } }, 40); setTimeout(() => r(''), 8000); })`);
-    assert(/壞/.test(revealed), 'end-game public chain may show the result (' + revealed + ')');
-    const review = await evalj(`document.body.innerText.includes('陣營：壞人')`);
-    assert(review, 'end-game review still records the lady alignment');
+    const revealed = await evalj(`new Promise(r => { const t = setInterval(() => {
+      const chain = document.querySelector('.lady-chain');
+      const recap = document.querySelector('.lady-recap');
+      if (chain && /[好壞]/.test(chain.innerText) && recap && recap.innerText.includes('當過湖仙的不能再被查驗')) {
+        clearInterval(t);
+        r({ chain: chain.innerText.replace(/\\s+/g,' ').trim(), recap: recap.innerText.replace(/\\s+/g,' ').trim() });
+      }
+    }, 40); setTimeout(() => r(null), 8000); })`);
+    assert(revealed && /壞/.test(revealed.chain), 'end-game public chain may show the result (' + (revealed && revealed.chain) + ')');
+    assert(revealed.recap.includes('沒用的') && revealed.recap.includes('開局持有') && /號驗/.test(revealed.recap), 'end-game recap is the avatar chain (' + (revealed && revealed.recap) + ')');
+    assert(!/[好壞]/.test(revealed.recap) && !revealed.recap.includes('陣營'), 'recap chain does not put alignment on the faces');
+    const grid = await evalj(`(() => { const g = document.querySelector('.vrec'); return g ? g.innerText.replace(/\\s+/g,' ').trim() : ''; })()`);
+    assert(grid.includes('藍方隊員') && grid.includes('紅方隊員') && grid.includes('通過') && grid.includes('第 1 個任務'), 'end-game vote grid uses camp colors (' + grid.slice(0, 120) + ')');
     console.log('LADY PRIVACY TEST PASSED');
   } finally {
     try { ws.close(); } catch {}

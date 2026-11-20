@@ -1956,79 +1956,24 @@ function reviewOf(r) {
 function reviewHtml(r) {
   const built = reviewOf(r);
   const seats = r.players || [];
-  const lab = (id) => {
-    if (typeof AvalonReview !== 'undefined') return AvalonReview.label(seats, id);
-    const p = seats.find(s => s.id === id);
-    return p ? `${p.seat || '?'}號 ${esc(p.name)}` : '未有記錄';
-  };
-  const roleOf = (id) => {
-    const p = seats.find(s => s.id === id);
-    if (!p || !p.role) return '<i class="rev-miss">未有記錄</i>';
-    return esc((ROLE[p.role] && ROLE[p.role].n) || RN[p.role] || p.role);
-  };
   if (!built.cards || !built.cards.length) {
     return `<div class="card"><h3>覆盤重點</h3><p class="rev-miss">此對局未有足夠記錄可重播。</p></div>`;
   }
+  const proposals = [];
   const cards = built.cards.map(c => {
     if (c.type === 'lady') {
+      if (typeof AvalonReview !== 'undefined' && AvalonReview.ladyRecapHtml) return AvalonReview.ladyRecapHtml(c, seats, (p, size) => av(p, size || 64));
       if (c.disabled) return `<article class="rev-card"><h4><span class="rev-k">湖中仙女</span> 本局未開啟</h4></article>`;
       if (c.unknown) return `<article class="rev-card"><h4><span class="rev-k">湖中仙女</span></h4><p class="rev-miss">舊記錄未保存是否開啟湖中仙女，未有記錄。</p></article>`;
-      const start = c.startKnown ? lab(c.startId) : '<span class="rev-miss">未有記錄</span>';
-      const checkLines = (c.checks || []).map(ch => {
-        if (ch.kind === 'notplayed') return '';
-        if (ch.kind === 'ended') return `<div>第 ${ch.mission} 個任務結束後已分出勝負或進入刺殺，沒有查驗。</div>`;
-        if (ch.kind === 'missing') return `<div>第 ${ch.mission} 個任務後嘅查驗：<span class="rev-miss">未有記錄</span></div>`;
-        const side = ch.side === 'good' ? '好人' : ch.side === 'evil' ? '壞人' : null;
-        return `<div>第 ${ch.mission} 個任務後：${lab(ch.holder)} 查驗 ${lab(ch.target)}${side ? `（陣營：${side}）` : '（查驗結果：<span class="rev-miss">未有記錄</span>）'}，之後把仙女交給對方。</div>`;
-      }).filter(Boolean).join('') || '<div class="rev-miss">沒有查驗記錄。</div>';
-      const chain = (c.chain && c.chain.length)
-        ? `<div class="rev-chain">傳遞鏈：${c.chain.map(lab).join(' → ')}</div>`
-        : `<div class="rev-miss">傳遞鏈：未有記錄</div>`;
-      const used = (c.used && c.used.length)
-        ? `<div>曾持有、不能再被查驗：${c.used.map(lab).join('、')}</div>`
-        : `<div class="rev-miss">曾持有名單：未有記錄</div>`;
-      return `<article class="rev-card"><h4><span class="rev-k">湖中仙女</span> 查驗同傳遞</h4>
-        <p>起始持有者：${start}。規則：第 2、3、4 個任務後可以查驗一人陣營，然後把仙女交給被查驗者；曾持有者不能再被查驗。</p>
-        ${checkLines}${chain}${used}</article>`;
+      return '';
     }
-    if (c.type === 'proposal') {
-      const ok = c.quest ? (c.quest.success ? 'ok' : 'bad') : (c.approved ? 'ok' : '');
-      const tag = c.quest
-        ? (c.quest.success ? `第 ${c.mission} 個任務 · 成功` : `第 ${c.mission} 個任務 · 失敗${c.quest.fails != null ? `（${c.quest.fails} 張失敗卡）` : ''}`)
-        : (c.approved ? `第 ${c.mission} 個任務組隊通過` : `第 ${c.mission} 個任務組隊被否決`);
-      const leader = c.leader ? lab(c.leader) : '<span class="rev-miss">隊長未有記錄</span>';
-      const att = c.attempt ? `第 ${c.attempt} 次提名` : '';
-      let nar = `隊長 ${leader}${att ? '（' + att + '）' : ''} 提名 ${ (c.team||[]).length || '？' } 人隊伍。`;
-      if (c.approved && c.yes != null) nar += `投票 ${c.yes} 贊成、${c.no} 反對，組隊通過。`;
-      else if (c.approved === false && c.yes != null) nar += `投票 ${c.yes} 贊成、${c.no} 反對，組隊被否決。`;
-      else if (c.missingVotes) nar += '詳細投票：<span class="rev-miss">未有記錄</span>。';
-      if (c.quest) nar += c.quest.success
-        ? `任務結果：成功${c.quest.fails != null ? `（失敗卡 ${c.quest.fails} 張）` : ''}。`
-        : `任務結果：失敗${c.quest.fails != null ? `（失敗卡 ${c.quest.fails} 張）` : ''}。`;
-      if (c.sameMerlinMorgana) nar += '此隊同時有梅林同莫甘娜。';
-      const team = (c.team || []).map(id => {
-        const p = seats.find(s => s.id === id) || { id, name: '？' };
-        return `<div class="rev-p">${av(p, 36)}<b>${esc(p.name || '騎士')}</b><i>${p.seat || '?'}號 · ${roleOf(id)}</i></div>`;
-      }).join('');
-      let votes = '';
-      if (c.votes) {
-        const rows = seats.map(p => {
-          const v = c.votes[p.id];
-          const mark = v === true ? '<span class="y">贊成</span>' : v === false ? '<span class="n">反對</span>' : '<span class="rev-miss">未有記錄</span>';
-          return `<div class="rev-v">${av(p, 22)}${esc(p.name)}（${p.seat || '?'}號）${mark}</div>`;
-        }).join('');
-        votes = `<div class="rev-votes">${rows}</div>`;
-      } else {
-        votes = `<p class="rev-miss">個別投票未有記錄。</p>`;
-      }
-      return `<article class="rev-card"><h4><span class="rev-k ${ok}">${att || '組隊'}</span> ${esc(tag)}</h4>
-        <p>${nar}</p>
-        ${team ? `<div class="rev-team">${team}</div>` : '<p class="rev-miss">隊伍名單未有記錄。</p>'}
-        ${votes}</article>`;
-    }
+    if (c.type === 'proposal') { proposals.push(c); return ''; }
     return '';
   }).join('');
-  return `<div class="card"><h3>覆盤重點</h3><div class="rev">${cards}</div></div>`;
+  const grid = proposals.length && typeof AvalonReview !== 'undefined' && AvalonReview.voteRecapHtml
+    ? AvalonReview.voteRecapHtml(proposals, seats, { reveal: true })
+    : '';
+  return `<div class="card"><h3>覆盤重點</h3><div class="rev">${cards}${grid}</div></div>`;
 }
 function liveRecord(g) {
   return { gid: g.gid, winner: g.winner, reason: g.reason, n: g.n, settings: g.settings,
@@ -2674,5 +2619,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
-window.__av = { makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
+window.__av = { makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

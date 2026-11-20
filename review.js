@@ -86,7 +86,9 @@
         checks,
         chain,
         used: uniqUsed,
-        unused: checks.filter(c => c.kind === 'ended' || c.kind === 'missing' || c.kind === 'notplayed'),
+        // Only a mission that was played and then ended before the inspection.
+        // A mission that never happened, or a missing log, is not an unused use.
+        unused: checks.filter(c => c.kind === 'ended'),
       });
     } else if (settings.lady === false) {
       cards.push({ type: 'lady', title: '湖中仙女', disabled: true });
@@ -138,5 +140,103 @@
     return { version: 1, cards };
   }
 
-  return { build, roleN, label, seatNo, byId };
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const SIDE = {
+    merlin: 'good', percival: 'good', servant: 'good', lancelot_good: 'good',
+    assassin: 'evil', morgana: 'evil', mordred: 'evil', oberon: 'evil', minion: 'evil', lancelot_evil: 'evil',
+  };
+  const LADY_MARK = '<svg class="lady-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="6.2" r="3.15" fill="#1aa7a8"/><circle cx="17.8" cy="12" r="3.15" fill="#1aa7a8"/><circle cx="12" cy="17.8" r="3.15" fill="#1aa7a8"/><circle cx="6.2" cy="12" r="3.15" fill="#1aa7a8"/><circle cx="12" cy="12" r="2.15" fill="#d7f6f4"/></svg>';
+
+  function campOf(p, reveal) {
+    if (!reveal || !p) return '';
+    if (p.side === 'good' || p.side === 'evil') return p.side;
+    return SIDE[p.role] || '';
+  }
+
+  function ladyTitle() {
+    return `<span class="lady-title">${LADY_MARK}<b>湖中仙女</b></span>`;
+  }
+
+  // Post-game avatar chain. Alignment is intentionally omitted: the faces stay clear,
+  // and mid-game callers must not render this card at all.
+  function ladyRecapHtml(card, seats, renderAv) {
+    if (!card || card.type !== 'lady') return '';
+    if (card.disabled) return '<article class="rev-card"><h4><span class="rev-k">湖中仙女</span> 本局未開啟</h4></article>';
+    if (card.unknown) return '<article class="rev-card"><h4><span class="rev-k">湖中仙女</span></h4><p class="rev-miss">舊記錄未保存是否開啟湖中仙女，未有記錄。</p></article>';
+    const list = seats || [];
+    const checks = card.checks || [];
+    const passed = checks.filter(c => c.kind === 'check');
+    const ended = checks.filter(c => c.kind === 'ended');
+    const chain = (card.chain || []).slice();
+    const face = (id) => {
+      const p = byId(list, id) || { id, name: '騎士', avatar: 'fox', bg: '#fff', pendant: 'none' };
+      return typeof renderAv === 'function' ? renderAv(p, 64) : '<span class="av" style="width:64px;height:64px"></span>';
+    };
+    let head = `<div class="lady-head">${ladyTitle()}</div>`;
+    if (ended.length) {
+      const notes = ended.map(c => `<p class="lady-note">第 ${c.mission} 個任務結束後已分出勝負或進入刺殺，沒有查驗。</p>`).join('');
+      head = `<details class="lady-fold"><summary class="lady-head">${ladyTitle()}<span class="lady-count">沒用的 ${ended.length}次<i class="lady-chev" aria-hidden="true"></i></span></summary>${notes}</details>`;
+    }
+    if (!chain.length) {
+      return `<article class="rev-card lady-recap">${head}<p class="rev-miss">未有傳遞記錄。</p></article>`;
+    }
+    const bits = [];
+    chain.forEach((id, i) => {
+      const prev = i > 0 ? passed[i - 1] : null;
+      if (prev) bits.push(`<div class="lady-seg"><span>任務 ${prev.mission} 後</span><i></i></div>`);
+      const cap = i === 0 ? '開局持有' : `${seatNo(list, prev && prev.holder)}號驗`;
+      const no = seatNo(list, id);
+      bits.push(`<div class="lady-node" data-seat="${esc(no)}" role="listitem">${face(id)}<b class="lady-no">${esc(no)}號</b><span class="lady-cap">${cap}</span></div>`);
+    });
+    const usedNums = (card.used || []).map(id => seatNo(list, id)).filter(n => n !== '?');
+    const foot = usedNums.length ? `<p class="lady-foot">當過湖仙的不能再被查驗：${usedNums.join('、')}號</p>` : '<p class="lady-foot rev-miss">曾持有名單：未有記錄</p>';
+    return `<article class="rev-card lady-recap">${head}<div class="lady-pass" role="list">${bits.join('')}</div>${foot}</article>`;
+  }
+
+  function voteRecapHtml(proposals, seats, opts) {
+    const rows = (proposals || []).filter(c => c && c.type === 'proposal');
+    if (!rows.length) return '';
+    const reveal = !opts || opts.reveal !== false;
+    const list = (seats || []).slice().sort((a, b) => (a.seat || 0) - (b.seat || 0));
+    const n = list.length;
+    const byMission = new Map();
+    rows.forEach(p => {
+      const m = p.mission || 0;
+      if (!byMission.has(m)) byMission.set(m, []);
+      byMission.get(m).push(p);
+    });
+    const missions = [...byMission.keys()].sort((a, b) => b - a);
+    const legend = reveal
+      ? `<div class="vrec-leg"><span><i class="vkey good"></i>藍方隊員</span><span><i class="vkey evil"></i>紅方隊員</span><span><i class="vkey crown">👑</i>隊長</span><span><i class="vkey yes"></i>同意</span><span><i class="vkey no"></i>反對</span></div>`
+      : `<div class="vrec-leg"><span><i class="vkey mem"></i>隊員</span><span><i class="vkey crown">👑</i>隊長</span><span><i class="vkey yes"></i>同意</span><span><i class="vkey no"></i>反對</span></div>`;
+    const blocks = missions.map(m => {
+      const props = byMission.get(m).slice().sort((a, b) => (a.attempt || 0) - (b.attempt || 0));
+      const sized = props.find(p => p.team && p.team.length);
+      const size = sized ? sized.team.length : 0;
+      const two = n >= 7 && m === 4;
+      const quest = (props.find(p => p.quest) || {}).quest;
+      let badge = '<em class="go">進行中</em>';
+      if (quest) badge = quest.success ? '<em class="ok">成功</em>' : `<em class="bad">失敗 · ${quest.fails == null ? '?' : quest.fails} 張失敗</em>`;
+      const meta = `${size ? size + ' 人' : ''}${two ? (size ? ' · ' : '') + '需 2 張失敗' : ''}`;
+      const lines = props.map(p => {
+        const cells = list.map(s => {
+          const on = (p.team || []).includes(s.id);
+          const leader = p.leader === s.id;
+          const v = p.votes ? p.votes[s.id] : undefined;
+          const tone = v === true ? 'yes' : v === false ? 'no' : 'unk';
+          const camp = on ? campOf(s, reveal) : '';
+          const num = esc(s.seat || '?');
+          const inner = on ? `<b class="dot${camp ? ' ' + camp : ''}">${num}</b>` : `<b>${num}</b>`;
+          return `<span class="vrec-cell ${tone}${leader ? ' ld' : ''}" data-seat="${num}"${camp ? ` data-camp="${camp}"` : ''} data-vote="${tone}">${leader ? '<i class="crown" aria-hidden="true">👑</i>' : ''}${inner}</span>`;
+        }).join('');
+        const res = p.approved === true ? '<span class="vrec-res ok">通過</span>' : p.approved === false ? '<span class="vrec-res bad">否決</span>' : '<span class="vrec-res go">組隊中</span>';
+        const attempt = p.attempt ? `第${p.attempt}次` : '提名';
+        return `<div class="vrec-row" style="--n:${n}"><span class="vrec-try">${attempt}</span><span class="vrec-seats">${cells}</span>${res}</div>`;
+      }).join('');
+      return `<section class="vrec-mis" data-mission="${m}"><div class="vrec-mh"><b>第 ${m} 個任務</b>${meta ? `<span class="meta">${meta}</span>` : ''}${badge}</div><div class="vrec-scroll">${lines}</div></section>`;
+    }).join('');
+    return `<article class="rev-card vrec">${legend}${blocks}</article>`;
+  }
+
+  return { build, roleN, label, seatNo, byId, ladyRecapHtml, voteRecapHtml, campOf };
 });

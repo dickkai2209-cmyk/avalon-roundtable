@@ -1282,10 +1282,10 @@ body:has(.myrole-fab) .rt,body:has(.veto-fab) .rt{
 .settle-foot .btn.ghost{background:transparent;color:#2f6fe0;border:0;border-left:1px solid #e6e9ef}
 .settle-foot .btn:disabled{opacity:.4}
 .settle-foot .btn:focus-visible,.settle-x:focus-visible,.endsum-act:focus-visible,.endsum-link:focus-visible{outline:3px solid #1d2333;outline-offset:-3px}
-.settle-page{padding:1px 0 2px;margin-top:6px}
+.settle-page{padding:1px 0 2px;margin-top:2px}
 .settle-page .settle-list{border:0}
-.endsum{margin:2px 0 4px}
-.endsum-hero{display:flex;align-items:center;gap:10px;border-radius:16px;padding:10px 12px 8px;background:linear-gradient(180deg,#e7f3ff,#f8fbff)}
+.endsum{margin:0}
+.endsum-hero{display:flex;align-items:center;gap:10px;border-radius:16px;padding:8px 12px 6px;background:linear-gradient(180deg,#e7f3ff,#f8fbff)}
 .endsum-hero > div{min-width:0;flex:1}
 .endsum-hero.evil{background:linear-gradient(180deg,#ffe9ee,#fff)}
 .endsum-hero.none{background:#f4f6fb}
@@ -1296,18 +1296,18 @@ body:has(.myrole-fab) .rt,body:has(.veto-fab) .rt{
 .endsum-reason{margin:3px 0 0;font-size:14px;line-height:1.35;color:#3c4456}
 .endsum-you{margin:3px 0 0;font-size:14px;line-height:1.35;color:#1d2333}
 .endsum-you .role{color:#2f6fe0;font-weight:800}
-.endsum-acts{display:flex;margin-top:8px;background:#fff;border:1px solid #e6e9ef;border-radius:14px;overflow:hidden}
-.endsum-act{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;background:#fff;border:0;color:#2f6fe0;font-weight:800;font-size:15px;line-height:1.2;padding:8px 6px;cursor:pointer;font-family:inherit}
+.endsum-acts{display:flex;margin-top:4px;background:#fff;border:1px solid #e6e9ef;border-radius:14px;overflow:hidden}
+.endsum-act{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;background:#fff;border:0;color:#2f6fe0;font-weight:800;font-size:15px;line-height:1.2;padding:6px;cursor:pointer;font-family:inherit}
 .endsum-act + .endsum-act{border-left:1px solid #e6e9ef}
 .endsum-act svg{flex:none;width:16px;height:16px}
-.endsum-meta{text-align:center;color:#8b919e;font-size:12px;line-height:1.35;margin:6px 4px}
-.endsum-me,.endsum-mvp{background:#fff;border:1px solid #e6e9ef;border-radius:12px;padding:5px 10px;margin:6px 0 0}
+.endsum-meta{text-align:center;color:#8b919e;font-size:12px;line-height:1.35;margin:2px 4px}
+.endsum-me,.endsum-mvp{background:#fff;border:1px solid #e6e9ef;border-radius:12px;padding:5px 10px;margin:3px 0 0}
 .endsum-me-h{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#5d6472;font-size:12px;line-height:1.2;font-weight:800}
 .endsum-me.is-lose .k,.endsum-mvp .k{color:#c47a00}
 .endsum-me-h .k{display:inline-flex;align-items:center;gap:4px;min-width:0}
 .endsum-link{border:0;background:transparent;color:#8b919e;font-size:12px;line-height:1.2;font-weight:700;cursor:pointer;padding:0;font-family:inherit;flex:none}
 .endsum-link::after{content:" ›"}
-.endsum-me-b{display:flex;align-items:center;gap:8px;margin-top:6px}
+.endsum-me-b{display:flex;align-items:center;gap:8px;margin-top:4px}
 .endsum-me-b .mid{flex:1;min-width:0}
 .endsum-me-b .mid b{display:block;font-size:14px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .endsum-me-b .mid span{display:block;margin-top:2px;color:#6b7286;font-size:12px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1317,6 +1317,18 @@ body:has(.myrole-fab) .rt,body:has(.veto-fab) .rt{
 .endsum-mvp .k{flex:none;font-size:12px;line-height:1.2;font-weight:800}
 .endsum-mvp .nm{flex:1;min-width:0;font-size:13px;line-height:1.2;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .endsum-mvp > b{flex:none;font-size:13px;line-height:1.2;color:#6b7286;font-weight:700}
+/* Next round stays above the home indicator. The in-flow button used to
+   slide under the sticky header, or sit past the fold under the Safari chrome. */
+.end-next{
+  position:fixed;left:50%;bottom:0;transform:translateX(-50%);
+  width:min(520px,100%);max-width:100%;z-index:8;box-sizing:border-box;
+  background:#fff;border-top:1px solid var(--line);
+  box-shadow:0 -4px 16px rgba(20,30,60,.06);
+  padding:6px 16px calc(6px + env(safe-area-inset-bottom));
+}
+.end-next .btn{margin:0;height:44px;min-height:44px;padding:0 14px;font-size:16px;line-height:44px}
+.end-next .end-wait{margin:0;height:44px;min-height:44px;display:flex;align-items:center;justify-content:center;text-align:center;color:#5d6472;font-size:14px;line-height:1.3;font-weight:700}
+body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
 .modal:has(.actconf){z-index:80 !important;background:rgba(16,20,32,.62)}
 .sheet:has(.actconf){animation:none;opacity:1;background:#fff;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
 .release-open{margin-top:10px}

@@ -425,6 +425,25 @@ async function act(room, pid, type, data) {
       room.lastEvent = { seq: ++room.eventSeq, type: 'host', id: p.id, name: p.name };
       return null;
     }
+    case 'seize': {
+      // Client flags are ignored. Only the verified GM account can take host,
+      // including as a spectator and while a game is in progress.
+      if (!member) return '你不在房間中';
+      const u = await db.getUser(pid);
+      if (!db.isGM(u)) return '你沒有搶房主的權限';
+      if (room.hostPid === pid) return null;
+      room.hostPid = pid;
+      const seatedMe = findPlayer(room, pid);
+      if (seatedMe) seatedMe.ready = false;
+      const pin = discovery.get(room.code);
+      if (pin) discovery.set(room.code, { ...pin, hostPid: pid });
+      let name = seatedMe && seatedMe.name;
+      if (!name && room.watchers && room.watchers[pid]) name = room.watchers[pid].name;
+      if (!name) { for (const s of io.sockets.sockets.values()) if (s.data.pid === pid && s.data.name) { name = s.data.name; break; } }
+      if (!name && u && u.name) name = u.name;
+      room.lastEvent = { seq: ++room.eventSeq, type: 'host', id: pubId(pid), name: name || '騎士' };
+      return null;
+    }
     case 'dissolve': {
       if (!isHost) return '只有房主可以解散房間';
       if (g && g.phase !== 'end') return '遊戲進行中，請先結束本局';

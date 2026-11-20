@@ -1828,7 +1828,9 @@ function gameHtml() {
       (amA ? `<div class="small muted" style="margin-top:6px">點選目標：${selCount ? esc(P([...selected][0]).name) : '未選'}</div><button class="btn evil" data-a="assassinate" ${selCount === 1 ? '' : 'disabled'}>確認刺殺</button>` : '');
   } else if (g.phase === 'end') {
     center = `<b>${winTitle(g.winner)}</b>${g.quests.map(q => q ? (q.success ? '🔵' : '🔴') : '⚪').join('')}`;
-    panel = `${S.isHost ? '<button class="btn" data-a="lobby" style="margin-top:0">🔁 再來一局（保留座位）</button>' : '<div class="center muted small">等待房主開新一局（座位保留）</div>'}`;
+    // The next round lives in a fixed dock. An in-flow button sits under the
+    // sticky header once the result is scrolled up, and off-screen at the top.
+    panel = '';
   }
   const teamOpen = g.phase === 'team' && isLeader && (!(S.settings && S.settings.mic === true) || (S.floor && S.floor.status === 'select'));
   const selectable = (s) => teamOpen || (g.phase === 'assassin' && me && me.role === 'assassin' && s.id !== meId && !s.evil) || (g.phase === 'lady' && isLady && s.id !== meId && !g.ladyUsed.includes(s.id)) || (g.phase === 'sword' && isLeader && g.team.includes(s.id) && s.id !== meId) || (g.phase === 'swordflip' && g.sword === meId && g.team.includes(s.id) && s.id !== meId);
@@ -1865,6 +1867,7 @@ function gameHtml() {
   ${panel ? `<div class="card${pickLive ? ' pick-ready' : ''}">${panel}</div>` : ''}
   ${me ? '' : '<div class="specbar">👁 觀戰中 · 唔會看到隱藏身分</div>'}
   ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : ''}
+  ${ended ? `<div class="end-next">${S.isHost ? '<button type="button" class="btn" data-a="lobby">🔁 再來一局（保留座位）</button>' : '<p class="end-wait">等待房主開新一局（座位保留）</p>'}</div>` : ''}
   ${g.settings.veto && me && !ended ? `<button type="button" class="veto-fab ${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'ready' : 'dim'}" data-a="${me.hasVeto && g.phase==='vote' && g.team.includes(meId) ? 'veto' : 'vetoinfo'}" aria-label="回避卡"><img src="/img/veto_t.webp" alt="" width="22" height="30"><span>回避卡</span><b>${vetoAmt(me.vetoCards != null ? me.vetoCards : S.myVetoCards)}</b></button>` : ''}
   ${me && !ended ? `<button type="button" class="myrole-fab" data-a="role" aria-label="我的身份"><span class="mini-back" style="background-image:url(${thumb(cardBackOf())})"></span><span>我的身份</span></button>` : ''}`;
 }

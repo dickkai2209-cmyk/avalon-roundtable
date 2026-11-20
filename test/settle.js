@@ -119,17 +119,92 @@ function bot(key, name) {
   const evalj = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 500)); return r.result.value; };
   await send('Runtime.enable'); await send('Page.enable');
   await send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: OUT }).catch(() => {});
-  async function setSize(w, h) { await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true }); }
+  // 375×812 uses the taller 12/13 mini inset; 390×844 uses iPhone 12/13/14.
+  const SAFE = { 375: { top: 50, bottom: 34 }, 390: { top: 47, bottom: 34 } };
+  let viewW = 375;
+  async function setSize(w, h) {
+    viewW = w;
+    await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true });
+    const safe = SAFE[w] || { top: 0, bottom: 0 };
+    await send('Emulation.setSafeAreaInsetsOverride', { insets: { top: safe.top, left: 0, bottom: safe.bottom, right: 0 } }).catch(() => {});
+    await forceSafe();
+  }
+  async function forceSafe() {
+    const safe = SAFE[viewW] || { top: 0, bottom: 0 };
+    let mode = '';
+    for (let i = 0; i < 8 && !mode; i++) {
+      try {
+        mode = await evalj(`(() => {
+          const el = document.createElement('div');
+          el.style.cssText = 'position:absolute;left:-999px;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)';
+          document.body.appendChild(el);
+          const cs = getComputedStyle(el);
+          const t = parseFloat(cs.paddingTop) || 0;
+          const b = parseFloat(cs.paddingBottom) || 0;
+          el.remove();
+          let s = document.getElementById('safe-test');
+          if (t >= ${safe.top} - 0.5 && b >= ${safe.bottom} - 0.5) { if (s) s.textContent = ''; return 'env'; }
+          if (!s) { s = document.createElement('style'); s.id = 'safe-test'; document.head.appendChild(s); }
+          s.textContent = ${JSON.stringify('.topbar{padding-top:' + safe.top + 'px !important}body{padding-bottom:' + safe.bottom + 'px !important}.settle-foot{padding-bottom:' + safe.bottom + 'px !important}main{padding-bottom:calc(16px + ' + safe.bottom + 'px) !important}')};
+          return 'inject';
+        })()`);
+      } catch { await sleep(40); }
+    }
+    return mode;
+  }
   async function asUser(person) {
     const profile = JSON.stringify({ name: person.name, avatar: 'fox', bg: '#fff', fx: 'spot', pendant: 'none' });
     for (let attempt = 0; attempt < 3; attempt++) {
       for (let i = 0; i < 30; i++) { if (await evalj(`!!document.querySelector('[data-a="create"], .rt')`).catch(() => false)) break; await sleep(80); }
       await evalj(`localStorage.setItem('cc.token', ${JSON.stringify(person.token)}); localStorage.setItem('cc.pid', ${JSON.stringify(person.user.id)}); localStorage.setItem('cc.profile', ${JSON.stringify(profile)}); location.replace(${JSON.stringify(APP + '?s=' + person.user.id + attempt)})`);
-      for (let i = 0; i < 40; i++) { if (await evalj(`!!document.querySelector('.rt')`).catch(() => false)) return; await sleep(120); }
+      for (let i = 0; i < 40; i++) { if (await evalj(`!!document.querySelector('.rt')`).catch(() => false)) { await forceSafe(); return; } await sleep(120); }
     }
     throw new Error('no table');
   }
   async function shot(name) { const { data } = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(OUT, name), Buffer.from(data, 'base64')); }
+  async function detailFit(expectN) {
+    const safe = SAFE[viewW] || { top: 0, bottom: 0 };
+    await forceSafe();
+    await sleep(30);
+    return evalj(`(() => {
+      document.querySelectorAll('.settle-page details[open]').forEach(d => { d.open = false; });
+      const el = document.querySelector('.endsum');
+      const bar = document.querySelector('.topbar');
+      if (!el || !bar) return { visible: false, missing: true };
+      const y = el.getBoundingClientRect().top + window.scrollY - bar.getBoundingClientRect().height;
+      window.scrollTo(0, Math.max(0, y));
+      const barB = bar.getBoundingClientRect().bottom;
+      const limit = window.innerHeight - ${safe.bottom};
+      const rows = [...document.querySelectorAll('.settle-page .settle-row')];
+      const boxes = rows.map(r => {
+        const b = r.getBoundingClientRect();
+        return { rank: r.dataset.rank, top: Math.round(b.top), bottom: Math.round(b.bottom), h: Math.round(b.height), role: (r.querySelector('.who em') || {}).textContent || '', pts: (r.querySelector('.pts') || {}).textContent || '' };
+      });
+      const last = boxes[boxes.length - 1];
+      const hero = document.querySelector('.endsum-hero').getBoundingClientRect();
+      const me = document.querySelector('.endsum-me');
+      const mvp = document.querySelector('.endsum-mvp');
+      const visible = boxes.length === ${expectN} && hero.top >= barB - 2 && !!last && last.bottom <= limit + 1 && boxes.every(b => b.top >= barB - 1 && b.h > 0 && b.bottom <= limit + 1 && b.role && b.pts);
+      return {
+        visible, n: boxes.length,
+        sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth,
+        ih: window.innerHeight, bar: Math.round(barB), limit: Math.round(limit),
+        heroTop: Math.round(hero.top), heroH: Math.round(hero.height),
+        meH: me ? Math.round(me.getBoundingClientRect().height) : 0,
+        mvpH: mvp ? Math.round(mvp.getBoundingClientRect().height) : 0,
+        rows: boxes, lastBottom: last ? last.bottom : null,
+        hasMe: !!me, hasMvp: !!mvp,
+        title: (document.querySelector('.endsum-hero h2') || {}).textContent || ''
+      };
+    })()`);
+  }
+  function assertFit(fit, label, n) {
+    const safe = SAFE[viewW] || { top: 0, bottom: 0 };
+    assert(fit && fit.visible && fit.n === n, label + ' shows all ' + n + ' collapsed names ' + JSON.stringify(fit));
+    assert(fit.sw <= fit.cw + 1, label + ' does not overflow');
+    assert(fit.bar >= safe.top + 52 - 2, label + ' keeps the top safe area ' + JSON.stringify({ bar: fit.bar, safe }));
+    assert(fit.hasMe && fit.hasMvp && fit.heroH >= 70, label + ' keeps the victory header, personal card and MVP row');
+  }
 
   try {
     await setSize(375, 812);
@@ -188,6 +263,17 @@ function bot(key, name) {
     })()`);
     await sleep(80);
     await shot('settle-score-375.png');
+    await evalj(`document.querySelector('#modal').classList.add('hidden')`);
+    await setSize(375, 812);
+    const room375 = await detailFit(10);
+    assertFit(room375, 'in-room red 375', 10);
+    await shot('settle-room-red-375.png');
+    await setSize(390, 844);
+    const room390 = await detailFit(10);
+    assertFit(room390, 'in-room red 390', 10);
+    await shot('settle-room-red-390.png');
+    await setSize(375, 812);
+    await evalj(`document.querySelector('#modal').classList.remove('hidden')`);
     async function fitAt(w, h) {
       await setSize(w, h);
       await sleep(60);
@@ -251,9 +337,14 @@ function bot(key, name) {
     const again = await evalj(`[...document.querySelectorAll('.settle-page .settle-row')].map(r => r.dataset.rank).join(',')`);
     assert(again === '1,2,3,4,5,6,7,8,9,10', 'reopening the saved game keeps the ranking');
     await setSize(375, 812);
-    await evalj(`(() => { const el = document.querySelector('.endsum'); const bar = document.querySelector('.topbar'); const y = el.getBoundingClientRect().top + window.scrollY - ((bar ? bar.offsetHeight : 52) + 8); window.scrollTo(0, Math.max(0, y)); })()`);
-    await sleep(40);
+    const hist375 = await detailFit(10);
+    assertFit(hist375, 'history red 375', 10);
     await shot('settle-detail-red-375.png');
+    await setSize(390, 844);
+    const hist390 = await detailFit(10);
+    assertFit(hist390, 'history red 390', 10);
+    await shot('settle-detail-red-390.png');
+    await setSize(375, 812);
     const detailText = await evalj(`document.querySelector('#app').innerText`);
     assert(detailText.includes('覆盤重點') && detailText.includes('組隊 / 投票全記錄'), 'detail keeps review and the full vote record');
     assert(detailText.includes('分享戰績') && detailText.includes('生成海報') && detailText.includes('積分詳情'), 'summary keeps share, poster and score entry');
@@ -274,6 +365,15 @@ function bot(key, name) {
     })()`);
     await sleep(80);
     await shot('settle-record.png');
+    const breakRead = await evalj(`(() => {
+      const li = document.querySelector('.settle-page .settle-break li');
+      if (!li) return null;
+      const cs = getComputedStyle(li);
+      const box = li.closest('.settle-break').getBoundingClientRect();
+      return { font: parseFloat(cs.fontSize), h: Math.round(box.height), text: li.textContent };
+    })()`);
+    assert(breakRead && breakRead.font >= 13 && breakRead.h >= 36 && breakRead.text.length > 1, 'expanded breakdown stays readable ' + JSON.stringify(breakRead));
+    await shot('settle-detail-expanded-375.png');
 
     const gid = gme().gid;
     const mvpBefore = JSON.parse(fs.readFileSync(path.join(DATA, 'db.json'), 'utf8'));
@@ -302,9 +402,15 @@ function bot(key, name) {
       await asUser(person);
       for (let i = 0; i < 40 && !(await evalj(`!!document.querySelector('.endsum')`).catch(() => false)); i++) await sleep(100);
       await evalj(`document.querySelector('#modal') && document.querySelector('#modal').classList.add('hidden')`);
-      await evalj(`(() => { const el = document.querySelector('.endsum'); const bar = document.querySelector('.topbar'); const y = el.getBoundingClientRect().top + window.scrollY - ((bar ? bar.offsetHeight : 52) + 8); window.scrollTo(0, Math.max(0, y)); })()`);
-      await sleep(60);
+      await setSize(375, 812);
+      const fit375 = await detailFit(10);
+      assertFit(fit375, person.name + ' 375', 10);
       await shot(collapsedName.replace('sheet', 'summary'));
+      await setSize(390, 844);
+      const fit390 = await detailFit(10);
+      assertFit(fit390, person.name + ' 390', 10);
+      await shot(collapsedName.replace('sheet', 'summary').replace('375', '390'));
+      await setSize(375, 812);
       const summary = await evalj(`document.querySelector('.endsum').innerText`);
       await evalj(`document.querySelector('[data-a="scores"]').click()`);
       for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('#modal .settle-row')`)); i++) await sleep(80);
@@ -356,9 +462,13 @@ function bot(key, name) {
     await openSheetShot(blueOther, 'settle-sheet-blue-nonmvp-collapsed-375.png', 'settle-sheet-blue-nonmvp-expanded-375.png');
     await evalj(`document.querySelector('#settle-ok').click()`);
     await setSize(390, 844);
-    await evalj(`(() => { const el = document.querySelector('.endsum'); const bar = document.querySelector('.topbar'); const y = el.getBoundingClientRect().top + window.scrollY - ((bar ? bar.offsetHeight : 52) + 8); window.scrollTo(0, Math.max(0, y)); })()`);
-    await sleep(40);
+    const blue390 = await detailFit(10);
+    assertFit(blue390, 'blue detail 390', 10);
     await shot('settle-detail-blue-390.png');
+    await setSize(375, 812);
+    const blue375 = await detailFit(10);
+    assertFit(blue375, 'blue detail 375', 10);
+    await shot('settle-detail-blue-375.png');
     await evalj(`document.querySelector('[data-a="scores"]').click()`);
     for (let i = 0; i < 30 && !(await evalj(`!!document.querySelector('#modal .settle-row[data-rank="10"]')`)); i++) await sleep(80);
     const fitBlue = await fitAt(390, 844);
@@ -367,6 +477,58 @@ function bot(key, name) {
     const fitBlue375 = await fitAt(375, 812);
     assert(fitBlue375.visible && fitBlue375.sw <= fitBlue375.cw + 1, 'blue win rank 10 stays above the footer at 375 ' + JSON.stringify(fitBlue375));
     await shot('settle-rank10-blue-375.png');
+
+    await bots[0].emit('leave', {});
+    const made6 = await bots[0].emit('create', {});
+    if (!made6 || !made6.room) throw new Error('create6 ' + JSON.stringify(made6));
+    for (let i = 0; i < 30 && !(bots[0].st && bots[0].st.code === made6.room && !bots[0].st.game); i++) await sleep(40);
+    if (!(await bots[0].act('capacity', { n: 6 })).ok) throw new Error('cap6');
+    for (let i = 1; i < 6; i++) {
+      await bots[i].emit('join', { code: made6.room });
+      if (!(await bots[i].act('sit', { seat: i + 1 })).ok) throw new Error('sit6');
+    }
+    if (!(await bots[0].act('start')).ok) throw new Error('start6');
+    for (let i = 0; i < 40 && !(gme() && gme().me && gme().n === 6 && gme().phase === 'team'); i++) await sleep(40);
+    async function mission6() {
+      const g = gme();
+      const team = g.seats.slice(0, g.teamSizes[g.round]).map(s => s.id);
+      const leader = bots.slice(0, 6).find(b => b.st.meId === g.leaderId);
+      if (!(await leader.act('propose', { team })).ok) throw new Error('propose6');
+      await until(() => gme().phase === 'vote', 'vote6');
+      for (const b of bots.slice(0, 6)) {
+        const r = await b.act('vote', { approve: true });
+        if (!r.ok && !(r.error && /已經/.test(r.error))) throw new Error('vote6 ' + (r && r.error));
+      }
+      await until(() => gme().phase === 'quest', 'quest6');
+      for (const b of bots.slice(0, 6)) {
+        if (!(gme().team || []).includes(b.st.meId)) continue;
+        if (!(await b.act('quest', { success: true })).ok) throw new Error('quest6');
+      }
+      await until(() => gme().phase !== 'quest', 'after6');
+    }
+    await mission6();
+    await mission6();
+    await mission6();
+    await until(() => gme().phase === 'assassin' && gme().n === 6, 'assassin6');
+    const assassin6 = bots.find(b => b.st.game && b.st.game.n === 6 && b.st.game.me && b.st.game.me.role === 'assassin');
+    const victim6 = bots.find(b => b.st.game && b.st.game.n === 6 && b.st.game.me && b.st.game.me.role !== 'assassin' && b.st.game.me.role !== 'merlin');
+    if (!(await assassin6.act('assassinate', { id: victim6.st.meId })).ok) throw new Error('miss6');
+    await until(() => gme().phase === 'end' && gme().n === 6 && gme().winner === 'good', 'end6');
+    await setSize(375, 812);
+    await asUser(people[0]);
+    for (let i = 0; i < 40 && !(await evalj(`document.querySelectorAll('.settle-page .settle-row').length === 6`).catch(() => false)); i++) await sleep(100);
+    await evalj(`document.querySelector('#modal') && document.querySelector('#modal').classList.add('hidden')`);
+    const small375 = await detailFit(6);
+    assertFit(small375, '6p 375', 6);
+    assert(small375.rows.every(r => r.h >= 24 && r.h <= 48), '6p rows stay compact ' + JSON.stringify(small375.rows));
+    await shot('settle-room-6p-375.png');
+    await setSize(390, 844);
+    const small390 = await detailFit(6);
+    assertFit(small390, '6p 390', 6);
+    await shot('settle-room-6p-390.png');
+    await evalj(`(() => { const row = document.querySelector('.settle-page .settle-row[data-rank="1"]'); if (row && !row.querySelector('details').open) row.querySelector('summary').click(); row.scrollIntoView({ block: 'center' }); })()`);
+    await sleep(40);
+    await shot('settle-room-6p-expanded-390.png');
     console.log('SETTLE TESTS PASSED', info.title, info.mvp);
   } finally {
     try { ws.close(); } catch {}

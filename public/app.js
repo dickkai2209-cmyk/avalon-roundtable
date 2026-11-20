@@ -1369,7 +1369,15 @@ function showRole(first) {
     <button class="btn big" id="ok">我記住了</button></div>`, (el) => {
     const eb = $('#early', el); if (eb) eb.onclick = () => { if (!confirm('確定提前刺殺？\n紅方會即時亮明身份（奧伯倫除外），你要喺圓桌上揀一位玩家刺殺：刺中梅林紅方即勝，刺錯藍方即勝。')) return; closeModal(); act('earlyassassin'); };
     const f = $('#flip', el); const rv = $('.reveal', el);
-    f.onclick = () => { f.classList.toggle('on'); const on = f.classList.contains('on'); rv.classList.toggle('opened', on); $('#kn', el).classList.toggle('hidden', !on); $('#cov', el).classList.toggle('hidden', on); if (on) burst($('#fxc', el), side); };
+    f.onclick = () => {
+      const on = !f.classList.contains('on');
+      f.classList.toggle('on', on);
+      f.classList.toggle('shut', !on);
+      rv.classList.toggle('opened', on);
+      $('#kn', el).classList.toggle('hidden', !on);
+      $('#cov', el).classList.toggle('hidden', on);
+      if (on) burst($('#fxc', el), side);
+    };
     $('#ok', el).onclick = closeModal;
   }, !!first);
 }

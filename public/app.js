@@ -1861,7 +1861,7 @@ function gameHtml() {
     center,
   });
   return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : ''}${!me ? '<div class="specbar">👁 觀戰中</div>' : ''}<div class="card">${trackHtml(g)}</div>
-  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:28px 10px 16px">${table}${ended ? '' : markLegend()}${S.isHost && !ended ? '<button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button>' : ''}</div>
+  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:42px 10px 16px">${table}${ended ? '' : markLegend()}${S.isHost && !ended ? '<button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button>' : ''}</div>
   <div class="card thist" id="teamhist">${teamHistoryHtml(g)}</div>
   ${ladyChainHtml(g.ladyLog, g.seats, ended) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats, ended)}</div>` : ''}
   ${panel ? `<div class="card${pickLive ? ' pick-ready' : ''}">${panel}</div>` : ''}

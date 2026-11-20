@@ -1028,10 +1028,11 @@ img,canvas,svg,video{max-width:100%}
 /* Home keeps a small footer gap. The lobby action row is fixed to the viewport. */
 main{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
 body:has(.bottombar) main{padding-bottom:calc(108px + env(safe-area-inset-bottom))}
-/* Chips float above the home indicator. The scrollport used to stop 78px
-   higher, leaving a white band that sheared the bottom seats. It now runs
-   to the safe area, and the in-game ring is capped so faces, names and
-   pendants sit above the chips instead of under that band. */
+/* Chips float above the home indicator. The scrollport runs to the safe
+   area, so the white band that used to shear the lower seats stays gone.
+   The in-game ring is the full card width again — the open spacing from
+   before the 416px cap. A tall 10-player table scrolls inside main, and the
+   padding below lets faces and names clear the chips. */
 body:has(.myrole-fab),body:has(.veto-fab){overflow:hidden;height:100%}
 body:has(.myrole-fab) main,body:has(.veto-fab) main{
   position:fixed;z-index:1;
@@ -1040,10 +1041,6 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
   bottom:env(safe-area-inset-bottom);
   overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;
   padding-bottom:72px;box-sizing:border-box;
-}
-body:has(.myrole-fab) .rt,body:has(.veto-fab) .rt{
-  width:min(100%, calc(100dvh - 53px - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 416px));
-  margin-bottom:28px;
 }
 .bottombar{
   position:fixed;left:50%;bottom:0;transform:translateX(-50%);

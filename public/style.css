@@ -1370,3 +1370,51 @@ body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))
 .near-item .av-wrap{flex:none}
 .near-item b,.near-item .near-copy span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .near-item span{font-size:12px;color:#6b7286}
+
+/* Leader pick: a thin gold ring and three rim sparkles. The face stays open. */
+.rt .st.gold-pick .av{
+  box-shadow:0 0 0 2px #fff6d0,0 0 0 4px #e2b23a,0 0 12px 2px rgba(226,178,58,.78);
+  animation:goldhalo 1.6s ease-in-out infinite;
+}
+.rt .st.gold-pick .av-wrap::before{
+  content:"";
+  position:absolute;
+  inset:-5px;
+  border-radius:50%;
+  pointer-events:none;
+  z-index:0;
+  background:conic-gradient(from 20deg,rgba(255,236,170,0) 0deg,rgba(255,250,230,.98) 16deg,rgba(226,178,58,0) 42deg,rgba(255,236,170,0) 130deg,rgba(255,252,240,1) 156deg,rgba(226,178,58,0) 188deg,rgba(255,236,170,0) 250deg,rgba(255,248,220,.95) 286deg,rgba(226,178,58,0) 322deg);
+  -webkit-mask:radial-gradient(circle,transparent 60%,#000 68%,#000 82%,transparent 92%);
+  mask:radial-gradient(circle,transparent 60%,#000 68%,#000 82%,transparent 92%);
+  animation:goldspin 2.8s linear infinite;
+}
+.rt .st.gold-pick .gspark{
+  position:absolute;
+  width:7px;height:7px;
+  margin:-3.5px 0 0 -3.5px;
+  pointer-events:none;
+  z-index:5;
+  background:#fffef8;
+  clip-path:polygon(50% 0,63% 37%,100% 50%,63% 63%,50% 100%,37% 63%,0 50%,37% 37%);
+  filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 3px rgba(226,178,58,.95));
+  animation:goldglint 1.5s ease-in-out infinite;
+}
+.rt .st.gold-pick .gspark.a{left:calc(50% - var(--av, 58px) * 0.7);top:calc(var(--av, 58px) * 0.58)}
+.rt .st.gold-pick .gspark.b{left:calc(50% + var(--av, 58px) * 0.7);top:calc(var(--av, 58px) * 0.7);animation-delay:.45s}
+.rt .st.gold-pick .gspark.c{left:calc(50% - var(--av, 58px) * 0.62);top:calc(var(--av, 58px) * 0.84);animation-delay:.9s}
+@keyframes goldhalo{
+  0%,100%{box-shadow:0 0 0 2px #fff6d0,0 0 0 4px #e2b23a,0 0 10px 1px rgba(226,178,58,.55)}
+  50%{box-shadow:0 0 0 2px #fff,0 0 0 5px #f0c14a,0 0 16px 3px rgba(246,208,92,.92)}
+}
+@keyframes goldspin{to{transform:rotate(1turn)}}
+@keyframes goldglint{0%,100%{opacity:.4;transform:scale(.72)}50%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion: reduce){
+  .rt .st.gold-pick .av{animation:none;box-shadow:0 0 0 2px #fff6d0,0 0 0 4px #e2b23a,0 0 12px 2px rgba(226,178,58,.85)}
+  .rt .st.gold-pick .av-wrap::before{animation:none;background:#f0c14a}
+  .rt .st.gold-pick .gspark{animation:none;opacity:.95;transform:none}
+}
+
+/* Team-approval vote keeps the light name chips and adds the seat number beside the name. */
+.vote-team{display:flex;flex-wrap:wrap;align-items:center;margin:2px 0 4px}
+.vote-team .chip{white-space:nowrap}
+.vote-team .seatno{font-weight:800}

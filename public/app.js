@@ -100,6 +100,8 @@ const LS = window.localStorage;
 let pid = LS.getItem('cc.pid') || LS.getItem('avalon.pid');
 if (!pid) pid = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2))).replace(/-/g, '');
 LS.setItem('cc.pid', pid);
+if (!LS.getItem('cc.guest')) LS.setItem('cc.guest', pid);
+const guestKey = () => LS.getItem('cc.guest') || LS.getItem('cc.pid') || pid;
 let token = LS.getItem('cc.token') || '';
 let account = null; // {username, guest}
 function migrateAvatar(a) { if (!a) return 'fox'; if (EMOJI_MAP[a]) return EMOJI_MAP[a]; if (a === 'photo' || ANIMALS.some(([k]) => k === a) || String(a).startsWith('data:')) return a; return 'fox'; }
@@ -135,7 +137,7 @@ async function ensureSession0() {
   try {
     if (token) { const r = await api('/api/me'); applyUser(r.user, r.stats); return r.user; }
   } catch (e) { token = ''; LS.removeItem('cc.token'); }
-  const r = await api('/api/auth/guest', { method: 'POST', body: JSON.stringify({ guestKey: LS.getItem('cc.pid'), profile }) });
+  const r = await api('/api/auth/guest', { method: 'POST', body: JSON.stringify({ guestKey: guestKey(), profile }) });
   token = r.token; LS.setItem('cc.token', token); applyUser(r.user, r.stats); return r.user;
 }
 
@@ -162,7 +164,7 @@ const helloProfile = () => ({ name: profile.name, avatar: profile.avatar, bg: pr
 socket.on('connect', () => {
   $('#conn').classList.add('on');
   ensureSession().then(() => {
-    socket.emit('hello', { token, guestKey: LS.getItem('cc.pid'), ...helloProfile() }, (r) => {
+    socket.emit('hello', { token, guestKey: guestKey(), ...helloProfile() }, (r) => {
       if (r && r.user) applyUser(r.user);
       if (!r || !r.room) { S = null; if (view === 'room') go('home'); }
       if (pendingJoin) { const c = pendingJoin; pendingJoin = null; ensureName(() => joinRoom(c)); }
@@ -362,6 +364,56 @@ function openAbortConfirm() {
       const r = await act('abort');
       closeModal();
       if (r && r.ok) toast('本局已結束，不計入記錄');
+    };
+    trapSheetKeys(el, dismiss);
+    if (cancel.focus) cancel.focus();
+  });
+}
+function openReleaseList() {
+  if (!S || !S.isHost) return;
+  const live = !!(S.game && S.game.phase !== 'end');
+  const people = ((live ? S.game.seats : S.seats) || []).filter(p => p && !p.empty && !p.claimable && p.id);
+  if (!people.length) return toast('沒有可釋出的座位');
+  openModal(`<div class="actconf release" role="dialog" aria-modal="true" aria-labelledby="rel-list-title">
+    <h2 id="rel-list-title">釋出座位</h2>
+    <p class="actconf-note">選擇一個座位。不會公開身份。</p>
+    <div class="pick">${people.map(p => `<button type="button" class="pick-i" data-id="${p.id}">${av(p, 40)}<div><b>${esc(p.name)}</b><div class="tiny muted">${p.seat || ''}號座${p.online === false ? ' · 離線' : ''}</div></div></button>`).join('')}</div>
+    <button type="button" class="btn ghost" id="rel-list-x">取消</button>
+  </div>`, (el) => {
+    el.querySelectorAll('.pick-i').forEach(b => b.onclick = (e) => { e.preventDefault(); const id = b.dataset.id; closeModal(); openReleaseConfirm(id); });
+    $('#rel-list-x', el).onclick = (e) => { e.preventDefault(); closeModal(); };
+  });
+}
+function openReleaseConfirm(id) {
+  if (!S || !S.isHost || !id) return;
+  const pool = (S.game && S.game.phase !== 'end' ? S.game.seats : S.seats) || [];
+  const p = pool.find(x => x && !x.empty && x.id === id) || (S.seats || []).find(x => x && !x.empty && x.id === id);
+  if (!p) return;
+  const self = id === S.meId;
+  const live = !!(S.game && S.game.phase !== 'end');
+  const note = self
+    ? '釋出後你會離開這個座位。若還有其他已就座玩家，房主會交給下一位。'
+    : (live
+      ? '這位玩家會離開座位，但本局身份與進度留在座位上，其他人可以接手。確認畫面不會公開身份。'
+      : '釋出後這個座位會空出來。對方仍留在房間，可以再坐其他空位。');
+  const ask = { busy: false };
+  openModal(`<div class="actconf release" id="actconf" role="dialog" aria-modal="true" aria-labelledby="rel-title">
+    <h2 id="rel-title">釋出座位？</h2>
+    <div class="actconf-who">${av(p, 72)}<div class="actconf-meta"><b>${esc(p.name)}</b><span>${p.seat || ''}號</span></div></div>
+    <p class="actconf-note">${note}</p>
+    <div class="actconf-btns"><button type="button" class="btn ghost" id="rel-cancel">取消</button><button type="button" class="btn" id="rel-ok">釋出座位</button></div>
+  </div>`, (el) => {
+    const cancel = $('#rel-cancel', el);
+    const ok = $('#rel-ok', el);
+    const dismiss = () => { if (ask.busy) return; closeModal(); };
+    cancel.onclick = (e) => { e.preventDefault(); dismiss(); };
+    ok.onclick = async (e) => {
+      e.preventDefault();
+      if (ask.busy || ok.disabled) return;
+      if (!S || !S.isHost) { closeModal(); return; }
+      ask.busy = true; ok.disabled = true; cancel.disabled = true; modalLock = true;
+      await act('release', { id });
+      closeModal();
     };
     trapSheetKeys(el, dismiss);
     if (cancel.focus) cancel.focus();
@@ -965,9 +1017,9 @@ function authDialog(mode) {
     $('#ok', el).onclick = async () => {
       try {
         await ensureSession();
-        const r = await api(mode==='login'?'/api/auth/login':'/api/auth/register', { method:'POST', body: JSON.stringify({ username: $('#un',el).value, password: $('#pw',el).value, guestKey: LS.getItem('cc.pid') }) });
+        const r = await api(mode==='login'?'/api/auth/login':'/api/auth/register', { method:'POST', body: JSON.stringify({ username: $('#un',el).value, password: $('#pw',el).value, guestKey: guestKey() }) });
         token = r.token; LS.setItem('cc.token', token); applyUser(r.user, r.stats);
-        socket.emit('hello', { token, guestKey: LS.getItem('cc.pid'), ...profile }, () => {});
+        socket.emit('hello', { token, guestKey: guestKey(), ...profile }, () => {});
         closeModal(); render(); toast(mode==='login'?'歡迎回來':'帳號已建立，資料會永久保存');
       } catch (e) { toast(e.message); }
     };
@@ -983,7 +1035,7 @@ async function googleLogin() {
     if (r.url) location.href = r.url;
   } catch (e) { toast(e.message || 'Google 登入失敗'); }
 }
-async function doLogout() { try { await api('/api/auth/logout', { method:'POST' }); } catch(e){} token=''; LS.removeItem('cc.token'); account=null; await ensureSession(); socket.emit('hello', { token, guestKey: LS.getItem('cc.pid'), ...helloProfile() }, ()=>{}); render(); toast('已登出，現為訪客'); }
+async function doLogout() { try { await api('/api/auth/logout', { method:'POST' }); } catch(e){} token=''; LS.removeItem('cc.token'); account=null; await ensureSession(); socket.emit('hello', { token, guestKey: guestKey(), ...helloProfile() }, ()=>{}); render(); toast('已登出，現為訪客'); }
 
 // ================= components =================
 function roomHead() {
@@ -1122,6 +1174,9 @@ function roundTable(seats, o = {}) {
     const pos = `left:${x}%;top:${y}%;--av:${avSize}px`;
     if (!s || s.empty) {
       return `<div class="st empty click" style="${pos}" data-a="sit" data-seat="${seatNo}"><div class="av-empty">+</div><div class="nm">空位</div></div>`;
+    }
+    if (s.claimable) {
+      return `<div class="st claim click" style="${pos}" data-sid="${s.id}" data-id="${s.id}" data-seat="${seatNo}" data-a="sit"><div class="av-empty">+</div><div class="nm">${esc(s.name || '可接手')}</div><div class="st-pills"><span class="claimpill">可接手</span></div></div>`;
     }
     const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '') + (enterIds.has(s.id) ? ` enter fx-${s.fx || 'spot'}` : '');
     const action = o.action || 'sel';
@@ -1702,6 +1757,7 @@ function lobbyHtml() {
       cls: p => (p.isHost || p.id === S.hostId ? 'host' : ''),
       sub: p => (p.isHost || p.id === S.hostId ? '<span class="hostpill">房主</span>' : '') + (p.id === S.meId ? '<span class="mepill">我</span>' : ''),
       center: `<div class="seatcount"><b>${x}<small>/${n}</small></b><span>已就座</span></div>` })}
+    ${host ? '<button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button>' : ''}
     </div>
   <div class="card cfgcard" data-a="cfg">
     <div class="row between"><h3 style="margin:0">${n} 人局</h3><span class="small gold">${host ? '調整 ›' : '查看 ›'}</span></div>
@@ -1795,7 +1851,7 @@ function gameHtml() {
     center,
   });
   return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : ''}${!me ? '<div class="specbar">👁 觀戰中</div>' : ''}<div class="card">${trackHtml(g)}</div>
-  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:22px 10px 16px">${table}${ended ? '' : markLegend()}</div>
+  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:22px 10px 16px">${table}${ended ? '' : markLegend()}${S.isHost && !ended ? '<button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button>' : ''}</div>
   <div class="card thist" id="teamhist">${teamHistoryHtml(g)}</div>
   ${ladyChainHtml(g.ladyLog, g.seats) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats)}</div>` : ''}
   ${panel ? `<div class="card${pickLive ? ' pick-ready' : ''}">${panel}</div>` : ''}
@@ -2467,6 +2523,8 @@ document.addEventListener('click', async (e) => {
       if (k === 'mic' && !next && window.AvalonVoice) AvalonVoice.roomOff();
       return act('settings', { [k]: next });
     }
+    case 'releaselist': return openReleaseList();
+    case 'release': return openReleaseConfirm(el.dataset.id);
     case 'kick': if (confirm('移除這位玩家？')) act('kick', { id: el.dataset.id }); return;
     case 'swap': { const id = el.dataset.id; if (selected.has(id)) selected.delete(id); else selected.add(id);
       if (selected.size === 2) { const [x, y] = [...selected]; selected = new Set(); await act('swap', { a: x, b: y }); } return render(); }
@@ -2507,7 +2565,7 @@ document.addEventListener('click', async (e) => {
       const id = el.dataset.id;
       if (id === S.meId) {
         return openModal(`<h2>我的座位</h2><div class="center">${av(people().find(p=>p.id===id)||profile,56)}<div class="name">${esc(profile.name)}</div></div><button class="btn ghost" data-x="stand">離座</button><button class="btn" id="ok">關閉</button>`, el2 => {
-          el2.querySelector('[data-x=stand]').onclick = () => { closeModal(); act('stand', {}); };
+          el2.querySelector('[data-x=stand]').onclick = () => { closeModal(); if (S && S.isHost) openReleaseConfirm(id); else act('stand', {}); };
           $('#ok', el2).onclick = closeModal;
         });
       }
@@ -2516,7 +2574,7 @@ document.addEventListener('click', async (e) => {
         ${S.isHost?`<div class="btns"><button class="btn ghost" data-x="stand">請他離座</button><button class="btn ghost" data-x="tr">轉讓房主</button></div><button class="btn dark" data-x="kick" style="color:#ff8b9c">移出房間</button>`:''}
         <button class="btn" id="ok">關閉</button>`, el2 => {
           const bind = (sel, fn) => { const b=el2.querySelector(sel); if (b) b.onclick = fn; };
-          bind('[data-x=stand]', () => { closeModal(); act('stand', { id }); });
+          bind('[data-x=stand]', () => { closeModal(); openReleaseConfirm(id); });
           bind('[data-x=tr]', () => { if (confirm('把房主轉讓給 '+p.name+'？')) { closeModal(); act('transfer', { id }); } });
           bind('[data-x=kick]', () => { if (confirm('移出 '+p.name+'？')) { closeModal(); act('kick', { id }); } });
           $('#ok', el2).onclick = closeModal;

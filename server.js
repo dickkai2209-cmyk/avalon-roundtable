@@ -332,9 +332,28 @@ async function act(room, pid, type, data) {
       return null;
     }
     case 'sit': {
-      if (g && g.phase !== 'end') return '遊戲進行中';
       const i = (data.seat | 0) - 1;
       if (i < 0 || i >= room.capacity) return '無效座位';
+      // Mid-game the only open seat is one the host released. The sitter inherits
+      // that seat's role and in-game state; the public id stays so votes still match.
+      if (g && g.phase !== 'end') {
+        const gs = g.seats[i];
+        if (!gs || !gs.claimable || gs.pid) return '遊戲進行中';
+        if (isSeatedPid(room, pid)) return '你已經就座';
+        const holder = [...io.sockets.sockets.values()].find(s => s.data.pid === pid);
+        const d = holder ? holder.data : {};
+        gs.pid = pid;
+        gs.claimable = false;
+        if (d.name) gs.name = d.name;
+        if (d.avatar) gs.avatar = d.avatar;
+        if (d.bg) gs.bg = d.bg;
+        if (d.fx) gs.fx = d.fx;
+        if (d.pendant) gs.pendant = d.pendant;
+        if (d.pv) gs.pv = d.pv;
+        room.seats[i] = { pid, id: gs.id, name: gs.name, avatar: gs.avatar, bg: gs.bg, fx: gs.fx, pendant: gs.pendant || 'none', pv: gs.pv || 0, ready: false, seat: i + 1 };
+        if (room.watchers) delete room.watchers[pid];
+        return null;
+      }
       if (room.seats[i] && room.seats[i].pid !== pid) return '這個座位已經有人';
       const cur = findSeat(room, pid);
       const sock = [...io.sockets.sockets.values()].find(s => s.data.pid === pid);
@@ -349,7 +368,33 @@ async function act(room, pid, type, data) {
       const target = data.id ? room.seats.find(p => p && p.id === data.id) : findPlayer(room, pid);
       if (!target) return '該玩家未就座';
       if (target.pid !== pid && !isHost) return '只有房主可以請人離座';
+      const wasHost = target.pid === room.hostPid;
       standUp(room, target.pid);
+      if (wasHost) pickNextHost(room, target.pid);
+      return null;
+    }
+    case 'release': {
+      if (!isHost) return '只有房主可以釋出座位';
+      const id = String((data && data.id) || '');
+      if (g && g.phase !== 'end') {
+        const gi = g.seats.findIndex(s => s && s.id === id);
+        if (gi < 0) return '該玩家未就座';
+        const gs = g.seats[gi];
+        if (!gs.pid) return gs.claimable ? null : '該玩家未就座';
+        const old = gs.pid;
+        const wasHost = old === room.hostPid;
+        standUp(room, old);
+        gs.pid = null;
+        gs.claimable = true;
+        if (room.watchers) delete room.watchers[old];
+        if (wasHost) pickNextHost(room, old);
+        return null;
+      }
+      const target = room.seats.find(p => p && p.id === id);
+      if (!target) return '該玩家未就座';
+      const wasHost = target.pid === room.hostPid;
+      standUp(room, target.pid);
+      if (wasHost) pickNextHost(room, target.pid);
       return null;
     }
     case 'ready': {
@@ -624,11 +669,12 @@ async function finishQuest(room) {
 
 function viewFor(room, pid) {
   const meSeated = findPlayer(room, pid);
+  const held = room.game && room.game.seats.find(s => s.pid === pid);
   const specs = spectatorList(room);
   const preset = presetRoles(room.capacity, room.settings);
   const readyN = seated(room).filter(p => p.ready || p.pid === room.hostPid).length;
   const v = {
-    code: room.code, hostId: pubId(room.hostPid), meId: pubId(pid), isHost: room.hostPid === pid,
+    code: room.code, hostId: pubId(room.hostPid), meId: held ? held.id : pubId(pid), isHost: room.hostPid === pid,
     settings: room.settings, lastEvent: room.lastEvent ? (({ swordPrivate, ...rest }) => rest)(room.lastEvent) : null,
     capacity: room.capacity, seated: seated(room).length, readyCount: readyN,
     mySeat: meSeated ? findSeat(room, pid) + 1 : null, myVetoCards: vetoCache.has(pid) ? vetoCache.get(pid) : null,
@@ -655,6 +701,7 @@ function viewFor(room, pid) {
         id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, fx: s.fx, pendant: s.pendant,
         photoUrl: s.avatar === 'photo' ? `/api/avatar/${s.id}?v=${s.pv || 0}` : `/img/av/${s.avatar || 'fox'}.webp`,
         online: playerOnline(room, s.pid),
+        claimable: s.claimable ? true : undefined,
         role: ended ? s.role : undefined,
         side: ended ? currentSide(s.role, g.lanceSwitched) : undefined,
         evil: (revealEvil && currentSide(s.role, g.lanceSwitched) === 'evil' && s.role !== 'oberon') ? true : undefined,
@@ -816,7 +863,8 @@ app.post('/api/auth/guest', async (req, res) => {
     const guestKey = String(req.body.guestKey || '');
     if (guestKey.length < 8 || guestKey.length > 80) return res.status(400).json({ error: '無效身份' });
     const profile = req.body.profile || {};
-    const u = await db.createGuest({
+    const known = await userByKey(guestKey);
+    const u = known || await db.createGuest({
       guestKey, name: cleanName(profile.name), avatar: cleanAvatar(profile.avatar),
       bg: cleanBg(profile.bg), fx: cleanFx(profile.fx), pendant: cleanPendant(profile.pendant), skins: profile.skins || {},
     });
@@ -952,9 +1000,15 @@ app.get('/auth/google/callback', async (req, res) => {
 app.get('/g/:gid', (req, res) => res.redirect('/?game=' + encodeURIComponent(req.params.gid)));
 app.get(['/r/:code', '/room/:code'], (req, res) => res.redirect('/?room=' + encodeURIComponent(req.params.code.toUpperCase())));
 
+async function userByKey(guestKey) {
+  const key = String(guestKey || '');
+  if (key.length < 8 || key.length > 80) return null;
+  return await db.getUserByGuestKey(key) || await db.getUser(key);
+}
 async function bindSocketUser(socket, token, guestKey, profile) {
   let u = token ? await db.getUserByToken(token) : null;
-  if (!u && guestKey) u = await db.getUserByGuestKey(guestKey) || await db.createGuest({ guestKey, name: cleanName(profile && profile.name), avatar: cleanAvatar(profile && profile.avatar), bg: cleanBg(profile && profile.bg), fx: cleanFx(profile && profile.fx), pendant: cleanPendant(profile && profile.pendant) });
+  if (!u && guestKey) u = await userByKey(guestKey);
+  if (!u && guestKey) u = await db.createGuest({ guestKey, name: cleanName(profile && profile.name), avatar: cleanAvatar(profile && profile.avatar), bg: cleanBg(profile && profile.bg), fx: cleanFx(profile && profile.fx), pendant: cleanPendant(profile && profile.pendant) });
   if (!u) return null;
   socket.data.pid = u.id;
   vetoCache.set(u.id, db.isGM(u) ? 999 : (u.veto_cards == null ? 1 : u.veto_cards));
@@ -1245,10 +1299,11 @@ io.on('connection', (socket) => {
     if (!u) return cb({ error: '請先登入或建立訪客' });
     const pid = u.id;
     const code = pidRoom.get(pid); const room = code && rooms.get(code);
-    if (room && room.members.has(pid)) {
+    if (room && (room.members.has(pid) || isSeatedPid(room, pid))) {
+      room.members.add(pid);
       const p = findPlayer(room, pid);
       if (p && (!room.game || room.game.phase === 'end')) applyProfile(p, socket.data);
-      if (!p) rememberWatcher(room, socket);
+      if (!isSeatedPid(room, pid)) rememberWatcher(room, socket);
       socket.join(code); socket.data.room = code; markOnline(room, pid); broadcast(room);
       return cb({ room: code, user: db.pubUser(u) });
     }
@@ -1284,7 +1339,7 @@ io.on('connection', (socket) => {
       return cb({ error: '你正在另一局遊戲中' });
     if (cur !== room) leaveCurrent(socket, pid, true);
     room.members.add(pid); pidRoom.set(pid, code);
-    rememberWatcher(room, socket);
+    if (!isSeatedPid(room, pid)) rememberWatcher(room, socket);
     socket.join(code); socket.data.room = code; markOnline(room, pid); broadcast(room);
     cb({ room: code, spectating: !isSeatedPid(room, pid) });
   });

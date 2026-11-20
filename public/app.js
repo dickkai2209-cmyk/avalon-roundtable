@@ -419,6 +419,36 @@ function openReleaseConfirm(id) {
     if (cancel.focus) cancel.focus();
   });
 }
+function openSeizeConfirm() {
+  if (!S || !S.code || S.isHost || !isGM()) return;
+  const host = (S.seats || []).find(p => p && !p.empty && (p.isHost || p.id === S.hostId))
+    || ((S.game && S.game.seats) || []).find(p => p && p.id === S.hostId);
+  const ask = { busy: false };
+  const who = host ? `<div class="actconf-who">${av(host, 72)}<div class="actconf-meta"><b>${esc(host.name)}</b><span>${host.seat ? host.seat + '號 · 現任房主' : '現任房主'}</span></div></div>` : '';
+  openModal(`<div class="actconf release" id="actconf" role="dialog" aria-modal="true" aria-labelledby="seize-title">
+    <h2 id="seize-title">搶房主？</h2>
+    ${who}
+    <p class="actconf-note">你會成為房主，原本的房主會失去開始、結束同房間設定等權限。座位、身份同對局不會改變。</p>
+    <div class="actconf-btns"><button type="button" class="btn ghost" id="seize-cancel">取消</button><button type="button" class="btn" id="seize-ok">搶房主</button></div>
+  </div>`, (el) => {
+    const cancel = $('#seize-cancel', el);
+    const ok = $('#seize-ok', el);
+    const dismiss = () => { if (ask.busy) return; closeModal(); };
+    cancel.onclick = (e) => { e.preventDefault(); dismiss(); };
+    ok.onclick = async (e) => {
+      e.preventDefault();
+      if (ask.busy || ok.disabled) return;
+      if (!S || !S.code || S.isHost || !isGM()) { closeModal(); return; }
+      ask.busy = true; ok.disabled = true; cancel.disabled = true; modalLock = true;
+      const r = await act('seize', {});
+      closeModal();
+      if (r && r.error) toast(r.error);
+      else if (r && r.ok) toast('你現在是房主');
+    };
+    trapSheetKeys(el, dismiss);
+    if (cancel.focus) cancel.focus();
+  });
+}
 function openRoomMenu() {
   if (!S || !S.code) return;
   const live = !!(S.game && S.game.phase !== 'end');
@@ -430,6 +460,7 @@ function openRoomMenu() {
     <h2 id="room-menu-title">房間選單</h2><div class="mlist">
     ${row('rules', '📖', '查看規則', '遊戲流程、角色能力、擴展玩法')}
     ${row('ref', '🔄', '刷新房間', '畫面唔同步或卡住時，重新連線並向伺服器攞最新狀態')}
+    ${isGM() && !S.isHost ? row('seize', '👑', '搶房主', '接手房主權限，座位同對局保持不變') : ''}
     ${inGame ? row('qr', '▣', '房間二維碼', '出示房間號同二維碼，朋友掃碼入房') : ''}
     ${inGame ? row('home', '‹', '返回主頁', '回到主頁，座位同房間仍然保留') : ''}
     ${S.isHost ? row('tr', '👑', '轉讓房主', '交俾另一位玩家，之後你可以離開') : ''}
@@ -440,6 +471,7 @@ function openRoomMenu() {
     const bind = (sel, fn) => { const b = el.querySelector(sel); if (b) b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); fn(); }; };
     bind('[data-x=rules]', () => { closeModal(); go('rules'); });
     bind('[data-x=ref]', () => { closeModal(); refreshRoom(); });
+    bind('[data-x=seize]', () => openSeizeConfirm());
     bind('[data-x=qr]', () => { closeModal(); inviteDialog(); });
     bind('[data-x=home]', () => { closeModal(); go('home'); });
     bind('[data-x=abort]', () => openAbortConfirm());

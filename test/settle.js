@@ -178,12 +178,18 @@ function bot(key, name) {
       const rows = [...document.querySelectorAll('.settle-page .settle-row')];
       const boxes = rows.map(r => {
         const b = r.getBoundingClientRect();
-        return { rank: r.dataset.rank, top: Math.round(b.top), bottom: Math.round(b.bottom), h: Math.round(b.height), role: (r.querySelector('.who em') || {}).textContent || '', pts: (r.querySelector('.pts') || {}).textContent || '' };
+        const name = r.querySelector('.who b');
+        const roleEl = r.querySelector('.who em');
+        const gap = name && roleEl ? roleEl.getBoundingClientRect().top - name.getBoundingClientRect().bottom : 0;
+        return { rank: r.dataset.rank, top: Math.round(b.top), bottom: Math.round(b.bottom), h: Math.round(b.height), role: (roleEl || {}).textContent || '', pts: (r.querySelector('.pts') || {}).textContent || '', nameGap: Math.round(gap * 10) / 10 };
       });
       const last = boxes[boxes.length - 1];
       const hero = document.querySelector('.endsum-hero').getBoundingClientRect();
       const me = document.querySelector('.endsum-me');
       const mvp = document.querySelector('.endsum-mvp');
+      const meName = me && me.querySelector('.mid b');
+      const meRole = me && me.querySelector('.mid span');
+      const meGap = meName && meRole ? meRole.getBoundingClientRect().top - meName.getBoundingClientRect().bottom : 0;
       const visible = boxes.length === ${expectN} && hero.top >= barB - 2 && !!last && last.bottom <= limit + 1 && boxes.every(b => b.top >= barB - 1 && b.h > 0 && b.bottom <= limit + 1 && b.role && b.pts);
       return {
         visible, n: boxes.length,
@@ -191,6 +197,7 @@ function bot(key, name) {
         ih: window.innerHeight, bar: Math.round(barB), limit: Math.round(limit),
         heroTop: Math.round(hero.top), heroH: Math.round(hero.height),
         meH: me ? Math.round(me.getBoundingClientRect().height) : 0,
+        meGap: Math.round(meGap * 10) / 10,
         mvpH: mvp ? Math.round(mvp.getBoundingClientRect().height) : 0,
         rows: boxes, lastBottom: last ? last.bottom : null,
         hasMe: !!me, hasMvp: !!mvp,
@@ -204,6 +211,8 @@ function bot(key, name) {
     assert(fit.sw <= fit.cw + 1, label + ' does not overflow');
     assert(fit.bar >= safe.top + 52 - 2, label + ' keeps the top safe area ' + JSON.stringify({ bar: fit.bar, safe }));
     assert(fit.hasMe && fit.hasMvp && fit.heroH >= 70, label + ' keeps the victory header, personal card and MVP row');
+    assert(fit.rows.every(b => b.nameGap >= 1.5), label + ' keeps a gap between the name and role ' + JSON.stringify(fit.rows.map(b => b.nameGap)));
+    assert(fit.meGap >= 1.5, label + ' keeps a gap on the personal score card ' + fit.meGap);
   }
 
   try {
@@ -229,6 +238,7 @@ function bot(key, name) {
         reason: box.querySelector('.settle-head p').textContent,
         you: box.querySelector('.settle-you').textContent,
         mvp: box.querySelector('.settle-mvp') ? box.querySelector('.settle-mvp').innerText.replace(/\\s+/g,' ') : '',
+        mvpGap: (() => { const mid = box.querySelector('.settle-mvp .mv-mid'); if (!mid) return 0; const name = mid.querySelector('b').getBoundingClientRect(); const role = mid.querySelector('span').getBoundingClientRect(); return Math.round((role.top - name.bottom) * 10) / 10; })(),
         me: box.querySelectorAll('.me').length,
         ranks: breaks.map(x => x.rank).join(','),
         rows: breaks,
@@ -250,6 +260,7 @@ function bot(key, name) {
     assert(!mismatch, 'every breakdown is the server score and adds up ' + (mismatch ? JSON.stringify({ mismatch, server: serverScores[mismatch.id] }) : ''));
     assert(info.me === 1, 'only the viewer has 我');
     assert(info.mvp.includes('MVP') && info.mvp.includes(gme().seats.find(s => s.id === gme().mvp).name), 'MVP summary names the server MVP');
+    assert(info.mvpGap >= 1.5, 'sheet MVP name and role have a gap ' + info.mvpGap);
     assert(info.title === '紅方勝利' && info.cls.includes('evil') && /刺中梅林/.test(info.reason), 'header is the winning side and the real reason (' + info.title + ' / ' + info.reason + ')');
     assert(/\d+號/.test(info.you) && /勝利|落敗/.test(info.you), 'viewer line has seat, role and result (' + info.you + ')');
     assert(info.cards === 0, 'settlement does not show quest cards');

@@ -1283,6 +1283,8 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .endsum-mvp > b{flex:none;font-size:13px;line-height:1.2;color:#6b7286;font-weight:700}
 .modal:has(.actconf){z-index:80 !important;background:rgba(16,20,32,.62)}
 .sheet:has(.actconf){animation:none;opacity:1;background:#fff;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+.release-open{margin-top:10px}
+.rt .st.claim .claimpill{display:inline-block;margin-top:2px;font-size:10px;line-height:14px;padding:0 6px;border-radius:7px;background:#eef3ff;color:#2f6be0;font-weight:800}
 .toast{z-index:90}
 .voicebar{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e3e6ef;border-radius:14px;padding:8px 10px;margin:8px 0}
 .listen-btn{border:0;background:#1d2333;color:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:800;cursor:pointer}

@@ -57,8 +57,9 @@ function bot(key, name) {
   const people = [];
   for (let i = 0; i < 5; i++) {
     const guestKey = 'gl' + i + Date.now().toString(36);
-    const j = await fetch(APP + 'api/auth/guest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guestKey, profile: { name: names[i], avatar: 'fox', bg: '#fff', fx: 'spot', pendant: 'none' } }) }).then(r => r.json());
-    people.push({ ...j, guestKey, name: names[i] });
+    const pendant = i === 2 ? 'bow' : 'none';
+    const j = await fetch(APP + 'api/auth/guest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guestKey, profile: { name: names[i], avatar: 'fox', bg: '#fff', fx: 'spot', pendant } }) }).then(r => r.json());
+    people.push({ ...j, guestKey, name: names[i], pendant });
   }
   const watchKey = 'glw' + Date.now().toString(36);
   const watcher = await fetch(APP + 'api/auth/guest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guestKey: watchKey, profile: { name: '觀戰', avatar: 'cat', bg: '#fff', fx: 'spot', pendant: 'none' } }) }).then(r => r.json());
@@ -74,8 +75,7 @@ function bot(key, name) {
     if (!(await bots[i].act('sit', { seat: i + 1 })).ok) throw new Error('sit');
   }
   await spec.emit('join', { code });
-  if (!(await bots[0].act('start')).ok) throw new Error('start');
-  for (let i = 0; i < 40 && !(bots[0].st.game && bots[0].st.game.me); i++) await sleep(40);
+  const crowd = bots.concat(spec);
 
   chrome = spawn('google-chrome', ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=' + CDP, '--user-data-dir=/tmp/chrome-layout-' + Date.now(), '--window-size=420,900', APP], { stdio: 'ignore' });
   let tab;
@@ -151,11 +151,97 @@ function bot(key, name) {
     assert(m.rect.l > m.iw / 2 && m.rect.r <= m.iw - 8, tag + ' identity button stays in the bottom right');
     assert(m.rect.t >= 0 && m.rect.b <= m.ih - safeBottom + 1, tag + ' identity button clears the home indicator (' + m.rect.b.toFixed(0) + '/' + m.ih + ')');
     assert(m.faces === 0, tag + ' identity button does not cover a face');
-    assert(m.mainBottom <= m.rect.t + 1, tag + ' team record stays above the button');
+    assert(m.mainBottom >= m.ih - safeBottom - 1 && m.mainBottom <= m.ih - safeBottom + 2, tag + ' scrollport ends at the home indicator (' + m.mainBottom.toFixed(0) + '/' + m.ih + ')');
+    assert(m.mainBottom > m.rect.t + 8, tag + ' scrollport is not cut off above the identity chip');
     assert(m.inset + 0.5 >= safeBottom, tag + ' safe-area inset is applied (' + m.inset + ')');
   }
+  const overlap = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b - 0.5 && a.b > b.t + 0.5;
+  const inside = (a, b, pad = 1) => a.t >= b.t - pad && a.b <= b.b + pad && a.l >= b.l - pad && a.r <= b.r + pad;
+  async function ringGeom(withVeto) {
+    await evalj(`(() => { const m = document.querySelector('main'); if (m) m.scrollTop = 0; window.scrollTo(0, 0); })()`);
+    return evalj(`(() => {
+      const box = (el) => { const r = el.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; };
+      const main = document.querySelector('main');
+      const rt = document.querySelector('.rt');
+      const card = rt.closest('.card');
+      let veto = document.querySelector('.veto-fab');
+      let injected = false;
+      if (${withVeto ? 'true' : 'false'} && !veto) {
+        veto = document.createElement('button');
+        veto.className = 'veto-fab dim';
+        veto.innerHTML = '<img alt="" width="22" height="30"><span>回避卡</span><b>1</b>';
+        document.body.appendChild(veto);
+        injected = true;
+      }
+      const vetoBox = veto ? box(veto) : null;
+      if (injected) veto.remove();
+      const probe = document.createElement('div');
+      probe.style.cssText = 'position:absolute;left:-999px;padding-bottom:env(safe-area-inset-bottom)';
+      document.body.appendChild(probe);
+      const inset = parseFloat(getComputedStyle(probe).paddingBottom) || 0;
+      probe.remove();
+      const seats = [...document.querySelectorAll('.rt .st')].map(s => {
+        const parts = [];
+        s.querySelectorAll('.av,.av-empty,.nm,.pov,.mark.crown,.mark.wreath,.mark.sword,.hostpill,.mepill,.lbl').forEach(el => {
+          const r = el.getBoundingClientRect();
+          if (r.width < 1 || r.height < 1) return;
+          let hit = null;
+          if (el.matches('.av,.av-empty')) {
+            const x = r.left + r.width / 2;
+            const y = r.bottom - Math.min(3, r.height / 3);
+            const node = document.elementFromPoint(x, y);
+            hit = !!(node && s.contains(node));
+          }
+          parts.push({ k: String(el.className).slice(0, 48), l: r.left, t: r.top, r: r.right, b: r.bottom, hit });
+        });
+        const face = s.querySelector('.av') || s.querySelector('.av-empty');
+        const fr = face.getBoundingClientRect();
+        return { seat: s.dataset.seat, name: (s.querySelector('.nm') || {}).textContent || '', cy: fr.top + fr.height / 2, parts };
+      });
+      const fab = document.querySelector('.myrole-fab');
+      const bar = document.querySelector('.bottombar');
+      return {
+        ih: innerHeight, iw: innerWidth, inset, scroll: main.scrollTop,
+        main: box(main), mainPos: getComputedStyle(main).position,
+        card: box(card), rt: box(rt),
+        fab: fab ? box(fab) : null, veto: vetoBox, bar: bar ? box(bar) : null,
+        seats
+      };
+    })()`);
+  }
+  async function assertRing(tag, opts) {
+    const g = await ringGeom(!!opts.chips);
+    const blockers = [g.fab, g.veto, g.bar].filter(Boolean);
+    const clip = opts.bar ? { l: -1, t: -1, r: g.iw + 1, b: g.bar.t } : g.main;
+    assert(g.seats.length === opts.n, tag + ' shows ' + opts.n + ' seats (' + g.seats.length + ')');
+    assert(g.scroll === 0, tag + ' starts at the top of the table');
+    if (opts.chips) {
+      assert(g.mainPos === 'fixed' && g.fab, tag + ' identity chip is on screen');
+      assert(g.main.b >= g.ih - g.inset - 1 && g.main.b <= g.ih - g.inset + 2, tag + ' no white band above the home indicator (' + g.main.b.toFixed(0) + ')');
+      assert(g.veto && g.veto.l < g.iw / 2 && g.fab.l > g.iw / 2, tag + ' chips stay on their corners');
+    }
+    if (opts.bar) assert(g.bar && g.bar.b >= g.ih - 2, tag + ' lobby bar sits on the viewport bottom');
+    let low = null;
+    for (const s of g.seats) {
+      assert(s.parts.some(p => p.k.includes('nm') || p.k === 'nm'), tag + ' seat ' + s.seat + ' has a name');
+      const lowSeat = s.cy > g.rt.t + g.rt.h * 0.62;
+      for (const p of s.parts) {
+        const pendant = String(p.k).includes('pov');
+        if (!pendant || lowSeat) assert(inside(p, g.card, 1.5), tag + ' seat ' + s.seat + ' ' + p.k + ' stays inside the table card (' + p.b.toFixed(1) + '/' + g.card.b.toFixed(1) + ' l' + p.l.toFixed(1) + ' r' + p.r.toFixed(1) + ')');
+        assert(inside(p, clip, 1.5), tag + ' seat ' + s.seat + ' ' + p.k + ' is not clipped (' + p.b.toFixed(1) + '/' + clip.b.toFixed(1) + ')');
+        assert(p.b <= g.ih - g.inset + 1, tag + ' seat ' + s.seat + ' ' + p.k + ' clears the home indicator');
+        for (const b of blockers) assert(!overlap(p, b), tag + ' seat ' + s.seat + ' ' + p.k + ' is not under a chip or bar');
+        if (p.hit === false) assert(false, tag + ' seat ' + s.seat + ' ' + p.k + ' is painted over or clipped');
+        if (!low || p.b > low.b) low = { seat: s.seat, k: p.k, b: p.b };
+      }
+    }
+    const bottom = g.seats.filter(s => s.cy > g.rt.t + g.rt.h * 0.62);
+    assert(bottom.length >= 1, tag + ' has a bottom seat to check');
+    assert(low && low.b < clip.b - 2, tag + ' the lowest mark (' + (low && low.seat) + ' ' + (low && low.k) + ') is fully above the clip (' + (low && low.b.toFixed(1)) + '/' + clip.b.toFixed(1) + ')');
+    if (opts.pendant) assert(g.seats.some(s => s.parts.some(p => String(p.k).includes('pov'))), tag + ' a pendant is on the table');
+  }
   async function asUser(person) {
-    const profile = JSON.stringify({ name: person.name, avatar: person.name === '觀戰' ? 'cat' : 'fox', bg: '#fff', fx: 'spot', pendant: 'none' });
+    const profile = JSON.stringify({ name: person.name, avatar: person.name === '觀戰' ? 'cat' : 'fox', bg: '#fff', fx: 'spot', pendant: person.pendant || 'none' });
     for (let attempt = 0; attempt < 3; attempt++) {
       for (let i = 0; i < 30; i++) { if (await evalj(`!!document.querySelector('[data-a="create"], .rt')`).catch(() => false)) break; await sleep(100); }
       await evalj(`localStorage.setItem('cc.token', ${JSON.stringify(person.token)}); localStorage.setItem('cc.pid', ${JSON.stringify(person.user.id)}); localStorage.setItem('cc.profile', ${JSON.stringify(profile)}); location.replace(${JSON.stringify(APP + '?g=' + Date.now())})`);
@@ -175,6 +261,40 @@ function bot(key, name) {
   const pageText = () => evalj(`document.body.innerText`);
 
   try {
+    async function waitSeats(n) {
+      const ok = await evalj(`new Promise(r => { const t = setInterval(() => { if (document.querySelectorAll('.rt .st').length === ${n}) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 4000); })`);
+      assert(ok, 'table shows ' + n + ' seats');
+    }
+    await setSize(375, 812);
+    await asUser(people[0]);
+    await quiet();
+    await assertRing('lobby 375/5', { n: 5, bar: true, pendant: true });
+    await shot('lobby-seats-5-375.png');
+    await setSize(390, 844);
+    await assertRing('lobby 390/5', { n: 5, bar: true, pendant: true });
+    await shot('lobby-seats-5-390.png');
+    assert((await bots[0].act('capacity', { n: 10 })).ok !== false, 'host can open 10 seats');
+    await waitSeats(10);
+    await setSize(375, 812);
+    await assertRing('lobby 375/10', { n: 10, bar: true });
+    await shot('lobby-seats-10-375.png');
+    await setSize(390, 844);
+    await assertRing('lobby 390/10', { n: 10, bar: true });
+    await shot('lobby-seats-10-390.png');
+    assert((await bots[0].act('capacity', { n: 5 })).ok !== false, 'host returns the room to 5 seats');
+    await waitSeats(5);
+    if (!(await bots[0].act('start')).ok) throw new Error('start');
+    for (let i = 0; i < 40 && !(bots[0].st.game && bots[0].st.game.me); i++) await sleep(40);
+    await setSize(375, 812);
+    await asUser(people[0]);
+    await quiet();
+    await assertRing('game 375/5', { n: 5, chips: true, pendant: true });
+    await shot('midgame-seats-5-375.png');
+    await setSize(390, 844);
+    await assertRing('game 390/5', { n: 5, chips: true, pendant: true });
+    await shot('midgame-seats-5-390.png');
+    await setSize(375, 812);
+
     const leader = bots.find(b => b.st.meId === b.st.game.leaderId);
     const other = bots.find(b => b !== leader);
     await setSize(375, 812);
@@ -230,10 +350,39 @@ function bot(key, name) {
     await sleep(200);
     assert(await evalj(`!document.querySelector('[data-a="role"]') && !document.querySelector('.myrole-fab') && !document.querySelector('#flip')`), 'a spectator cannot open a private role');
     assert((await pageText()).includes('唔會看到隱藏身分'), 'spectators are told the role stays hidden');
+
+    const names10 = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
+    const p10 = [];
+    for (let i = 0; i < 10; i++) {
+      const guestKey = 'g10' + i + Date.now().toString(36);
+      const pendant = i === 5 ? 'bow' : 'none';
+      const j = await fetch(APP + 'api/auth/guest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guestKey, profile: { name: names10[i], avatar: 'fox', bg: '#fff', fx: 'spot', pendant } }) }).then(r => r.json());
+      p10.push({ ...j, guestKey, name: names10[i], pendant });
+    }
+    const b10 = p10.map(p => bot(p.guestKey, p.name));
+    crowd.push(...b10);
+    await Promise.all(b10.map(b => b.ready));
+    const made10 = await b10[0].emit('create', {});
+    for (let i = 0; i < 30 && !(b10[0].st && b10[0].st.code); i++) await sleep(40);
+    await b10[0].act('capacity', { n: 10 });
+    for (let i = 1; i < 10; i++) {
+      await b10[i].emit('join', { code: made10.room });
+      if (!(await b10[i].act('sit', { seat: i + 1 })).ok) throw new Error('sit10 ' + (i + 1));
+    }
+    if (!(await b10[0].act('start')).ok) throw new Error('start10');
+    for (let i = 0; i < 40 && !(b10[0].st.game && b10[0].st.game.me); i++) await sleep(40);
+    await setSize(375, 812);
+    await asUser(p10[0]);
+    await quiet();
+    await assertRing('game 375/10', { n: 10, chips: true, pendant: true });
+    await shot('midgame-seats-10-375.png');
+    await setSize(390, 844);
+    await assertRing('game 390/10', { n: 10, chips: true, pendant: true });
+    await shot('midgame-seats-10-390.png');
     console.log('GAME LAYOUT TESTS PASSED');
   } finally {
     try { ws.close(); } catch {}
     stop();
-    bots.concat(spec).forEach(b => { try { b.s.close(); } catch {} });
+    crowd.forEach(b => { try { b.s.close(); } catch {} });
   }
 })().catch(e => { console.error(e); process.exit(1); });

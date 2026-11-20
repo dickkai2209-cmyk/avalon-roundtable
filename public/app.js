@@ -1853,7 +1853,7 @@ function gameHtml() {
   return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : ''}${!me ? '<div class="specbar">👁 觀戰中</div>' : ''}<div class="card">${trackHtml(g)}</div>
   <div class="card${pickLive ? ' pick-live' : ''}" style="padding:28px 10px 16px">${table}${ended ? '' : markLegend()}${S.isHost && !ended ? '<button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button>' : ''}</div>
   <div class="card thist" id="teamhist">${teamHistoryHtml(g)}</div>
-  ${ladyChainHtml(g.ladyLog, g.seats) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats)}</div>` : ''}
+  ${ladyChainHtml(g.ladyLog, g.seats, ended) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats, ended)}</div>` : ''}
   ${panel ? `<div class="card${pickLive ? ' pick-ready' : ''}">${panel}</div>` : ''}
   ${me ? '' : '<div class="specbar">👁 觀戰中 · 唔會看到隱藏身分</div>'}
   ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : ''}
@@ -1879,9 +1879,17 @@ function floorBar() {
     <div class="floor-acts">${mine && !paused ? `<button type="button" class="btn sm" data-a="floorend" data-token="${f.token}">結束發言</button>` : ''}${S.isHost ? `<button type="button" class="btn ghost sm" data-a="${paused ? 'floorresume' : 'floorpause'}" data-token="${f.token}">${paused ? '繼續' : '暫停'}</button><button type="button" class="btn ghost sm" data-a="floorskip" data-token="${f.token}">跳過</button><button type="button" class="btn ghost sm" data-a="floorrestart">重新開始發言</button>` : ''}</div>
   </div>`;
 }
-function ladyChainHtml(log, seats) {
+function ladyChainHtml(log, seats, reveal) {
   if (!log || !log.length) return '';
-  return `<div class="small" style="margin-top:12px"><span class="gold">🌊 湖中仙女：</span>${log.map(l => `${esc(P(l.holder, seats).name)} → ${esc(P(l.target, seats).name)}${l.side ? ` <span class="badge ${l.side}">${l.side === 'good' ? '好' : '壞'}</span>` : ''}`).join('　')}</div>`;
+  // The public row never shows 好/壞 while the game is still going, even on the
+  // inspector's own screen. They reopen that result from the private card.
+  // reveal is only the finished game, when roles are already public.
+  const bits = log.map(l => {
+    const pass = `${esc(P(l.holder, seats).name)} → ${esc(P(l.target, seats).name)}`;
+    if (reveal && l.side) return `${pass} <span class="badge ${l.side}">${l.side === 'good' ? '好' : '壞'}</span>`;
+    return pass;
+  });
+  return `<div class="small lady-chain" style="margin-top:12px"><span class="gold">🌊 湖中仙女：</span>${bits.join('　')}</div>`;
 }
 
 function reviewOf(r) {

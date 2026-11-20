@@ -711,7 +711,14 @@ function viewFor(room, pid) {
       quests: g.quests.map(q => q ? { success: q.success, fails: q.fails, team: q.team, sword: q.sword } : null),
       rounds: g.rounds, winner: g.winner, reason: g.reason, assassinTarget: g.assassinTarget,
       ladyId: g.lady >= 0 ? g.seats[g.lady].id : null, ladyUsed: g.ladyUsed, ladyStartId: g.ladyStartId || null,
-      ladyLog: g.ladyLog.map(l => ({ round: l.round, holder: l.holder, target: l.target, side: (ended || (isPlayer && seat && l.holder === seat.id)) ? l.side : undefined })),
+      // Mid-game the public chain is only who passed 湖中仙女 to whom. The alignment
+      // stays on the inspector's own entry so they can reopen it; spectators and
+      // every other player get no side field. After the game ends, roles are public.
+      ladyLog: g.ladyLog.map(l => {
+        const row = { round: l.round, holder: l.holder, target: l.target };
+        if (ended || (isPlayer && seat && l.holder === seat.id)) row.side = l.side;
+        return row;
+      }),
       sword: g.sword, lanceSwitched: ended ? g.lanceSwitched : undefined, lanceLog: g.lanceLog,
       scores: ended ? g.scores : undefined, mvp: ended ? g.mvp : undefined, runnerUp: ended ? g.runnerUp : undefined, highlights: ended ? g.highlights : undefined,
       startedAt: ended ? g.startedAt : undefined, endedAt: ended ? g.endedAt : undefined,

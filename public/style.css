@@ -1414,10 +1414,7 @@ body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))
   .rt .st.gold-pick .gspark{animation:none;opacity:.95;transform:none}
 }
 
-/* Team-approval vote: each nominee is an avatar plus a seat number. */
-.vote-team{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:10px 0 2px}
-.vote-mate{display:flex;align-items:center;gap:6px;max-width:100%;background:#fff8e8;border:1.5px solid #e6c56a;border-radius:999px;padding:3px 10px 3px 3px}
-.vote-mate .av-wrap{flex:none}
-.vote-meta{display:flex;align-items:center;gap:4px;min-width:0}
-.vote-no{flex:none;min-width:22px;height:18px;padding:0 5px;border-radius:9px;background:#1d2333;color:#f6dc96;font-size:12px;font-weight:800;line-height:18px;text-align:center}
-.vote-nm{font-size:13px;font-weight:800;color:#1d2333;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Team-approval vote keeps the light name chips and adds the seat number beside the name. */
+.vote-team{display:flex;flex-wrap:wrap;align-items:center;margin:2px 0 4px}
+.vote-team .chip{white-space:nowrap}
+.vote-team .seatno{font-weight:800}

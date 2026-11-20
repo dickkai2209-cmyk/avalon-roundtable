@@ -1,4 +1,5 @@
-// Leader pick glows gold. The vote below shows avatars and seat numbers, and hides the 回避卡 chip.
+// Leader pick glows gold. The vote chips show avatar, seat number and name.
+// The avoid card is only on the lobby screen, never after the game starts.
 const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
@@ -72,9 +73,6 @@ function bot(key, name) {
     await bots[i].emit('join', { code });
     if (!(await bots[i].act('sit', { seat: i + 1 })).ok) throw new Error('sit');
   }
-  if (!(await bots[0].act('start')).ok) throw new Error('start');
-  for (let i = 0; i < 40 && !(bots[0].st.game && bots[0].st.game.me); i++) await sleep(40);
-
   chrome = spawn('google-chrome', ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=' + CDP, '--user-data-dir=/tmp/chrome-pick-' + Date.now(), '--window-size=420,900', APP], { stdio: 'ignore' });
   let tab;
   for (let i = 0; i < 40 && !tab; i++) { try { tab = JSON.parse(await get('http://127.0.0.1:' + CDP + '/json/list')).find(t => t.type === 'page'); } catch { await sleep(120); } }
@@ -162,8 +160,8 @@ function bot(key, name) {
     assert(view.sw <= view.cw + 1, tag + ' does not overflow');
     assert(view.top + 0.5 >= safe.top && view.bottom + 0.5 >= safe.bottom, tag + ' applies the safe area (' + view.top + '/' + view.bottom + ')');
     assert(!view.ladyBadge && view.labels === 0, tag + ' does not publish a side or a role');
-    assert(view.fab && view.fab.l < view.iw / 2, tag + ' still shows the avoid chip while the leader is picking');
-    const blockers = [view.fab, view.role].filter(Boolean);
+    assert(!view.fab, tag + ' does not show the avoid chip while the leader is picking');
+    const blockers = [view.role].filter(Boolean);
     for (const s of picked) {
       assert(s.sparks === 3 && s.face && s.edge, tag + ' seat ' + s.seat + ' keeps the face clear of the glow');
       assert(s.shadow && s.shadow !== 'none' && (s.anim === 'goldhalo' || /226,\s*178,\s*58|240,\s*193,\s*74/.test(s.shadow)), tag + ' seat ' + s.seat + ' has a gold halo');
@@ -187,6 +185,27 @@ function bot(key, name) {
 
   try {
     await setSize(375, 812);
+    await asUser(people[0]);
+    await quiet();
+    async function lobbyChip(tag) {
+      const c = await evalj(`(() => {
+        const b = document.querySelector('.bottombar .avoid-btn');
+        if (!b) return null;
+        const r = b.getBoundingClientRect();
+        return { label: b.getAttribute('aria-label') || '', w: r.width, h: r.height, l: r.left, b: r.bottom, ih: innerHeight, iw: innerWidth, img: !!b.querySelector('img') };
+      })()`);
+      assert(c && c.shown !== false && c.img && c.w >= 36 && c.h >= 48, tag + ' lobby shows the avoid chip');
+      assert(/迴避卡|回避卡/.test(c.label), tag + ' lobby chip is the avoid card');
+      assert(c.l < c.iw / 2 && c.b <= c.ih - 30, tag + ' lobby chip sits in the bottom bar');
+    }
+    await lobbyChip('375');
+    await shot('lobby-avoid-375.png');
+    await setSize(390, 844);
+    await lobbyChip('390');
+    await shot('lobby-avoid-390.png');
+    if (!(await bots[0].act('start')).ok) throw new Error('start');
+    for (let i = 0; i < 40 && !(bots[0].st.game && bots[0].st.game.me); i++) await sleep(40);
+    await setSize(375, 812);
     const leader = bots.find(b => b.st.meId === b.st.game.leaderId);
     await asUser(people[bots.indexOf(leader)]);
     await quiet();
@@ -197,6 +216,7 @@ function bot(key, name) {
       await sleep(40);
     }
     let view = await pickView();
+    await noAvoid('leader pick 375');
     assertGold('375', view, SAFE[375]);
     assert(view.seats.filter(s => s.gold).every(s => s.anim === 'goldhalo' && s.ringAnim === 'goldspin'), '375 sparkle animates');
     await shot('pick-gold-375.png');
@@ -204,6 +224,7 @@ function bot(key, name) {
     await evalj(`document.querySelector('main').scrollTop = 0`);
     await sleep(40);
     view = await pickView();
+    await noAvoid('leader pick 390');
     assertGold('390', view, SAFE[390]);
     await shot('pick-gold-390.png');
 
@@ -240,19 +261,21 @@ function bot(key, name) {
       return evalj(`(() => {
         const box = (el) => { const r = el.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; };
         const panel = document.querySelector('.vote-panel');
-        const mates = [...document.querySelectorAll('.vote-panel .vote-mate')].map(m => {
+        const mates = [...document.querySelectorAll('.vote-panel .chip')].map(m => {
           const img = m.querySelector('.av img');
-          const no = m.querySelector('.vote-no');
+          const no = m.querySelector('.seatno');
           const face = m.querySelector('.av').getBoundingClientRect();
-          const badge = no.getBoundingClientRect();
+          const badge = no ? no.getBoundingClientRect() : null;
           const cx = face.left + face.width / 2, cy = face.top + face.height / 2;
           const hit = document.elementFromPoint(cx, cy);
+          const bg = getComputedStyle(m).backgroundColor;
           return {
-            name: (m.querySelector('.vote-nm') || {}).textContent || '',
+            text: (m.innerText || '').replace(/\\s+/g, ''),
             no: no ? no.textContent : '',
             src: img ? img.getAttribute('src') : '',
             face: !!(hit && m.querySelector('.av').contains(hit)),
-            clear: badge.right < face.left + 1 || badge.left > face.right - 1 || badge.bottom < face.top + 1 || badge.top > face.bottom - 1,
+            beside: !!(badge && badge.left >= face.right - 2 && badge.top < face.bottom && badge.bottom > face.top),
+            light: /244,\\s*246,\\s*251|255,\\s*255,\\s*255/.test(bg),
             w: m.getBoundingClientRect().width
           };
         });
@@ -278,16 +301,20 @@ function bot(key, name) {
       assert(v.afterTable && v.mates.length === chosen.length, tag + ' lists the proposed team under the table');
       assert(v.sw <= v.cw + 1, tag + ' vote does not overflow');
       assert(v.panel.l >= -1 && v.panel.r <= v.iw + 1 && v.panel.b <= v.ih - safeBottom + 8, tag + ' vote panel fits the phone (' + v.panel.b.toFixed(0) + ')');
-      assert(!v.fab && !v.avoid && !v.vetoImg, tag + ' hides the avoid card during the vote');
+      assert(!v.fab && !v.avoid && !v.vetoImg && !v.vetoBtn, tag + ' hides the avoid card during the vote');
+      assert(!/回避卡|迴避卡/.test(v.text), tag + ' vote card does not say 回避卡');
       assert(!v.ladyBadge && v.labels === 0, tag + ' still hides sides and roles');
-      assert(v.votes === 2, tag + ' vote buttons remain');
       for (const p of chosen) {
-        const m = v.mates.find(x => x.name === p.name);
-        assert(m && m.no === p.seat + '號', tag + ' shows ' + p.name + ' with seat ' + p.seat + ' (' + (m && m.no) + ')');
+        const m = v.mates.find(x => x.text.includes(p.name));
+        assert(m && m.no === p.seat + '號' && m.text.includes(p.seat + '號' + p.name), tag + ' shows ' + p.seat + '號 beside ' + p.name + ' (' + (m && m.text) + ')');
         assert(m.src && /\/img\/av\/|\/api\/avatar\//.test(m.src) && !/veto/.test(m.src), tag + ' uses ' + p.name + ' avatar');
-        assert(m.face && m.clear, tag + ' seat number does not cover ' + p.name + ' face');
+        assert(m.face && m.beside && m.light, tag + ' keeps a light chip and puts the number beside the face');
         assert(m.w <= v.iw - 24, tag + ' roster chip fits');
       }
+    }
+    async function noAvoid(tag) {
+      const s = await evalj(`(() => ({ text: document.body.innerText, ctl: !!document.querySelector('.veto-fab, .avoid-btn, [data-a="veto"], [data-a="vetoinfo"], .vchip') }))()`);
+      assert(!/回避卡|迴避卡/.test(s.text) && !s.ctl, tag + ' has no avoid card on screen');
     }
 
     const outsider = people[3];
@@ -295,12 +322,20 @@ function bot(key, name) {
     await asUser(outsider);
     await quiet();
     let vote = await voteView();
-    assert(!vote.text.includes('回避卡') && !vote.vetoBtn, '375 vote panel does not offer the avoid card to someone off the team');
+    assert(vote.votes === 2, '375 vote buttons remain before a ballot');
     assertVote('375', vote, 34);
+    await noAvoid('team vote 375');
+    const cast = await evalj(`(() => { const b = document.querySelector('.vote-panel [data-a="vote"][data-v="0"]'); if (!b) return 0; b.click(); return 1; })()`);
+    assert(cast, 'the voter can oppose the team');
+    for (let i = 0; i < 30 && !(bots[3].st.game.me && bots[3].st.game.me.voted); i++) await sleep(40);
+    vote = await voteView();
+    assert(/你已投「反對」/.test(vote.text), '375 shows the waiting line after a ballot');
+    assertVote('375 voted', vote, 34);
     await shot('vote-team-375.png');
     await setSize(390, 844);
     vote = await voteView();
     assertVote('390', vote, 34);
+    await noAvoid('team vote 390');
     await shot('vote-team-390.png');
 
     const member = people.find(p => chosen.some(s => s.name === p.name));
@@ -309,7 +344,24 @@ function bot(key, name) {
     await quiet();
     vote = await voteView();
     assertVote('teammate 375', vote, 34);
-    assert(vote.vetoBtn && !vote.fab, 'a teammate can still play the avoid card from the vote panel, without the floating chip');
+    await noAvoid('teammate vote');
+    for (const b of bots) {
+      const r = await b.act('vote', { approve: true });
+      if (!r.ok && !(r.error && /已經/.test(r.error))) throw new Error('vote ' + JSON.stringify(r));
+    }
+    for (let i = 0; i < 40 && bots[0].st.game.phase !== 'quest'; i++) await sleep(40);
+    assert(bots[0].st.game.phase === 'quest', 'an approved team reaches the mission');
+    for (let i = 0; i < 30 && !await evalj(`document.body.innerText.includes('任務進行中')`).catch(() => false); i++) await sleep(50);
+    await noAvoid('mission');
+    for (const b of bots) {
+      if (!bots[0].st.game.team.includes(b.st.meId)) continue;
+      const r = await b.act('quest', { success: true });
+      if (!r.ok && !(r.error && /已經/.test(r.error))) throw new Error('quest ' + JSON.stringify(r));
+    }
+    for (let i = 0; i < 40 && bots[0].st.game.phase === 'quest'; i++) await sleep(40);
+    assert(bots[0].st.game.phase !== 'quest', 'the mission moves on');
+    for (let i = 0; i < 30 && await evalj(`document.body.innerText.includes('任務進行中')`).catch(() => true); i++) await sleep(50);
+    await noAvoid('later phase ' + bots[0].st.game.phase);
     console.log('PICK GLOW TESTS PASSED');
   } finally {
     try { ws.close(); } catch {}

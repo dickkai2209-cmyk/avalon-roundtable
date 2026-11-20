@@ -1216,8 +1216,8 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .settle-crown.sm{width:12px;height:8px}
 .settle-mvp .k{flex:none;font-size:13px;font-weight:800;color:#e0a020;line-height:1.2}
 .settle-mvp .mv-mid{flex:1;min-width:0}
-.settle-mvp .mv-mid b{display:block;font-size:14px;line-height:1.15;color:#1d2333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.settle-mvp .mv-mid span{display:block;color:#6b7286;font-size:12px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.settle-mvp .mv-mid b{display:block;font-size:14px;line-height:1.25;color:#1d2333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.settle-mvp .mv-mid span{display:block;margin-top:2px;color:#6b7286;font-size:12px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .settle-mvp .mv-pts{flex:none;color:#6b7286;font-size:14px;font-weight:800;line-height:1.2}
 .settle-list{list-style:none;margin:0;padding:0;background:#fff}
 .settle-row{border-bottom:1px solid #eef0f4}
@@ -1226,10 +1226,10 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .settle-row summary::-webkit-details-marker{display:none}
 .settle-row summary::after{content:"";width:7px;height:7px;flex:none;margin-right:2px;border-right:2px solid #b0b6c2;border-bottom:2px solid #b0b6c2;transform:rotate(45deg) translateY(-1px)}
 .settle-row details[open] summary::after{transform:rotate(-135deg) translateY(-1px)}
-.settle-row .who{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:0;line-height:1.1}
+.settle-row .who{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px;line-height:1.1}
 .settle-row .ln{display:flex;align-items:center;gap:4px;max-width:100%;min-width:0}
-.settle-row .who b{font-size:13px;line-height:1.15;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.settle-row .who em{font-style:normal;font-size:11px;line-height:1.15;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.settle-row .who b{font-size:13px;line-height:1.2;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.settle-row .who em{font-style:normal;font-size:11px;line-height:1.25;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .settle-row .who em.good{color:#3d6fbe}
 .settle-row .who em.evil{color:#c4475c}
 .settle-row .me{flex:none;font-style:normal;font-size:10px;line-height:1.2;font-weight:800;color:#2f6fe0;background:#e8f0ff;border-radius:6px;padding:0 4px}
@@ -1273,8 +1273,8 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .endsum-link::after{content:" ›"}
 .endsum-me-b{display:flex;align-items:center;gap:8px;margin-top:6px}
 .endsum-me-b .mid{flex:1;min-width:0}
-.endsum-me-b .mid b{display:block;font-size:14px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.endsum-me-b .mid span{display:block;margin-top:1px;color:#6b7286;font-size:12px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.endsum-me-b .mid b{display:block;font-size:14px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.endsum-me-b .mid span{display:block;margin-top:2px;color:#6b7286;font-size:12px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .endsum-me-b .sc{flex:none;font-size:22px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
 .endsum-me-b .sc i{font-style:normal;font-size:12px;font-weight:700;margin-left:1px}
 .endsum-mvp{display:flex;align-items:center;gap:6px}

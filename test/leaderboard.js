@@ -21,13 +21,16 @@ function get(url) {
 function cmp(a, b) {
   const cross = BigInt(b.won) * BigInt(a.played) - BigInt(a.won) * BigInt(b.played);
   if (cross !== 0n) return cross > 0n ? 1 : -1;
+  const am = Number(a.mvp) || 0;
+  const bm = Number(b.mvp) || 0;
+  if (am !== bm) return bm - am;
   if (a.played !== b.played) return b.played - a.played;
   if (a.won !== b.won) return b.won - a.won;
   if (a.id < b.id) return -1;
   if (a.id > b.id) return 1;
   return 0;
 }
-const FORBIDDEN = ['email', 'google_sub', 'google', 'guest_key', 'guestKey', 'username', 'password', 'password_hash', 'token', 'veto', 'vetoCards', 'veto_cards', 'roles', 'role', 'side', 'skins', 'avoid', 'fx', 'mvp', 'id'];
+const FORBIDDEN = ['email', 'google_sub', 'google', 'guest_key', 'guestKey', 'username', 'password', 'password_hash', 'token', 'veto', 'vetoCards', 'veto_cards', 'roles', 'role', 'side', 'skins', 'avoid', 'fx', 'id'];
 function walk(v, where) {
   if (Array.isArray(v)) return v.forEach((x, i) => walk(x, where + '[' + i + ']'));
   if (v && typeof v === 'object') {
@@ -49,9 +52,10 @@ function walk(v, where) {
   assert((await db.leaderboard()).length === 0, 'no completed matches yields an empty board');
 
   let seq = 0;
-  async function play(user, kind) {
+  async function play(user, kind, asMvp) {
     seq += 1;
     const winner = kind === 'abort' ? 'none' : (kind === 'win' ? 'good' : 'evil');
+    const award = kind !== 'abort' && (asMvp == null ? kind === 'win' : !!asMvp);
     await db.saveGame({
       gid: 'lbg' + seq,
       room: 'LBX',
@@ -62,7 +66,7 @@ function walk(v, where) {
       reason: kind,
       players: [{ id: 's', name: user.name, avatar: user.avatar || 'fox', role: 'servant', side: 'good', pendant: user.pendant || 'none' }],
       pids: [user.id],
-      mvpPid: kind === 'win' ? user.id : null,
+      mvpPid: award ? user.id : null,
     });
   }
   async function record(user, wins, losses = 0) {
@@ -83,6 +87,10 @@ function walk(v, where) {
   const exactHi = await db.createGuest({ guestKey: 'rank-real-key-exact-hi', name: '精確甲' });
   const exactLo = await db.createGuest({ guestKey: 'rank-real-key-exact-lo', name: '精確乙' });
   const anchored = await db.createGuest({ guestKey: 'xdemo12345678', name: '真玩家', avatar: 'otter' });
+  const mvpRich = await db.createGuest({ guestKey: 'rank-real-key-mvp-rich', name: '冠軍多', avatar: 'lion' });
+  const mvpPoor = await db.createGuest({ guestKey: 'rank-real-key-mvp-poor', name: '冠軍少', avatar: 'bunny' });
+  const rateKing = await db.createGuest({ guestKey: 'rank-real-key-rate-king', name: '勝率王', avatar: 'wolf' });
+  const mvpWhale = await db.createGuest({ guestKey: 'rank-real-key-mvp-whale', name: 'MVP鯨魚', avatar: 'koala' });
   const zero = await db.createGuest({ guestKey: 'rank-real-key-zero', name: '零場' });
   const aborted = await db.createGuest({ guestKey: 'rank-real-key-abort', name: '中止局' });
   const watcher = await db.createGuest({ guestKey: 'rank-real-key-watch', name: '只觀戰' });
@@ -102,6 +110,14 @@ function walk(v, where) {
   await record(exactHi, 1, 2);
   await record(exactLo, 13, 27);
   await record(anchored, 2, 8);
+  await play(mvpRich, 'win', true);
+  await play(mvpRich, 'win', true);
+  await play(mvpPoor, 'win', true);
+  await play(mvpPoor, 'win', false);
+  for (let i = 0; i < 9; i++) await play(rateKing, 'win', false);
+  await play(rateKing, 'loss', false);
+  await play(mvpWhale, 'win', true);
+  for (let i = 0; i < 4; i++) await play(mvpWhale, 'loss', true);
   await play(aborted, 'abort');
 
   const fixtures = [];
@@ -154,26 +170,37 @@ function walk(v, where) {
   const shown = direct.find(p => p.name === '示例甲');
   assert(shown.avatar === 'panda' && shown.pendant === 'crown' && shown.bg === '#ffe08a' && !shown.photoUrl, 'public avatar and current pendant are included');
   assert(shown.pubId && shown.pubId !== alpha.id, 'public id is not the internal user id');
+  assert(shown.mvp === 3 && Number.isInteger(shown.mvp), 'public row includes the earned MVP count');
+  assert(direct.every(p => Number.isInteger(p.mvp) && p.mvp >= 0 && !('id' in p)), 'every public row has an integer MVP count and no internal id');
+  const rich = direct.find(p => p.name === '冠軍多');
+  const poor = direct.find(p => p.name === '冠軍少');
+  assert(rich && poor && rich.won === 2 && poor.won === 2 && rich.played === 2 && poor.played === 2 && rich.mvp === 2 && poor.mvp === 1, 'same exact rate rows carry different MVP counts');
+  assert(names.indexOf('冠軍多') < names.indexOf('冠軍少'), 'same exact win rate ranks more MVP first');
+  const king = direct.find(p => p.name === '勝率王');
+  const whale = direct.find(p => p.name === 'MVP鯨魚');
+  assert(king && whale && king.won === 9 && king.played === 10 && king.mvp === 0 && whale.mvp === 5 && whale.won === 1 && whale.played === 5, 'a higher exact rate can have fewer MVP');
+  assert(names.indexOf('勝率王') < names.indexOf('MVP鯨魚'), 'a higher exact win rate still ranks above more MVP');
+  assert(Math.round(king.won * 100 / king.played) === 90 && Math.round(one.won * 100 / one.played) === 100, 'displayed percents stay rounded, including a 1/1 100%');
 
   const eligible = [
-    alpha, beta, gamma, google, finished, tieA, tieB, exactHi, exactLo, anchored, ...fillers,
+    alpha, beta, gamma, google, finished, tieA, tieB, exactHi, exactLo, anchored, mvpRich, mvpPoor, rateKing, mvpWhale, ...fillers,
   ].map(u => {
     const st = saved.stats[u.id];
-    return { id: u.id, name: u.name, played: st.played, won: st.won };
+    return { id: u.id, name: u.name, played: st.played, won: st.won, mvp: st.mvp || 0 };
   });
   eligible.sort(cmp);
   const expectNames = eligible.slice(0, 100).map(p => p.name);
-  assert(JSON.stringify(names) === JSON.stringify(expectNames), 'order is exact rate, then games, then wins, then id');
+  assert(JSON.stringify(names) === JSON.stringify(expectNames), 'order is exact rate, then MVP, then games, then wins, then id');
   assert(eligible[100] && !names.includes(eligible[100].name), 'player 101 is omitted');
   const tieOrder = [tieA, tieB].sort((a, b) => a.id < b.id ? -1 : 1).map(u => u.name);
-  assert(names.indexOf(tieOrder[0]) < names.indexOf(tieOrder[1]), 'equal rate and games break ties by stable id');
+  assert(names.indexOf(tieOrder[0]) < names.indexOf(tieOrder[1]), 'equal rate, MVP, and games break ties by stable id');
   walk(direct, 'direct');
   const blob = JSON.stringify(direct);
   for (const secret of ['rank-secret-mailbox@example.com', 'rank-google-sub-secret', 'avoid-role-assassin-secret', 'rank-real-key-alpha', alpha.id, 'servant']) {
     assert(!blob.includes(secret), 'response hides ' + secret);
   }
   const rowKeys = Object.keys(direct[0]).sort();
-  assert(JSON.stringify(rowKeys) === JSON.stringify(['avatar', 'bg', 'name', 'pendant', 'photoUrl', 'played', 'pubId', 'rank', 'won']), 'rows expose only public fields');
+  assert(JSON.stringify(rowKeys) === JSON.stringify(['avatar', 'bg', 'mvp', 'name', 'pendant', 'photoUrl', 'played', 'pubId', 'rank', 'won']), 'rows expose the public MVP count and no private fields');
 
   const boot = (port, dir) => {
     const srv = spawn(process.execPath, ['server.js'], {
@@ -266,19 +293,89 @@ function walk(v, where) {
       return { rows: rows.slice(0, 8), n: rows.length, note, title: document.querySelector('#topTitle').textContent, scroll: app.scrollHeight, body: document.body.innerText.includes('機械sim') };
     })()`);
     assert(ui.title === '排行榜' && ui.n === 100, 'mobile board lists 100 rows under the 排行榜 title');
-    assert(/全球/.test(ui.note) && /100/.test(ui.note) && /精確/.test(ui.note) && /1 勝/.test(ui.note), 'the note explains global exact-rate ordering');
+    assert(/全球/.test(ui.note) && /100/.test(ui.note) && /精確/.test(ui.note) && /1 勝/.test(ui.note) && /MVP 次數較多優先/.test(ui.note), 'the note explains global exact-rate ordering, then MVP');
     assert(!ui.body, 'fixture names are not rendered');
     const top = ui.rows[0];
-    assert(top.text.includes('示例甲') && top.text.includes('100%') && top.text.includes('3勝/3場') && top.av.includes('/img/av/panda.webp') && top.pd.includes('/img/pd/crown.webp'), 'first row shows rank, avatar, pendant, nickname, percent, and record');
+    assert(top.text.includes('示例甲') && top.text.includes('100%') && top.text.includes('3勝/3場') && top.text.includes('MVP 3') && top.text.indexOf('MVP 3') < top.text.indexOf('100%') && top.av.includes('/img/av/panda.webp') && top.pd.includes('/img/pd/crown.webp'), 'first row shows rank, avatar, pendant, nickname, MVP left of the percent, and record');
+    assert(top.label.includes('MVP 3 次') && top.label.includes('100%'), 'the row label names the MVP count and the rounded rate');
     const gammaRow = await cdp.eval(`(() => { const li = [...document.querySelectorAll('.lb li')].find(el => el.innerText.includes('示例丙')); return li ? li.innerText.replace(/\\s+/g, ' ') : ''; })()`);
-    assert(gammaRow.includes('100%') && gammaRow.includes('1勝/1場'), 'one win out of one game is shown as 100% with the count');
+    assert(gammaRow.includes('100%') && gammaRow.includes('1勝/1場') && gammaRow.includes('MVP 1') && gammaRow.indexOf('MVP 1') < gammaRow.indexOf('100%'), 'one win out of one game is shown as 100% with MVP on its left');
+    const pair = await cdp.eval(`(() => {
+      const rows = [...document.querySelectorAll('.lb li')];
+      const rich = rows.find(el => el.innerText.includes('冠軍多'));
+      const poor = rows.find(el => el.innerText.includes('冠軍少'));
+      const text = el => el ? el.innerText.replace(/\\s+/g, ' ').trim() : '';
+      return { rich: text(rich), poor: text(poor), richBefore: !!(rich && poor && (rich.compareDocumentPosition(poor) & Node.DOCUMENT_POSITION_FOLLOWING)) };
+    })()`);
+    assert(pair.richBefore && pair.rich.includes('MVP 2') && pair.rich.includes('100%') && pair.rich.includes('2勝/2場') && pair.poor.includes('MVP 1') && pair.poor.includes('100%') && pair.poor.includes('2勝/2場'), 'rendered rows with the same exact rate put more MVP first');
+    assert(pair.rich.indexOf('MVP 2') < pair.rich.indexOf('100%') && pair.poor.indexOf('MVP 1') < pair.poor.indexOf('100%'), 'each tie-break row shows MVP immediately left of 100%');
     const scrolled = await cdp.eval(`(() => { const before = document.querySelector('.lb li').getBoundingClientRect().top; window.scrollTo(0, 900); const after = document.querySelector('.lb li').getBoundingClientRect().top; return { y: window.scrollY, moved: before - after, tall: document.documentElement.scrollHeight > 812 }; })()`);
     assert(scrolled.tall && scrolled.y > 100 && scrolled.moved > 100, 'the board scrolls vertically on a phone');
-    await cdp.eval(`window.scrollTo(0, 0)`);
-    await sleep(80);
-    const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    const SAFE = { 375: { top: 50, bottom: 34 }, 390: { top: 47, bottom: 34 } };
+    const fitExpr = `(() => {
+      const bad = [];
+      const rows = [...document.querySelectorAll('.lb li')];
+      for (const li of rows) {
+        const mvp = li.querySelector('.lb-mvp');
+        const pct = li.querySelector('.lb-rec b');
+        const wl = li.querySelector('.lb-wl');
+        const av = li.querySelector('.av');
+        const nm = li.querySelector('.nm');
+        const rank = li.querySelector('.lb-rank');
+        if (!mvp || !pct || !wl || !av || !nm || !rank) { bad.push({ name: nm ? nm.textContent : '', missing: true }); continue; }
+        const mr = mvp.getBoundingClientRect();
+        const pr = pct.getBoundingClientRect();
+        const wr = wl.getBoundingClientRect();
+        const ar = av.getBoundingClientRect();
+        const nr = nm.getBoundingClientRect();
+        const rr = rank.getBoundingClientRect();
+        const rec = li.querySelector('.lb-rec').getBoundingClientRect();
+        const card = li.closest('.card').getBoundingClientRect();
+        const same = Math.abs((mr.top + mr.height / 2) - (pr.top + pr.height / 2)) <= 3;
+        const left = mr.right <= pr.left + 0.5 && (pr.left - mr.right) <= 14;
+        const below = wr.top >= pr.bottom - 1;
+        const face = rec.left >= ar.right - 0.5;
+        const clearName = rec.left >= nr.right - 1;
+        const clearRank = rec.left >= rr.right - 0.5;
+        const inside = rec.right <= card.right + 1.5 && rr.left >= card.left - 1;
+        if (!(same && left && below && face && clearName && clearRank && inside && mr.width > 0 && pr.width > 0)) {
+          bad.push({ name: nm.textContent, same, left, below, face, clearName, clearRank, inside, gap: Math.round((pr.left - mr.right) * 10) / 10 });
+          if (bad.length >= 4) break;
+        }
+      }
+      return { bad, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1 };
+    })()`;
+    async function setPhone(w, h) {
+      const safe = SAFE[w];
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true });
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: safe.top, left: 0, bottom: safe.bottom, right: 0 } }).catch(() => {});
+      await cdp.eval(`(() => {
+        const el = document.createElement('div');
+        el.style.cssText = 'position:absolute;left:-999px;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)';
+        document.body.appendChild(el);
+        const t = parseFloat(getComputedStyle(el).paddingTop) || 0;
+        const b = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+        el.remove();
+        let s = document.getElementById('safe-test');
+        if (t >= ${safe.top} - 0.5 && b >= ${safe.bottom} - 0.5) { if (s) s.textContent = ''; return 'env'; }
+        if (!s) { s = document.createElement('style'); s.id = 'safe-test'; document.head.appendChild(s); }
+        s.textContent = '.topbar{padding-top:${safe.top}px !important}body{padding-bottom:${safe.bottom}px !important}main{padding-bottom:calc(16px + ${safe.bottom}px) !important}';
+        return 'inject';
+      })()`);
+      await cdp.eval(`window.scrollTo(0, 0)`);
+      await sleep(60);
+    }
     fs.mkdirSync('/opt/cursor/artifacts', { recursive: true });
-    fs.writeFileSync('/opt/cursor/artifacts/leaderboard-375.png', Buffer.from(shot.data, 'base64'));
+    await setPhone(375, 812);
+    const fit375 = await cdp.eval(fitExpr);
+    assert(!fit375.overflow && fit375.bad.length === 0, '375 board keeps MVP left of the percent without covering the face ' + JSON.stringify(fit375));
+    const shot375 = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    fs.writeFileSync('/opt/cursor/artifacts/leaderboard-375.png', Buffer.from(shot375.data, 'base64'));
+    await setPhone(390, 844);
+    const fit390 = await cdp.eval(fitExpr);
+    assert(!fit390.overflow && fit390.bad.length === 0, '390 board keeps MVP left of the percent without covering the face ' + JSON.stringify(fit390));
+    const shot390 = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    fs.writeFileSync('/opt/cursor/artifacts/leaderboard-390.png', Buffer.from(shot390.data, 'base64'));
   } finally {
     try { chrome && chrome.kill('SIGKILL'); } catch {}
     try { srv && srv.kill('SIGKILL'); } catch {}

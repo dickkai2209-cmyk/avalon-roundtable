@@ -1183,16 +1183,22 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 /* Global win-rate board: white card, vertical page scroll */
 .lb-note{margin:0 0 8px;line-height:1.55}
 .lb{list-style:none;margin:0;padding:0}
-.lb li{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line2)}
+.lb li{display:flex;align-items:center;flex-wrap:nowrap;gap:10px;padding:12px 0;border-bottom:1px solid var(--line2)}
 .lb li:last-child{border-bottom:0}
 .lb-rank{width:28px;flex:none;text-align:center;font-weight:800;font-variant-numeric:tabular-nums;color:#6b7286}
 .lb li:nth-child(-n+3) .lb-rank{color:#8a5f12}
 .lb-main{flex:1;min-width:0}
-.lb-main .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-main .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:8px}
 .lb-rec{flex:none;text-align:right;font-variant-numeric:tabular-nums}
-.lb-rec b{display:block;font-size:16px;line-height:1.2}
-.lb-rec span{display:block;font-size:12px;color:var(--muted);white-space:nowrap}
+.lb-rate{display:flex;align-items:baseline;justify-content:flex-end;flex-wrap:nowrap;gap:6px;white-space:nowrap;line-height:1.2}
+.lb-mvp{flex:none;font-size:12px;font-weight:800;color:#8a5f12;letter-spacing:0}
+.lb-rec b{flex:none;font-size:16px;font-weight:800;line-height:1.2}
+.lb-wl{display:block;margin-top:1px;font-size:12px;color:var(--muted);white-space:nowrap}
 .lb-empty{padding:18px 0 8px}
+@media (max-width:390px){
+  .lb li{gap:8px}
+  .lb-rate{gap:5px}
+}
 
 /* In-app confirm for lake inspection and assassination. No native browser dialog. */
 .actconf{text-align:center}

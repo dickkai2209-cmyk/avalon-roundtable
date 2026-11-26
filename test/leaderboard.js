@@ -202,6 +202,25 @@ function walk(v, where) {
   const rowKeys = Object.keys(direct[0]).sort();
   assert(JSON.stringify(rowKeys) === JSON.stringify(['avatar', 'bg', 'mvp', 'name', 'pendant', 'photoUrl', 'played', 'pubId', 'rank', 'won']), 'rows expose the public MVP count and no private fields');
 
+  const outside = eligible[100];
+  const tokAlpha = await db2.createSession(alpha.id);
+  const tokZero = await db2.createSession(zero.id);
+  const tokOut = await db2.createSession(outside.id);
+  const tokFx = await db2.createSession(fixtures[0].id);
+  db2.flush();
+  const photoUser = await db2.getUser(alpha.id);
+  const prevAvatar = photoUser.avatar;
+  photoUser.avatar = 'photo';
+  fs.mkdirSync(path.join(DATA, 'photos'), { recursive: true });
+  fs.writeFileSync(path.join(DATA, 'photos', alpha.id + '.webp'), Buffer.from('RIFFxxxxWEBPVP8 '));
+  const photoView = await db2.leaderboardView(100, photoUser);
+  const pv = photoUser.updated_at ? new Date(photoUser.updated_at).getTime() : 0;
+  assert(photoView.me && photoView.me.photoUrl === '/api/avatar/' + photoUser.pub_id + '?v=' + pv, 'me uses the same public photo URL as a board row');
+  assert(!String(photoView.me.photoUrl).includes(photoUser.id), 'me photo URL does not contain the internal id');
+  photoUser.avatar = prevAvatar;
+  const alphaRank = eligible.findIndex(p => p.id === alpha.id) + 1;
+  assert(alphaRank > 0 && alphaRank <= 100, 'the sample viewer is inside the top 100');
+
   const boot = (port, dir) => {
     const srv = spawn(process.execPath, ['server.js'], {
       cwd: path.join(__dirname, '..'),
@@ -217,21 +236,45 @@ function walk(v, where) {
   try {
     srv = await boot(PORT, DATA);
     emptySrv = await boot(EMPTY_PORT, EMPTY_DATA);
-    const [openA, openB, anon, limited] = await Promise.all([
+    const [openA, openB, anon, limited, asAlpha, asZero, asOut, asFx] = await Promise.all([
       fetch(APP + 'api/leaderboard', { headers: { Authorization: 'Bearer ' + tokA } }).then(r => r.json()),
       fetch(APP + 'api/leaderboard', { headers: { Authorization: 'Bearer ' + tokB } }).then(r => r.json()),
       fetch(APP + 'api/leaderboard').then(r => r.json()),
       fetch(APP + 'api/leaderboard?limit=500').then(r => r.json()),
+      fetch(APP + 'api/leaderboard', { headers: { Authorization: 'Bearer ' + tokAlpha } }).then(r => r.json()),
+      fetch(APP + 'api/leaderboard', { headers: { Authorization: 'Bearer ' + tokZero } }).then(r => r.json()),
+      fetch(APP + 'api/leaderboard', { headers: { Authorization: 'Bearer ' + tokOut } }).then(r => r.json()),
+      fetch(APP + 'api/leaderboard', { headers: { Authorization: 'Bearer ' + tokFx } }).then(r => r.json()),
     ]);
     assert(openA.limit === 100 && openA.players.length === 100, 'authenticated client gets the global cap');
-    assert(JSON.stringify(openA) === JSON.stringify(openB) && JSON.stringify(openA) === JSON.stringify(anon), 'two clients and an anonymous read see the same persisted board');
+    assert(JSON.stringify(openA.players) === JSON.stringify(openB.players) && JSON.stringify(openA.players) === JSON.stringify(anon.players) && JSON.stringify(openA.players) === JSON.stringify(asAlpha.players), 'every caller sees the same public list');
+    assert(!Object.prototype.hasOwnProperty.call(anon, 'me') && !Object.prototype.hasOwnProperty.call(limited, 'me'), 'an anonymous read does not invent a me card');
     assert(limited.players.length === 100, 'a larger limit query cannot exceed 100');
+    assert(openA.me && openA.me.name === '客戶甲' && openA.me.rank == null && openA.me.played === 0 && openA.me.won === 0 && openA.me.mvp === 0, 'a signed-in player with no completed games is unranked with zeroed stats');
+    assert(openB.me && openB.me.name === '客戶乙' && openB.me.pubId !== openA.me.pubId, 'me belongs to the authenticated viewer');
+    const alphaRow = asAlpha.players.find(p => p.pubId === asAlpha.me.pubId);
+    assert(asAlpha.me && asAlpha.me.name === '示例甲' && asAlpha.me.rank === alphaRank && alphaRow && alphaRow.rank === asAlpha.me.rank, 'a rank inside the top 100 matches that list row');
+    assert(JSON.stringify(alphaRow) === JSON.stringify(asAlpha.me), 'the pinned viewer stays on the public list with the same public fields');
+    assert(asAlpha.me.played === 3 && asAlpha.me.won === 3 && asAlpha.me.mvp === 3 && asAlpha.me.avatar === 'panda' && asAlpha.me.pendant === 'crown' && asAlpha.me.photoUrl == null, 'me carries the public avatar and the win, game, and MVP counts');
+    assert(asZero.me && asZero.me.name === '零場' && asZero.me.rank == null && asZero.me.played === 0 && asZero.me.won === 0, '0 completed games stay unranked even when an MVP count is stored');
+    assert(!asZero.players.some(p => p.name === '零場'), 'the unranked viewer is absent from the public list');
+    assert(asOut.me && asOut.me.name === outside.name && asOut.me.rank === 101 && asOut.me.played === outside.played && asOut.me.won === outside.won && asOut.me.mvp === outside.mvp, 'a rank past 100 is the true rank across every eligible player');
+    assert(!asOut.players.some(p => p.pubId === asOut.me.pubId) && asOut.players.length === 100, 'rank 101 is not sliced into the top 100');
+    assert(asFx.me && asFx.me.rank == null && asFx.me.played === 10 && !asFx.players.some(p => p.name === fixtures[0].name), 'a fixture is excluded from the rank the same way as the public list');
+    for (const body of [anon, openA, openB, asAlpha, asZero, asOut, asFx, limited]) walk(body, 'http');
+    const meKeys = Object.keys(asAlpha.me).sort();
+    assert(JSON.stringify(meKeys) === JSON.stringify(rowKeys), 'me exposes the same public fields as a board row');
+    const httpBlob = JSON.stringify({ anon, openA, asAlpha, asZero, asOut, asFx });
+    for (const secret of ['rank-secret-mailbox@example.com', 'rank-google-sub-secret', 'avoid-role-assassin-secret', 'rank-real-key-alpha', alpha.id, 'servant', tokAlpha, tokZero]) {
+      assert(!httpBlob.includes(secret), 'leaderboard response hides ' + secret);
+    }
     walk(anon, 'http');
     const emptyBody = await fetch(EMPTY + 'api/leaderboard').then(r => r.json());
-    assert(emptyBody.players.length === 0 && emptyBody.limit === 100, 'a server with no completed games returns an empty list');
+    assert(emptyBody.players.length === 0 && emptyBody.limit === 100 && !Object.prototype.hasOwnProperty.call(emptyBody, 'me'), 'a server with no completed games returns an empty list and no me');
 
     const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
     assert(src.includes('function checkAch') && src.includes('10次MVP') && src.includes("laurel"), 'achievement and MVP reward logic stays in the client');
+    assert(!src.includes('BOARD_NOTE') && !src.includes('lb-note') && !src.includes('aria-describedby'), 'the rules note is gone from the client');
 
     chrome = spawn('google-chrome', ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=' + CDP, '--user-data-dir=/tmp/chrome-lb-' + Date.now(), 'about:blank'], { stdio: 'ignore' });
     class Page {
@@ -267,8 +310,12 @@ function walk(v, where) {
     assert(menu0.items.some(t => t.includes('排行榜')) && !menu0.ach, 'home menu shows 排行榜 and not 成就');
     await cdp.eval(`document.querySelector('[data-v="board"]').click()`);
     await cdp.eval(`new Promise(r => { const t = setInterval(() => { if (document.querySelector('.lb-empty')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 8000); })`);
-    const emptyUi = await cdp.eval(`(() => ({ text: document.querySelector('#app').innerText, rows: document.querySelectorAll('.lb li').length }))()`);
+    const emptyUi = await cdp.eval(`(() => {
+      const pin = document.querySelector('.lb-me');
+      return { text: document.querySelector('#app').innerText, rows: document.querySelectorAll('.lb li').length, note: !!document.querySelector('#lb-note') || !!document.querySelector('[aria-describedby]'), pin: pin ? pin.innerText.replace(/\\s+/g, ' ').trim() : '', state: pin ? pin.dataset.state : '' };
+    })()`);
     assert(emptyUi.text.includes('暫時未有完成對局可以排名') && emptyUi.rows === 0, 'empty board explains itself and lists nobody');
+    assert(!emptyUi.note && emptyUi.state === 'unranked' && emptyUi.pin.includes('你的排名') && emptyUi.pin.includes('未上榜') && !emptyUi.text.includes('全球所有玩家'), 'an empty board still pins the viewer and drops the rules note');
 
     await cdp.send('Page.navigate', { url: APP });
     await cdp.eval(`new Promise(r => { const t = setInterval(() => { if (document.querySelector('[data-v="board"]')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 8000); })`);
@@ -288,12 +335,20 @@ function walk(v, where) {
 
     const ui = await cdp.eval(`(() => {
       const rows = [...document.querySelectorAll('.lb li')].map(li => ({ rank: li.dataset.rank, label: li.getAttribute('aria-label'), text: li.innerText.replace(/\\s+/g, ' ').trim(), av: (li.querySelector('.av img') || {}).src || '', pd: (li.querySelector('.pov') || {}).src || '' }));
-      const note = document.querySelector('#lb-note').innerText;
+      const pin = document.querySelector('.lb-me');
+      const list = document.querySelector('.lb');
       const app = document.querySelector('#app');
-      return { rows: rows.slice(0, 8), n: rows.length, note, title: document.querySelector('#topTitle').textContent, scroll: app.scrollHeight, body: document.body.innerText.includes('機械sim') };
+      return {
+        rows: rows.slice(0, 8), n: rows.length,
+        note: !!document.querySelector('#lb-note') || !!document.querySelector('.lb-note') || !!document.querySelector('[aria-describedby]'),
+        rules: /全球所有玩家|唔係只計呢間房|固定身份編號|四捨五入/.test(document.body.innerText),
+        pin: pin ? { state: pin.dataset.state, text: pin.innerText.replace(/\\s+/g, ' ').trim(), above: !!(list && (pin.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING)) } : null,
+        title: document.querySelector('#topTitle').textContent, scroll: app.scrollHeight, body: document.body.innerText.includes('機械sim'),
+      };
     })()`);
     assert(ui.title === '排行榜' && ui.n === 100, 'mobile board lists 100 rows under the 排行榜 title');
-    assert(/全球/.test(ui.note) && /100/.test(ui.note) && /精確/.test(ui.note) && /1 勝/.test(ui.note) && /MVP 次數較多優先/.test(ui.note), 'the note explains global exact-rate ordering, then MVP');
+    assert(!ui.note && !ui.rules, 'the rules note and its description link are gone');
+    assert(ui.pin && ui.pin.above && ui.pin.state === 'unranked' && ui.pin.text.includes('你的排名') && ui.pin.text.includes('未上榜') && ui.pin.text.includes('0%') && ui.pin.text.includes('MVP 次數 0') && ui.pin.text.includes('0勝/0場') && !ui.pin.text.includes('示例甲'), '0 games pins 未上榜 with zeroed stats and does not borrow another player');
     assert(!ui.body, 'fixture names are not rendered');
     const top = ui.rows[0];
     assert(top.text.includes('示例甲') && top.text.includes('100%') && top.text.includes('3勝/3場') && top.text.includes('MVP 3') && top.text.indexOf('MVP 3') < top.text.indexOf('100%') && top.av.includes('/img/av/panda.webp') && top.pd.includes('/img/pd/crown.webp'), 'first row shows rank, avatar, pendant, nickname, MVP left of the percent, and record');
@@ -345,6 +400,30 @@ function walk(v, where) {
       }
       return { bad, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1 };
     })()`;
+    const pinFitExpr = `(() => {
+      const pin = document.querySelector('.lb-me');
+      if (!pin) return { missing: true };
+      const card = pin.closest('.card').getBoundingClientRect();
+      const box = pin.getBoundingClientRect();
+      const inside = box.left >= card.left - 1 && box.right <= card.right + 1 && box.width > 0;
+      const overflow = document.documentElement.scrollWidth > document.documentElement.clientWidth + 1;
+      if (pin.querySelector('.lb-me-out')) return { inside, overflow, signedOut: true };
+      const rank = pin.querySelector('.lb-me-rank').getBoundingClientRect();
+      const av = pin.querySelector('.av').getBoundingClientRect();
+      const nm = pin.querySelector('.nm').getBoundingClientRect();
+      const rate = pin.querySelector('.lb-me-rate').getBoundingClientRect();
+      const label = pin.querySelector('.lb-me-k').getBoundingClientRect();
+      const subs = [...pin.querySelectorAll('.lb-me-sub')].map(el => el.getBoundingClientRect());
+      return {
+        inside, overflow,
+        clearRank: av.left >= rank.right - 1,
+        clearName: rate.left >= nm.right - 1,
+        rateInside: rate.right <= box.right - 4,
+        labelAbove: label.bottom <= Math.min(rank.top, av.top) + 2,
+        under: subs.length === 2 && subs[0].top >= nm.bottom - 1 && subs[1].top >= subs[0].bottom - 1,
+        gap: Math.round((av.left - rank.right) * 10) / 10,
+      };
+    })()`;
     async function setPhone(w, h) {
       const safe = SAFE[w];
       await cdp.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true });
@@ -365,17 +444,100 @@ function walk(v, where) {
       await cdp.eval(`window.scrollTo(0, 0)`);
       await sleep(60);
     }
+    async function openBoard(token) {
+      await cdp.eval(`localStorage.setItem('cc.token', ${JSON.stringify(token)})`);
+      await cdp.send('Page.navigate', { url: APP });
+      await cdp.eval(`new Promise(r => { const t = setInterval(() => { if (document.querySelector('[data-v="board"]')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 8000); })`);
+      await cdp.eval(`document.querySelector('[data-v="board"]').click()`);
+      await cdp.eval(`new Promise(r => { const t = setInterval(() => { if (document.querySelector('.lb-me') && document.querySelector('.lb li')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 8000); })`);
+      await cdp.eval(`window.scrollTo(0, 0)`);
+    }
+    async function shot(name) {
+      const png = await cdp.send('Page.captureScreenshot', { format: 'png' });
+      fs.writeFileSync('/opt/cursor/artifacts/' + name + '.png', Buffer.from(png.data, 'base64'));
+    }
     fs.mkdirSync('/opt/cursor/artifacts', { recursive: true });
     await setPhone(375, 812);
     const fit375 = await cdp.eval(fitExpr);
+    const pin375 = await cdp.eval(pinFitExpr);
     assert(!fit375.overflow && fit375.bad.length === 0, '375 board keeps MVP left of the percent without covering the face ' + JSON.stringify(fit375));
-    const shot375 = await cdp.send('Page.captureScreenshot', { format: 'png' });
-    fs.writeFileSync('/opt/cursor/artifacts/leaderboard-375.png', Buffer.from(shot375.data, 'base64'));
+    assert(pin375.inside && !pin375.overflow && pin375.clearRank && pin375.clearName && pin375.rateInside && pin375.labelAbove && pin375.under, '375 pin card keeps the rank, face, name, and win rate apart ' + JSON.stringify(pin375));
+    await shot('pin-me-unranked-375');
     await setPhone(390, 844);
     const fit390 = await cdp.eval(fitExpr);
+    const pin390 = await cdp.eval(pinFitExpr);
     assert(!fit390.overflow && fit390.bad.length === 0, '390 board keeps MVP left of the percent without covering the face ' + JSON.stringify(fit390));
-    const shot390 = await cdp.send('Page.captureScreenshot', { format: 'png' });
-    fs.writeFileSync('/opt/cursor/artifacts/leaderboard-390.png', Buffer.from(shot390.data, 'base64'));
+    assert(pin390.inside && !pin390.overflow && pin390.clearRank && pin390.clearName && pin390.rateInside && pin390.labelAbove && pin390.under, '390 pin card keeps the rank, face, name, and win rate apart ' + JSON.stringify(pin390));
+    await shot('pin-me-unranked-390');
+
+    await openBoard(tokAlpha);
+    const ranked = await cdp.eval(`(() => {
+      const pin = document.querySelector('.lb-me');
+      const row = [...document.querySelectorAll('.lb li')].find(li => (li.querySelector('.nm') || {}).textContent === '示例甲');
+      return {
+        title: document.querySelector('#topTitle').textContent,
+        state: pin.dataset.state,
+        rank: pin.dataset.rank,
+        text: pin.innerText.replace(/\\s+/g, ' ').trim(),
+        label: pin.getAttribute('aria-label') || '',
+        av: (pin.querySelector('.av img') || {}).src || '',
+        pd: (pin.querySelector('.pov') || {}).src || '',
+        rowRank: row ? row.dataset.rank : '',
+        rowStill: !!row,
+        note: !!document.querySelector('#lb-note') || !!document.querySelector('[aria-describedby]'),
+        rules: /全球所有玩家|固定身份編號/.test(document.body.innerText),
+      };
+    })()`);
+    assert(ranked.title === '排行榜' && ranked.state === 'ranked' && ranked.rank === String(alphaRank) && ranked.rowRank === ranked.rank && ranked.rowStill, 'the signed-in rank is pinned and the matching list row stays ' + JSON.stringify(ranked));
+    assert(ranked.text.includes('你的排名') && ranked.text.includes('示例甲') && ranked.text.includes('100%') && ranked.text.includes('MVP 次數 3') && ranked.text.includes('3勝/3場'), 'the pin shows the rounded win rate, MVP count, and record');
+    assert(ranked.av.includes('/img/av/panda.webp') && ranked.pd.includes('/img/pd/crown.webp'), 'the pin uses the viewer avatar and pendant');
+    assert(ranked.label.includes('第 ' + alphaRank + ' 名') && ranked.label.includes('100%') && !ranked.note && !ranked.rules, 'the pin names the true rank without the rules note');
+    assert(!ranked.text.includes('好人勝利場') && !ranked.text.includes('狼人勝利場') && !ranked.text.includes('16.5'), 'the pin does not copy werewolf score lines');
+    await setPhone(375, 812);
+    const rankedFit375 = await cdp.eval(pinFitExpr);
+    const rankedList375 = await cdp.eval(fitExpr);
+    assert(rankedFit375.inside && !rankedFit375.overflow && rankedFit375.clearRank && rankedFit375.clearName && rankedFit375.rateInside && rankedFit375.labelAbove && rankedFit375.under, '375 ranked pin stays inside the card ' + JSON.stringify(rankedFit375));
+    assert(!rankedList375.overflow && rankedList375.bad.length === 0, '375 list still fits under the pin ' + JSON.stringify(rankedList375));
+    await shot('pin-me-ranked-375');
+    await setPhone(390, 844);
+    const rankedFit390 = await cdp.eval(pinFitExpr);
+    assert(rankedFit390.inside && !rankedFit390.overflow && rankedFit390.clearRank && rankedFit390.clearName && rankedFit390.rateInside && rankedFit390.labelAbove && rankedFit390.under, '390 ranked pin stays inside the card ' + JSON.stringify(rankedFit390));
+    await shot('pin-me-ranked-390');
+
+    await openBoard(tokOut);
+    const below = await cdp.eval(`(() => {
+      const pin = document.querySelector('.lb-me');
+      const names = [...document.querySelectorAll('.lb li .nm')].map(el => el.textContent);
+      const ranks = [...document.querySelectorAll('.lb li')].map(li => Number(li.dataset.rank));
+      return { state: pin.dataset.state, rank: pin.dataset.rank, name: (pin.querySelector('.nm') || {}).textContent || '', inList: names.includes(${JSON.stringify(outside.name)}), max: Math.max(...ranks), n: ranks.length };
+    })()`);
+    assert(below.state === 'ranked' && below.rank === '101' && below.name === outside.name && !below.inList && below.max === 100 && below.n === 100, 'a viewer outside the top 100 still sees the true global rank ' + JSON.stringify(below));
+
+    await cdp.eval(`(() => {
+      const orig = window.fetch.bind(window);
+      window.fetch = (url, opt) => String(url).includes('/api/leaderboard')
+        ? orig(url, opt).then(async r => { const j = await r.json(); delete j.me; return new Response(JSON.stringify(j), { status: 200, headers: { 'content-type': 'application/json' } }); })
+        : orig(url, opt);
+    })()`);
+    await cdp.eval(`document.querySelector('#backBtn').click()`);
+    await cdp.eval(`new Promise(r => { const t = setInterval(() => { if (document.querySelector('[data-v="board"]')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 8000); })`);
+    await cdp.eval(`document.querySelector('[data-v="board"]').click()`);
+    await cdp.eval(`new Promise(r => { const t = setInterval(() => { if (document.querySelector('.lb-me-out')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 8000); })`);
+    const signedOut = await cdp.eval(`(() => {
+      const pin = document.querySelector('.lb-me');
+      const first = (document.querySelector('.lb .nm') || {}).textContent || '';
+      return {
+        state: pin.dataset.state,
+        text: pin.innerText.replace(/\\s+/g, ' ').trim(),
+        rank: !!pin.querySelector('.lb-me-rank'),
+        note: !!document.querySelector('#lb-note') || !!document.querySelector('.lb-note') || !!document.querySelector('[aria-describedby]'),
+        rules: /全球所有玩家|固定身份編號/.test(document.body.innerText),
+        stole: !!(first && pin.innerText.includes(first)),
+        rows: document.querySelectorAll('.lb li').length,
+      };
+    })()`);
+    assert(signedOut.state === 'signedout' && signedOut.text === '你的排名 登入後即可查看你的排名' && !signedOut.rank && !signedOut.stole && signedOut.rows === 100, 'a signed-out board does not invent a rank from the list ' + JSON.stringify(signedOut));
+    assert(!signedOut.note && !signedOut.rules, 'the signed-out board still has no rules note');
   } finally {
     try { chrome && chrome.kill('SIGKILL'); } catch {}
     try { srv && srv.kill('SIGKILL'); } catch {}

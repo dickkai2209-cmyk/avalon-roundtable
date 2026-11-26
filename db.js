@@ -453,8 +453,7 @@ function publicBoardRow(u, played, won, rank, mvp) {
     mvp: Math.max(0, Math.trunc(Number(mvp) || 0)),
   };
 }
-async function leaderboard(limit = 100) {
-  const cap = Math.min(100, Math.max(1, Number(limit) || 100));
+async function boardRows() {
   let rows = [];
   if (mode === 'pg') {
     const r = await pool.query(`
@@ -477,7 +476,29 @@ async function leaderboard(limit = 100) {
   }
   rows = rows.filter(row => row.played > 0 && row.u && !isRankFixture(row.u));
   rows.sort(cmpBoard);
-  return rows.slice(0, cap).map((row, i) => publicBoardRow(row.u, row.played, row.won, i + 1, row.mvp));
+  return rows;
+}
+async function boardStanding(user, rows) {
+  const idx = rows.findIndex(r => r.id === user.id);
+  if (idx >= 0) {
+    const row = rows[idx];
+    return publicBoardRow(row.u, row.played, row.won, idx + 1, row.mvp);
+  }
+  const st = await getStats(user.id);
+  const played = Number(st.played) || 0;
+  const won = Number(st.won) || 0;
+  const mvp = Number(st.mvp) || 0;
+  return publicBoardRow(user, played, won, null, mvp);
+}
+async function leaderboardView(limit = 100, viewer = null) {
+  const cap = Math.min(100, Math.max(1, Number(limit) || 100));
+  const rows = await boardRows();
+  const players = rows.slice(0, cap).map((row, i) => publicBoardRow(row.u, row.played, row.won, i + 1, row.mvp));
+  const me = viewer ? await boardStanding(viewer, rows) : null;
+  return { players, me };
+}
+async function leaderboard(limit = 100) {
+  return (await leaderboardView(limit, null)).players;
 }
 async function purgeTestData() {
   if (mode === 'pg') {
@@ -510,6 +531,6 @@ module.exports = {
   getUser, getUserByUsername, getUserByGuestKey, getUserByPubId, getUserByToken,
   createGuest, updateUser, setPhoto, getPhoto,
   validUsername, validPassword, registerOrUpgrade, verifyLogin,
-  createSession, deleteSession, saveGame, listHistory, getGame, getStats, leaderboard,
+  createSession, deleteSession, saveGame, listHistory, getGame, getStats, leaderboard, leaderboardView,
   getVetoCards, consumeVeto, getUserByGoogle, linkGoogle,
 };

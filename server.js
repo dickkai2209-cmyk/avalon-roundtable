@@ -979,8 +979,11 @@ app.get('/api/history', authUser, async (req, res) => {
 app.get('/api/stats', authUser, async (req, res) => res.json(await db.getStats(req.user.id)));
 app.get('/api/leaderboard', async (req, res) => {
   try {
-    const players = await db.leaderboard(100);
-    res.set('Cache-Control', 'no-store').json({ players, limit: 100 });
+    const viewer = await db.getUserByToken(bearer(req));
+    const { players, me } = await db.leaderboardView(100, viewer);
+    const body = { players, limit: 100 };
+    if (viewer && me) body.me = me;
+    res.set('Cache-Control', 'no-store').json(body);
   } catch (e) {
     console.error('leaderboard', e);
     res.status(500).json({ error: '暫時無法載入排行榜' });

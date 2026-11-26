@@ -66,8 +66,8 @@ const serverSrc = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const cssSrc = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 
-assert(html.includes('style.css?v=56') && html.includes('app.js?v=64'), 'cache bust moves past the versions on main');
-assert(!html.includes('style.css?v=55') && !html.includes('app.js?v=63'), 'live cache versions are not reused');
+assert(html.includes('style.css?v=57') && html.includes('app.js?v=65'), 'cache bust moves past the versions on main');
+assert(!html.includes('style.css?v=56') && !html.includes('app.js?v=64') && !html.includes('style.css?v=55') && !html.includes('app.js?v=63'), 'live cache versions are not reused');
 assert(appSrc.includes('const PD_V = 5'), 'pendant image cache key bumped');
 assert(cssSrc.includes('iceSweep') && cssSrc.includes('prefers-reduced-motion') && cssSrc.includes('pd-ice'), 'ice motion honors reduced motion');
 assert(appSrc.includes('mvpTotal() >= 10') && serverSrc.includes("f.pendant === 'laurel' && st.mvp < 10"), 'laurel still needs 10 earned MVP');
@@ -266,7 +266,8 @@ class Page {
     }
     const animalBtn = await cdp.eval(`document.querySelector('[data-e="puffer"]').scrollIntoView({ block: 'center' }); 1`);
     assert(animalBtn, 'scrolled to the new animals');
-    await sleep(80);
+    await cdp.eval(`Promise.all([...document.querySelectorAll('.pe-grid img, .pe-av img')].map(i => i.decode().catch(() => 0)))`);
+    await sleep(120);
     await cdp.shot('picker-animals-375');
     await size(390, 844);
     await sleep(80);
@@ -281,8 +282,29 @@ class Page {
       assert(hit && hit.n === n && hit.back, 'picker shows frame ' + n);
       assert(ICE.includes(k) ? !hit.off && hit.ice : hit.off, (ICE.includes(k) ? 'free ' : 'locked ') + n);
     }
+    const foxLock = await cdp.eval(`(() => {
+      const b = document.querySelector('[data-pd="foxqiu"]');
+      const lk = b.querySelector(':scope > .lk');
+      const br = b.getBoundingClientRect();
+      const lr = lk.getBoundingClientRect();
+      const pov = getComputedStyle(b.querySelector('.pov'));
+      const pd = b.querySelector('.pdv').getBoundingClientRect();
+      return {
+        off: b.classList.contains('off'),
+        need: (b.querySelector('i') || {}).textContent || '',
+        filter: pov.filter,
+        opacity: pov.opacity,
+        topGap: Math.round(lr.top - br.top),
+        rightGap: Math.round(br.right - lr.right),
+        aboveArt: lr.top < pd.top,
+      };
+    })()`);
+    assert(foxLock.off && foxLock.need === '玩 9 場解鎖', 'a 0-game account still shows the 狐祈千秋 requirement ' + JSON.stringify(foxLock));
+    assert(String(foxLock.filter).includes('grayscale') && Number(foxLock.opacity) < 0.7, 'locked 狐祈千秋 art is greyed ' + JSON.stringify(foxLock));
+    assert(foxLock.topGap >= 0 && foxLock.topGap <= 8 && foxLock.rightGap >= 0 && foxLock.rightGap <= 8, 'the 狐祈千秋 lock sits in the card corner ' + JSON.stringify(foxLock));
     await cdp.eval(`document.querySelector('[data-pd="frostmirror"]').scrollIntoView({ block: 'center' });`);
-    await sleep(80);
+    await cdp.eval(`Promise.all([...document.querySelectorAll('.pe-grid img, .pe-av img')].map(i => i.decode().catch(() => 0)))`);
+    await sleep(150);
     await cdp.shot('picker-frames-375');
     await size(390, 844);
     await sleep(120);
@@ -353,9 +375,9 @@ class Page {
     await openProfile('pendant');
     const unlocked = await cdp.eval(`(() => {
       const q = (k) => document.querySelector('[data-pd="' + k + '"]');
-      return { foxqiu: q('foxqiu').classList.contains('off'), plain: q('starplain').classList.contains('off'), ice: q('icesword').classList.contains('off') };
+      return { foxqiu: q('foxqiu').classList.contains('off'), foxNeed: (q('foxqiu').querySelector('i') || {}).textContent || '', plain: q('starplain').classList.contains('off'), plainNeed: (q('starplain').querySelector('i') || {}).textContent || '', ice: q('icesword').classList.contains('off') };
     })()`);
-    assert(!unlocked.foxqiu && unlocked.plain && !unlocked.ice, 'picker locks and unlocks follow the same ladder');
+    assert(!unlocked.foxqiu && unlocked.foxNeed === '' && unlocked.plain && unlocked.plainNeed.includes('勝 4 場') && !unlocked.ice, 'picker locks and unlocks follow the same ladder ' + JSON.stringify(unlocked));
     await cdp.eval(`document.querySelector('.modal').classList.add('hidden');`);
     await cdp.eval(`document.querySelector('[data-a="create"]').click()`);
     const tigerSeat = await cdp.eval(`new Promise(r => { const t = setInterval(() => { const img = document.querySelector('.rt .st .av img'); if (img && img.src.includes('/img/av/tiger.webp') && document.querySelector('.rt .st .pov.back')) { clearInterval(t); r(img.src); } }, 40); setTimeout(() => r(''), 20000); })`);

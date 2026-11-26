@@ -574,7 +574,7 @@ main{padding:8px 16px 96px}
 .pdgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
 .pdc{position:relative;background:#fff;border:1.5px solid #eceef4;border-radius:16px;padding:8px 4px 8px;cursor:pointer;box-shadow:0 2px 8px rgba(30,40,80,.06);color:#1d2333;display:flex;flex-direction:column;align-items:center;gap:2px}
 .pdc.sel{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.18)}
-.pdc .pdv,.pe-grid .pdv{position:relative;width:54px;height:54px;margin:14px 0 12px;overflow:visible}
+.pdc .pdv,.pe-grid .pdv{position:relative;z-index:1;width:54px;height:54px;margin:14px 0 12px;overflow:visible}
 .pdc .pdcirc,.pe-grid .pdcirc{position:absolute;inset:0;border-radius:50%;overflow:hidden;background:#fff;border:1.5px solid #e3e6ef;z-index:1}
 .pdc .pdcirc img,.pe-grid .pdcirc img{width:100%;height:100%;object-fit:cover;object-position:center;border-radius:50%;display:block;pointer-events:none}
 .pdc .pov,.pe-grid .pov,.pdc .pov.back,.pe-grid .pov.back{z-index:3;pointer-events:none}
@@ -584,9 +584,26 @@ main{padding:8px 16px 96px}
 .pdc i{font-style:normal;font-size:10px;color:#9aa0b2}
 .pdc .sp{position:absolute;left:6px;top:5px;font-size:12px;z-index:5}
 .pdc .ck{position:absolute;right:6px;top:6px;width:18px;height:18px;border-radius:50%;background:#3b82f6;color:#fff;font-size:11px;line-height:18px;font-weight:800;z-index:5}
-.pdc.off .pov{filter:grayscale(1);opacity:.55}.pdc.off .pdcirc{opacity:1;filter:none}
+.pdc.off .pov{filter:grayscale(1);opacity:.48}.pdc.off .pdcirc{opacity:1;filter:none}
+/* Ice frames: a light sweeps the rim. The mask keeps the face hole clear. */
+.av-wrap.pd-ice::after,.pdv.pd-ice::after,.crop-ring.pd-ice::after{
+  content:"";position:absolute;left:-33.33%;top:-33.33%;width:166.67%;height:166.67%;border-radius:50%;
+  pointer-events:none;z-index:4;
+  background:conic-gradient(from 0deg, transparent 0 74%, rgba(255,255,255,.92) 82%, transparent 90%);
+  -webkit-mask:radial-gradient(circle, transparent 0 30%, #000 33%, #000 48%, transparent 52%);
+  mask:radial-gradient(circle, transparent 0 30%, #000 33%, #000 48%, transparent 52%);
+  animation:iceSweep 7s linear infinite;
+}
+.av-wrap.pd-ice>.pov.ice,.pdv.pd-ice>.pov.ice,.crop-ring.pd-ice>.pov.ice{animation:iceGlow 2.8s ease-in-out infinite}
+@keyframes iceSweep{to{transform:rotate(360deg)}}
+@keyframes iceGlow{0%,100%{filter:brightness(1)}50%{filter:brightness(1.18) drop-shadow(0 0 3px rgba(190,230,255,.85))}}
+@media (prefers-reduced-motion:reduce){
+  .av-wrap.pd-ice::after,.pdv.pd-ice::after,.crop-ring.pd-ice::after,.av-wrap.pd-ice>.pov.ice,.pdv.pd-ice>.pov.ice,.crop-ring.pd-ice>.pov.ice{animation:none}
+  .av-wrap.pd-ice::after,.pdv.pd-ice::after,.crop-ring.pd-ice::after{opacity:0}
+  .av-wrap.pd-ice>.pov.ice,.pdv.pd-ice>.pov.ice,.crop-ring.pd-ice>.pov.ice{filter:none}
+}
 .pdc.off b{color:#9aa0b2}
-.pdc .lk{position:absolute;right:-4px;bottom:-4px;z-index:6;font-size:14px;background:#fff;border-radius:50%;width:22px;height:22px;line-height:22px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.pdc>.lk{position:absolute;top:4px;right:4px;bottom:auto;z-index:8;font-size:13px;background:#fff;border-radius:50%;width:22px;height:22px;line-height:22px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.18);pointer-events:none}
 .pdh{margin:16px 2px 0;font-size:12px;font-weight:700;color:#8a90a2}
 /* ---- seats: no ring, small seat number, host pill ---- */
 .rt .st .no{left:0;top:-4px;width:14px;height:14px;line-height:13px;font-size:8px;background:rgba(255,255,255,.9)!important;border:1px solid #e3e6ef!important;color:#9aa0b2!important;font-weight:600}
@@ -757,9 +774,9 @@ img,canvas,svg,video{max-width:100%}
 .pe-grid .ck{position:absolute;right:4px;top:4px;width:16px;height:16px;border-radius:50%;background:#3b82f6;color:#fff;font-size:10px;line-height:16px;font-weight:800}
 .pe-camcell{background:#f1f3f8 !important;font-size:22px;color:#8a90a2}
 .pe-grid button.off{opacity:.7}
-.pe-grid button.off .pov{filter:grayscale(1);opacity:.55}.pe-grid button.off .pdcirc,.pe-grid button.off .pdcirc img{filter:none;opacity:1}.pe-grid button.off .cell{filter:grayscale(1);opacity:.7}
-.pe-grid .pdv{position:relative;width:56px;height:56px;margin:0 auto 4px}
-.pe-grid .lk{position:absolute;right:-2px;bottom:-2px;z-index:6;font-size:12px;background:#fff;border-radius:50%;width:18px;height:18px;line-height:18px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.pe-grid button.off .pov{filter:grayscale(1);opacity:.48}.pe-grid button.off .pdcirc,.pe-grid button.off .pdcirc img{filter:none;opacity:1}.pe-grid button.off .cell{filter:grayscale(1);opacity:.7}
+.pe-grid .pdv{position:relative;z-index:1;width:56px;height:56px;margin:0 auto 4px}
+.pe-grid button>.lk{position:absolute;top:4px;right:4px;bottom:auto;z-index:8;font-size:13px;background:#fff;border-radius:50%;width:22px;height:22px;line-height:22px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.18);pointer-events:none}
 .pe-grid i{display:block;font-style:normal;font-size:9px;color:#9aa0b2;margin-top:1px}
 .pe-fx{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
 .pe-fx button{border:1.5px solid #eceef4;background:#fff;border-radius:12px;padding:6px 8px;font-size:12px;cursor:pointer;color:#1d2333}

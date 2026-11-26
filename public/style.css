@@ -585,6 +585,23 @@ main{padding:8px 16px 96px}
 .pdc .sp{position:absolute;left:6px;top:5px;font-size:12px;z-index:5}
 .pdc .ck{position:absolute;right:6px;top:6px;width:18px;height:18px;border-radius:50%;background:#3b82f6;color:#fff;font-size:11px;line-height:18px;font-weight:800;z-index:5}
 .pdc.off .pov{filter:grayscale(1);opacity:.55}.pdc.off .pdcirc{opacity:1;filter:none}
+/* Ice frames: a light sweeps the rim. The mask keeps the face hole clear. */
+.av-wrap.pd-ice::after,.pdv.pd-ice::after,.crop-ring.pd-ice::after{
+  content:"";position:absolute;left:-33.33%;top:-33.33%;width:166.67%;height:166.67%;border-radius:50%;
+  pointer-events:none;z-index:4;
+  background:conic-gradient(from 0deg, transparent 0 74%, rgba(255,255,255,.92) 82%, transparent 90%);
+  -webkit-mask:radial-gradient(circle, transparent 0 30%, #000 33%, #000 48%, transparent 52%);
+  mask:radial-gradient(circle, transparent 0 30%, #000 33%, #000 48%, transparent 52%);
+  animation:iceSweep 7s linear infinite;
+}
+.av-wrap.pd-ice>.pov.ice,.pdv.pd-ice>.pov.ice,.crop-ring.pd-ice>.pov.ice{animation:iceGlow 2.8s ease-in-out infinite}
+@keyframes iceSweep{to{transform:rotate(360deg)}}
+@keyframes iceGlow{0%,100%{filter:brightness(1)}50%{filter:brightness(1.18) drop-shadow(0 0 3px rgba(190,230,255,.85))}}
+@media (prefers-reduced-motion:reduce){
+  .av-wrap.pd-ice::after,.pdv.pd-ice::after,.crop-ring.pd-ice::after,.av-wrap.pd-ice>.pov.ice,.pdv.pd-ice>.pov.ice,.crop-ring.pd-ice>.pov.ice{animation:none}
+  .av-wrap.pd-ice::after,.pdv.pd-ice::after,.crop-ring.pd-ice::after{opacity:0}
+  .av-wrap.pd-ice>.pov.ice,.pdv.pd-ice>.pov.ice,.crop-ring.pd-ice>.pov.ice{filter:none}
+}
 .pdc.off b{color:#9aa0b2}
 .pdc .lk{position:absolute;right:-4px;bottom:-4px;z-index:6;font-size:14px;background:#fff;border-radius:50%;width:22px;height:22px;line-height:22px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
 .pdh{margin:16px 2px 0;font-size:12px;font-weight:700;color:#8a90a2}

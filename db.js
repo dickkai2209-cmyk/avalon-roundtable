@@ -424,6 +424,9 @@ function isRankFixture(u) {
 function cmpBoard(a, b) {
   const cross = BigInt(b.won) * BigInt(a.played) - BigInt(a.won) * BigInt(b.played);
   if (cross !== 0n) return cross > 0n ? 1 : -1;
+  const am = Number(a.mvp) || 0;
+  const bm = Number(b.mvp) || 0;
+  if (am !== bm) return bm - am;
   if (a.played !== b.played) return b.played - a.played;
   if (a.won !== b.won) return b.won - a.won;
   if (a.id < b.id) return -1;
@@ -435,7 +438,7 @@ function boardPhoto(u) {
   if (u.has_photo || u.photo) return true;
   return mode === 'json' && fs.existsSync(path.join(PHOTO_DIR, u.id + '.webp'));
 }
-function publicBoardRow(u, played, won, rank) {
+function publicBoardRow(u, played, won, rank, mvp) {
   const pv = u.updated_at ? new Date(u.updated_at).getTime() : 0;
   return {
     rank,
@@ -447,6 +450,7 @@ function publicBoardRow(u, played, won, rank) {
     photoUrl: boardPhoto(u) ? `/api/avatar/${u.pub_id}?v=${pv}` : null,
     played,
     won,
+    mvp: Math.max(0, Math.trunc(Number(mvp) || 0)),
   };
 }
 async function leaderboard(limit = 100) {
@@ -455,12 +459,12 @@ async function leaderboard(limit = 100) {
   if (mode === 'pg') {
     const r = await pool.query(`
       SELECT u.id, u.pub_id, u.name, u.avatar, u.bg, u.pendant, u.guest_key, u.username, u.google_sub,
-             u.updated_at, (u.photo IS NOT NULL) AS has_photo, s.played, s.won
+             u.updated_at, (u.photo IS NOT NULL) AS has_photo, s.played, s.won, s.mvp
       FROM user_stats s
       JOIN users u ON u.id = s.user_id
       WHERE s.played > 0`);
     rows = r.rows.map(row => ({
-      id: row.id, u: row, played: Number(row.played) || 0, won: Number(row.won) || 0,
+      id: row.id, u: row, played: Number(row.played) || 0, won: Number(row.won) || 0, mvp: Number(row.mvp) || 0,
     }));
   } else {
     for (const [id, st] of Object.entries(mem.stats || {})) {
@@ -468,12 +472,12 @@ async function leaderboard(limit = 100) {
       if (played <= 0) continue;
       const u = mem.users.find(x => x.id === id);
       if (!u) continue;
-      rows.push({ id, u, played: Number(played) || 0, won: Number(st.won) || 0 });
+      rows.push({ id, u, played: Number(played) || 0, won: Number(st.won) || 0, mvp: Number(st.mvp) || 0 });
     }
   }
   rows = rows.filter(row => row.played > 0 && row.u && !isRankFixture(row.u));
   rows.sort(cmpBoard);
-  return rows.slice(0, cap).map((row, i) => publicBoardRow(row.u, row.played, row.won, i + 1));
+  return rows.slice(0, cap).map((row, i) => publicBoardRow(row.u, row.played, row.won, i + 1, row.mvp));
 }
 async function purgeTestData() {
   if (mode === 'pg') {

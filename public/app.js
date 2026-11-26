@@ -1738,16 +1738,17 @@ const ACHS = [
   ['assassin', '暗影之刃', '以刺客身份獲勝', s => ((s.roles || {}).assassin || {}).won >= 1],
   ['allroles', '千面騎士', '玩過 6 種不同角色', s => Object.keys(s.roles || {}).length >= 6],
 ];
-const BOARD_NOTE = '全球所有玩家，唔係只計呢間房。按已完成對局的精確勝率由高至低，最多 100 人。0 場完成唔會上榜。勝率相同時，完成場數較多優先，然後勝場較多，最後用固定身份編號。畫面上的百分比有四捨五入，排序用精確分數。1 勝 / 1 場會顯示 100%。';
+const BOARD_NOTE = '全球所有玩家，唔係只計呢間房。按已完成對局的精確勝率由高至低，最多 100 人。0 場完成唔會上榜。勝率相同時，MVP 次數較多優先，然後完成場數較多，然後勝場較多，最後用固定身份編號。畫面上的百分比有四捨五入，排序用精確分數。1 勝 / 1 場會顯示 100%。';
 function boardHtml(data) {
   const rows = (data && data.players) || [];
   const note = `<p id="lb-note" class="tiny muted lb-note">${BOARD_NOTE}</p>`;
   if (!rows.length) return `<div class="card"><h3>排行榜</h3>${note}<div class="center muted lb-empty">暫時未有完成對局可以排名</div></div>`;
   const items = rows.map(p => {
     const rate = pct(p.won, p.played);
+    const mvp = Math.max(0, Math.trunc(Number(p.mvp) || 0));
     const nick = p.name || '未設定暱稱';
-    const label = `第 ${p.rank} 名，${nick}，勝率 ${rate}%，${p.won} 勝 / ${p.played} 場`;
-    return `<li data-rank="${p.rank}" aria-label="${esc(label)}"><span class="lb-rank" aria-hidden="true">${p.rank}</span>${av(p, 44)}<div class="lb-main"><div class="nm">${esc(nick)}</div></div><div class="lb-rec"><b>${rate}%</b><span>${p.won}勝/${p.played}場</span></div></li>`;
+    const label = `第 ${p.rank} 名，${nick}，MVP ${mvp} 次，勝率 ${rate}%，${p.won} 勝 / ${p.played} 場`;
+    return `<li data-rank="${p.rank}" aria-label="${esc(label)}"><span class="lb-rank" aria-hidden="true">${p.rank}</span>${av(p, 44)}<div class="lb-main"><div class="nm">${esc(nick)}</div></div><div class="lb-rec"><div class="lb-rate"><span class="lb-mvp">MVP ${mvp}</span><b>${rate}%</b></div><span class="lb-wl">${p.won}勝/${p.played}場</span></div></li>`;
   }).join('');
   return `<div class="card"><h3>排行榜</h3>${note}<ol class="lb" aria-describedby="lb-note">${items}</ol></div>`;
 }

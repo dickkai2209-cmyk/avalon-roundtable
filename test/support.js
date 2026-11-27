@@ -92,7 +92,7 @@ async function hook(objType, object, id) {
   assert(!html.includes('tlogo" src="/img/amigos.webp"') && !html.includes('class="tlogo" src="/img/amigos.webp"'), 'Amigos is not the header mark');
   assert(app.includes('class="amigos-mark"') && app.includes('Amigosparty') && app.includes('Teddy Design Limited'), 'Amigos stays a sponsor credit');
   assert(app.includes('旺角霓虹'), 'card-back name 旺角霓虹 is left as venue flavour');
-  assert(html.includes('style.css?v=61') && html.includes('app.js?v=69') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'cache bust past live main');
+  assert(html.includes('style.css?v=62') && html.includes('app.js?v=70') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'cache bust past live main');
   assert(fs.existsSync(path.join(root, 'public/img/logo-merlin.webp')) && fs.existsSync(path.join(root, 'public/img/logo-merlin.png')), 'logo asset is webp and png');
   const logo = fs.readFileSync(path.join(root, 'public/img/logo-merlin.webp'));
   assert(logo.slice(0, 4).toString() === 'RIFF' && logo.slice(8, 12).toString() === 'WEBP', 'merlin logo is webp');
@@ -103,7 +103,13 @@ async function hook(objType, object, id) {
   }
   assert(!ui.includes('去廣告') && !ui.includes('去广告') && !supportSrc.includes('去廣告') && !app.includes('去广告'), 'ad removal is not sold');
   assert(!ui.includes('¥') && !ui.includes('请开发者') && !ui.includes('头像挂件'), 'support UI is Traditional Chinese and not CNY');
-  assert(app.includes('data-a="go" data-v="support"') || app.includes('data-v="support"'), '支持我哋 entry is present');
+  const home = app.slice(app.indexOf('function homeHtml'), app.indexOf('function supportIcon'));
+  assert(!home.includes('support-entry'), 'home has no full-width support button');
+  const menuSrc = home.slice(home.indexOf('class="card menu"'), home.indexOf('class="footer"'));
+  const labels = [...menuSrc.matchAll(/class="grow">([^<]+)</g)].map(m => m[1]);
+  assert(labels.join(',') === '歷史記錄,數據統計,角色皮膚,排行榜,規則介紹,支持我哋,版本', 'support row sits under 規則介紹 (' + labels.join(',') + ')');
+  assert(menuSrc.includes('<div class="item" data-a="go" data-v="support"><span class="ic">☕</span><span class="grow">支持我哋</span><span class="chev">›</span></div>'), 'support menu row keeps the coffee emoji and chevron');
+  assert(!css.includes('.support-entry'), 'unused support-entry CSS is removed');
 
   assert(support.UNIT_AMOUNT === 1500 && support.CURRENCY === 'hkd' && support.LABEL === 'HK$15', 'amount is HK$15');
   assert(support.BENEFIT_IDS.join() === 'coffee,badge,silver,emote', 'four benefits');
@@ -301,13 +307,18 @@ async function hook(objType, object, id) {
   const shoot = async (name, w, h) => {
     await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true });
     await send('Page.navigate', { url: APP });
-    const ready = await evalj(`new Promise(r => { const t=setInterval(()=>{ const title=document.querySelector('#topTitle'); const img=document.querySelector('.tlogo.merlin'); if(title && title.textContent==='HK阿瓦隆' && img && img.complete && img.naturalWidth>0 && document.querySelector('.support-entry')){ clearInterval(t); r(1);} }, 40); setTimeout(()=>r(0), 8000); })`);
+    const ready = await evalj(`new Promise(r => { const t=setInterval(()=>{ const title=document.querySelector('#topTitle'); const img=document.querySelector('.tlogo.merlin'); const row=document.querySelector('.card.menu [data-a="go"][data-v="support"]'); if(title && title.textContent==='HK阿瓦隆' && img && img.complete && img.naturalWidth>0 && row && !document.querySelector('.support-entry')){ clearInterval(t); r(1);} }, 40); setTimeout(()=>r(0), 8000); })`);
     assert(ready === 1, name + ' home header is ready');
+    const menu = await evalj(`(() => { const items=[...document.querySelectorAll('.card.menu .item .grow')].map(el => el.textContent.trim()); const row=document.querySelector('.card.menu [data-a="go"][data-v="support"]'); const rules=items.indexOf('規則介紹'); const sup=items.indexOf('支持我哋'); const ver=items.indexOf('版本'); return { items, blue: !!document.querySelector('.support-entry') || !!document.querySelector('button.support-entry'), coffee: row && row.querySelector('.ic') ? row.querySelector('.ic').textContent : '', chev: !!(row && row.querySelector('.chev')), orderOk: rules >= 0 && sup === rules + 1 && ver === sup + 1 }; })()`);
+    assert(!menu.blue && menu.orderOk && menu.coffee === '☕' && menu.chev, name + ' menu has 支持我哋 under 規則介紹 and no blue button ' + JSON.stringify(menu));
     const head = await evalj(`(() => { const img=document.querySelector('.tlogo.merlin'); const title=document.querySelector('#topTitle'); const ir=img.getBoundingClientRect(); const tr=title.getBoundingClientRect(); return { src: img.getAttribute('src'), title: title.textContent, w: Math.round(ir.width), h: Math.round(ir.height), overlap: !(ir.right < tr.left || tr.right < ir.left) }; })()`);
     assert(head.src.includes('logo-merlin') && head.title === 'HK阿瓦隆' && head.w >= 24 && head.h >= 24, name + ' header is Merlin + HK阿瓦隆');
     const { data } = await send('Page.captureScreenshot', { format: 'png' });
     fs.writeFileSync(path.join(OUT, 'header-' + w + '.png'), Buffer.from(data, 'base64'));
-    await evalj(`document.querySelector('.support-entry').click()`);
+    const pageBox = await evalj(`({ w: document.documentElement.clientWidth, h: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight) })`);
+    const homeShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: 0, y: 0, width: pageBox.w, height: pageBox.h, scale: 1 } });
+    fs.writeFileSync(path.join(OUT, 'home-menu-' + w + '.png'), Buffer.from(homeShot.data, 'base64'));
+    await evalj(`document.querySelector('.card.menu [data-a="go"][data-v="support"]').click()`);
     const shown = await evalj(`new Promise(r => { const t=setInterval(()=>{ const h=document.querySelector('.support h1'); if(h && h.textContent.includes('請開發者喝杯咖啡') && document.querySelector('.support-pay')){ clearInterval(t); r(document.body.innerText); } }, 40); setTimeout(()=>r(''), 4000); })`);
     assert(shown.includes('HK$15 支持') && shown.includes('一杯咖啡') && shown.includes('支持者表情') && !shown.includes('去廣告') && !shown.includes('¥'), name + ' support screen copy');
     const layout = await evalj(`(() => { const rows=[...document.querySelectorAll('.support-row')].map(r => r.getBoundingClientRect()); const btn=document.querySelector('.support-pay').getBoundingClientRect(); const h1=document.querySelector('.support h1').getBoundingClientRect(); return { n: rows.length, w: Math.round(document.documentElement.clientWidth), h1: Math.round(h1.top), btn: Math.round(btn.bottom), vh: window.innerHeight, covers: rows.some(r => r.top < 52) }; })()`);

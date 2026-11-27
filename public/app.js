@@ -95,6 +95,9 @@ const MARK_CROWN = `<span class="mark crown" title="隊長"><span class="halo"><
 const MARK_WREATH = `<span class="mark wreath" title="湖中仙女"><span class="glow"></span><svg viewBox="0 0 78 40" width="54" height="26" aria-hidden="true"><path d="M8 34c8-16 18-24 31-24s23 8 31 24" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/><path d="M8 34c8-16 18-24 31-24s23 8 31 24" fill="none" stroke="#0c7c74" stroke-width="4.2" stroke-linecap="round"/><ellipse cx="16" cy="28" rx="8" ry="4" fill="#b7f3df" stroke="#0c6b5c" stroke-width="1.3" transform="rotate(-32 16 28)"/><ellipse cx="62" cy="28" rx="8" ry="4" fill="#b7f3df" stroke="#0c6b5c" stroke-width="1.3" transform="rotate(32 62 28)"/><ellipse cx="26" cy="16" rx="7" ry="3.3" fill="#7de8c4" stroke="#0c6b5c" stroke-width="1.2" transform="rotate(-52 26 16)"/><ellipse cx="52" cy="16" rx="7" ry="3.3" fill="#7de8c4" stroke="#0c6b5c" stroke-width="1.2" transform="rotate(52 52 16)"/><circle cx="18" cy="22" r="6.2" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle cx="18" cy="22" r="3.1" fill="#ff8fb8"/><circle class="mid" cx="39" cy="8" r="6.6" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle class="mid" cx="39" cy="8" r="3.2" fill="#ff8fb8"/><circle cx="60" cy="22" r="6.2" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle cx="60" cy="22" r="3.1" fill="#ff8fb8"/></svg></span>`;
 const MARK_SWORD = `<span class="mark sword" title="王者之劍"><svg viewBox="0 0 28 64" width="16" height="34" aria-hidden="true"><path d="M14 2 L18 10 L16 38 L14 42 L12 38 L10 10 Z" fill="#f4f7fb" stroke="#7d92aa" stroke-width="1.6" stroke-linejoin="round"/><path d="M5 40 h18" stroke="#e0a820" stroke-width="4" stroke-linecap="round"/><rect x="11" y="42" width="6" height="12" rx="1.5" fill="#c4922a"/><circle cx="14" cy="57" r="3.2" fill="#f0c14a" stroke="#a86b08" stroke-width="1"/></svg></span>`;
 const MARK_RING = `<span class="mark ring" title="隊員"></span>`;
+// Original team-pick pennant. Compact, centred on the portrait, not a banner over the head.
+const PICK_FLAG = `<span class="pick-flag" aria-hidden="true"><svg viewBox="0 0 64 40"><path d="M8 3.2v33.6" stroke="#6b4510" stroke-width="3.6" stroke-linecap="round"/><path d="M8 3.2v33.6" stroke="#f8e2a0" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="3.8" r="2.5" fill="#fff6d4" stroke="#6b4510" stroke-width="1.1"/><path d="M11.2 6.5h39.2l-8.6 9.2 8.6 9.2H11.2z" fill="#f6c445" stroke="#6b4510" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 9.2h31.2l-6.4 6.5 6.4 6.5H14z" fill="#fff3c4" opacity=".55"/><path d="M31.2 12.4l2.05 3.7 4.15.5-3.05 2.75.8 4.05-3.95-2.15-3.95 2.15.8-4.05-3.05-2.75 4.15-.5z" fill="#fffef8" stroke="#8a5a12" stroke-width=".7" stroke-linejoin="round"/></svg></span>`;
+const PICK_STARS = [0, 1, 2, 3, 4, 5, 6, 7].map(i => `<i class="gstar s${i}" aria-hidden="true"></i>`).join('');
 const MARK_CAST = `<span class="mark cast" title="已投票"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12.5 L10 17.5 L19 7" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
 function markLegend() {
   return `<div class="markleg"><span><i class="crown">${MARK_CROWN}</i>隊長</span><span><i class="wreath">${MARK_WREATH}</i>湖中仙女</span><span><i class="sword">${MARK_SWORD}</i>王者之劍</span><span><i class="ring"></i>隊員</span><span><i class="cast">${MARK_CAST}</i>已投票</span></div>`;
@@ -1553,9 +1556,9 @@ function roundTable(seats, o = {}) {
     const mic = (window.AvalonVoice && AvalonVoice.glyph(s.id)) || '';
     const pres = (window.AvalonVoice && AvalonVoice.presence(!!s.online)) || '';
     const speakCls = (S && S.settings && S.settings.mic === true && S.floor && S.floor.speaker === s.id) ? ' is-speak' : '';
-    const sparks = String(cls).includes('gold-pick') ? '<i class="gspark a" aria-hidden="true"></i><i class="gspark b" aria-hidden="true"></i><i class="gspark c" aria-hidden="true"></i>' : '';
+    const pickArt = String(cls).includes('gold-pick') ? PICK_FLAG + PICK_STARS : '';
     return `<div class="st ${cls}${speakCls}" style="${pos}" data-sid="${s.id}" data-id="${s.id}" data-seat="${seatNo}" ${actAttr}>
-      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${o.marks ? o.marks(s, i) : ''}${av(s, avSize, palSide)}${sparks}${mic}${pres}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
+      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${o.marks ? o.marks(s, i) : ''}${av(s, avSize, palSide)}${pickArt}${mic}${pres}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
   }).join('');
   return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="currentColor"/><circle cx="13.8" cy="10.3" r="1.2" fill="currentColor"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${nums.join('')}${st}</div>`;
 }
@@ -2334,7 +2337,8 @@ function gameHtml() {
     click: selectable,
     cls: s => [
       selected.has(s.id) ? 'sel' : '',
-      selected.has(s.id) && teamOpen ? 'gold-pick' : '',
+      // Flag and star ring: while the leader is tapping, and after the team is proposed (vote). Not assassin, Lady, or sword picks.
+      ((teamOpen && selected.has(s.id)) || (!ended && g.phase === 'vote' && (g.team || []).includes(s.id))) ? 'gold-pick' : '',
       !ended && (g.team || []).includes(s.id) ? 'team' : '',
       s.online ? '' : 'off',
       !ended && s.id === g.leaderId ? 'is-lead' : '',

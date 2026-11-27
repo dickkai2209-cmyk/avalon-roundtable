@@ -950,7 +950,7 @@ app.post('/api/auth/guest', async (req, res) => {
   try {
     const guestKey = String((req.body && req.body.guestKey) || '').trim();
     const userId = String((req.body && (req.body.userId || req.body.pid)) || '').trim();
-    const keys = [guestKey, userId].filter(k => k.length >= 8 && k.length <= 80);
+    const keys = [userId, guestKey].filter(k => k.length >= 8 && k.length <= 80);
     if (!keys.length) return res.status(400).json({ error: '無效身份' });
     const profile = req.body.profile || {};
     const known = await resolveIdentity(keys);
@@ -1112,7 +1112,7 @@ async function resolveIdentity(keys) {
 }
 async function bindSocketUser(socket, token, guestKey, profile, userId) {
   let u = token ? await db.getUserByToken(token) : null;
-  if (!u) u = await resolveIdentity([guestKey, userId]);
+  if (!u) u = await resolveIdentity([userId, guestKey]);
   const key = String(guestKey || '').trim();
   if (!u && key.length >= 8 && key.length <= 80) u = await db.createGuest({ guestKey: key, name: cleanName(profile && profile.name), avatar: cleanAvatar(profile && profile.avatar), bg: cleanBg(profile && profile.bg), fx: cleanFx(profile && profile.fx), pendant: cleanPendant(profile && profile.pendant) });
   if (!u) return null;

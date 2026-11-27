@@ -103,6 +103,10 @@ function readDb() { return JSON.parse(fs.readFileSync(path.join(DATA, 'db.json')
   const freshKey = 'rejoin-brand-new-key-99';
   const hijack = await guest(freshKey, '陌生人', { avatar: 'cat', pendant: 'crown', userId: made.user.id });
   assert(hijack.user.id === made.user.id && hijack.user.name === '回歸' && hijack.stats.played === 7, 'a new guest key plus the stored user id does not create a second account');
+  const stray = await guest('rejoin-empty-stray-22', '空帳');
+  assert(stray.user.id !== made.user.id, 'a lone unused guest key can still open a new account');
+  const reclaim = await guest('rejoin-empty-stray-22', '再空', { userId: made.user.id });
+  assert(reclaim.user.id === made.user.id && reclaim.user.name === '回歸' && reclaim.stats.played === 7, 'an existing stray guest key plus the stored user id still returns the original account');
   const regName = 'rj' + Math.random().toString(36).slice(2, 6);
   const reg = await fetch(URL + '/api/auth/register', {
     method: 'POST',

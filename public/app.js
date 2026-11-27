@@ -1516,11 +1516,11 @@ function canonicalSlots(seats) {
 }
 function roundTable(seats, o = {}) {
   const n = seats.length;
-  // Large ring: icon centres sit near the card edge so the middle stays open (5–12 seats).
-  const R = n >= 12 ? 39 : n >= 10 ? 40 : 42;
-  // One numeral radius for every seat: 0.55 of the avatar-centre ring (target ~190/350).
-  // Same angle as the icon, so avatar-centre to number-centre distance is identical.
-  const numR = Math.round(R * 0.55 * 10) / 10;
+  // Numerals stay on the original ring (0.55 of the old 42/40/39 radii):
+  // 23.1 / 22 / 21.5. Avatars step outward on one shared radius so a charm
+  // clears that numeral without dragging the digits toward the centre.
+  const numR = n >= 12 ? 21.5 : n >= 10 ? 22 : 23.1;
+  const R = n >= 12 ? 44 : n >= 10 ? 44.5 : n >= 8 ? 43.5 : 44;
   const avSize = o.avSize || (n >= 12 ? 46 : n >= 10 ? 52 : 58);
   const nums = [];
   const st = canonicalSlots(seats).map((s, i) => {
@@ -2331,9 +2331,11 @@ function gameHtml() {
     label: s => ended ? `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>` : (s.evil ? '<span class="lbl e">壞人</span>' : ''),
     center,
   });
-  return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : ''}${!me ? '<div class="specbar" data-spec="live">👁 觀戰中 · 唔會看到隱藏身分</div>' : ''}<div class="card">${trackHtml(g)}</div>
+  const micCard = S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : '';
+  return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${!me ? '<div class="specbar" data-spec="live">👁 觀戰中 · 唔會看到隱藏身分</div>' : ''}<div class="card">${trackHtml(g)}</div>
   <div class="card${pickLive ? ' pick-live' : ''}" style="padding:42px 10px 16px">${table}${S.isHost && !ended ? releaseOpen() : ''}</div>
   <div class="card thist" id="teamhist">${teamHistoryHtml(g)}${ended ? '' : markLegend()}</div>
+  ${micCard}
   ${ladyChainHtml(g.ladyLog, g.seats, ended) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats, ended)}</div>` : ''}
   ${panel ? `<div class="card${pickLive ? ' pick-ready' : ''}${g.phase === 'vote' ? ' vote-panel' : ''}">${panel}</div>` : ''}
   ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : ''}

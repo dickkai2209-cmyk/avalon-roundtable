@@ -1,4 +1,5 @@
-// t256–t257: entrance effects live on their own profile tab and replay every 30s.
+// Entrance effects live on their own profile tab and replay once a minute.
+// The seat stays still: only the fx layer plays.
 const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
@@ -25,6 +26,14 @@ const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
 assert(html.includes('style.css?v=71') && html.includes('app.js?v=79'), 'cache bust moves past live 68/76');
 assert(!html.includes('style.css?v=70') && !html.includes('app.js?v=78') && !html.includes('style.css?v=69') && !html.includes('app.js?v=77') && !html.includes('style.css?v=68') && !html.includes('app.js?v=76') && !html.includes('style.css?v=67') && !html.includes('app.js?v=75'), 'live cache versions are not reused');
 assert(appSrc.includes("['none','無',0]") && appSrc.includes("['spot','聚光燈',0]") && appSrc.includes("['gold','金光',0]") && appSrc.includes("['snow','聖誕飄雪',0]") && appSrc.includes("['spark','星火',1]") && appSrc.includes("['petals','花瓣',3]") && appSrc.includes("['howl','狼人咆哮',4]") && appSrc.includes("['fire','火焰圈',6]") && appSrc.includes("['lightning','閃電',10]"), 'unlock ladder is unchanged');
+assert(appSrc.includes("['signs','旺角燈牌',0]") && appSrc.includes("['ding','叮叮電車',2]") && appSrc.includes("['harbour','維港煙花',5]") && appSrc.includes("['ferry','渡海小輪',8]") && appSrc.includes("['hop','兔兔跳跳',0]") && appSrc.includes("['waddle','小鴨巡遊',3]") && appSrc.includes("['ham','倉鼠滾滾',7]"), 'new effects use the play-count ladder');
+const serverSrc = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+assert(serverSrc.includes('signs: 0') && serverSrc.includes('ding: 2') && serverSrc.includes('harbour: 5') && serverSrc.includes('ferry: 8') && serverSrc.includes('hop: 0') && serverSrc.includes('waddle: 3') && serverSrc.includes('ham: 7'), 'server play-count ladder matches');
+assert(appSrc.includes('const FX_EVERY = 60000') && !appSrc.includes('const FX_EVERY = 30000'), 'replay cadence is one minute');
+const applyFn = appSrc.slice(appSrc.indexOf('function applyEntrance'), appSrc.indexOf('function playSeat'));
+assert(applyFn.includes("el.classList.add('fx-' + fx)") && !/classList\.add\(\s*'enter'/.test(applyFn), 'playing an effect does not add the bounce class');
+const previewFn = appSrc.slice(appSrc.indexOf('const replayEntrancePreview'), appSrc.indexOf('const markSel'));
+assert(previewFn.includes("classList.remove('enter')") && !/classList\.add\(\s*'enter'/.test(previewFn), 'picker preview does not bounce the avatar');
 assert(appSrc.includes('data-t="fx"') && appSrc.includes('>入場特效</button>'), 'third tab is 入場特效');
 const bodyFn = appSrc.slice(appSrc.indexOf('const bodyHtml'), appSrc.indexOf('const draw'));
 const fxBranch = bodyFn.slice(bodyFn.indexOf("tab === 'fx'"), bodyFn.indexOf("tab === 'pendant'"));
@@ -32,7 +41,10 @@ assert(fxBranch.includes('data-fx') && fxBranch.includes('pe-fx'), 'fx picker is
 const avatarBranch = bodyFn.slice(bodyFn.indexOf('photoOn'));
 assert(!avatarBranch.includes('data-fx') && !avatarBranch.includes('pe-fx') && !avatarBranch.includes('pe-fxlab'), 'avatar pane no longer embeds the fx list');
 assert(!bodyFn.includes('pe-fxlab'), 'the old embedded heading is gone');
-assert(appSrc.includes('30000'), 'replay cadence is 30 seconds');
+assert(cssSrc.includes('.fx-signs') && cssSrc.includes('.fx-ding') && cssSrc.includes('.fx-harbour') && cssSrc.includes('.fx-ferry') && cssSrc.includes('.fx-hop') && cssSrc.includes('.fx-waddle') && cssSrc.includes('.fx-ham'), 'seven new effect styles exist');
+assert(cssSrc.includes('/img/fx/howl.webp') && cssSrc.includes('width:54px;height:50px') && cssSrc.includes('howlwolf') && !cssSrc.includes('M4 40c6-2') && !cssSrc.includes("fill='%236b5348'") && !/\.fx-howl\{[^}]*animation:howlwave/.test(cssSrc), '狼人咆哮 is a painted werewolf, not the sticker silhouette');
+const fxCss = cssSrc.slice(cssSrc.indexOf('/* Entrance art sits above the avatar'));
+assert(/prefers-reduced-motion[\s\S]{0,700}\.fx-signs/.test(fxCss) && fxCss.includes('.fx-hop') && fxCss.includes('.fx-harbour'), 'reduced motion stills the new effects');
 assert(appSrc.includes('prefers-reduced-motion') && cssSrc.includes('.rt .st.enter') && /prefers-reduced-motion[\s\S]{0,400}\.rt \.st\.enter/.test(cssSrc), 'reduced motion suppresses the seat entrance');
 assert(/\.pe-tabs\{[^}]*nowrap/.test(cssSrc), 'tab row is kept on one line');
 
@@ -170,17 +182,58 @@ try { localStorage.setItem('cc.profile', JSON.stringify({ name:'雪人', avatar:
     return { buttons, cls: wrap.className, tabs, grid: !!document.querySelector('.pe-body .pe-grid'), sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth };
   })()`);
   assert(fxTab.tabs.find(t => t.t === '入場特效').sel, 'fx tab is selected');
-  assert(fxTab.buttons.map(b => b.k).join(',') === 'none,spot,gold,snow,spark,petals,howl,fire,lightning,silver', 'fx list is the full ladder including 無 and 銀白追光');
+  assert(fxTab.buttons.map(b => b.k).join(',') === 'none,spot,gold,snow,spark,petals,howl,fire,lightning,signs,ding,harbour,ferry,hop,waddle,ham,silver', 'fx list keeps the old ladder and adds seven effects before 銀白追光');
   assert(fxTab.buttons.find(b => b.k === 'silver').off && fxTab.buttons.find(b => b.k === 'silver').t.includes('支持'), '銀白追光 stays a support unlock');
-  assert(fxTab.buttons.filter(b => !b.off).map(b => b.k).join(',') === 'none,spot,gold,snow', 'free effects stay unlocked');
+  assert(fxTab.buttons.filter(b => !b.off).map(b => b.k).join(',') === 'none,spot,gold,snow,signs,hop', 'free effects stay unlocked, including 旺角燈牌 and 兔兔跳跳');
   assert(fxTab.buttons.find(b => b.k === 'spark').off && fxTab.buttons.find(b => b.k === 'spark').t.includes('1場'), '星火 still needs 1 game');
   assert(fxTab.buttons.find(b => b.k === 'lightning').t.includes('10場'), '閃電 still needs 10 games');
+  assert(fxTab.buttons.find(b => b.k === 'signs').t.includes('旺角燈牌') && fxTab.buttons.find(b => b.k === 'ding').t.includes('叮叮電車') && fxTab.buttons.find(b => b.k === 'ding').t.includes('2場'), 'Hong Kong names and the tram unlock');
+  assert(fxTab.buttons.find(b => b.k === 'harbour').t.includes('維港煙花') && fxTab.buttons.find(b => b.k === 'harbour').t.includes('5場') && fxTab.buttons.find(b => b.k === 'ferry').t.includes('渡海小輪') && fxTab.buttons.find(b => b.k === 'ferry').t.includes('8場'), 'harbour and ferry stay on the play ladder');
+  assert(fxTab.buttons.find(b => b.k === 'hop').t.includes('兔兔跳跳') && fxTab.buttons.find(b => b.k === 'waddle').t.includes('小鴨巡遊') && fxTab.buttons.find(b => b.k === 'waddle').t.includes('3場') && fxTab.buttons.find(b => b.k === 'ham').t.includes('倉鼠滾滾') && fxTab.buttons.find(b => b.k === 'ham').t.includes('7場'), 'animal names and mid-ladder unlocks');
   assert(/fx-snow/.test(fxTab.cls), 'opening the tab previews the selected effect');
   assert(!fxTab.grid && fxTab.sw <= fxTab.cw + 1, 'fx list does not widen the page');
   const artDir = '/opt/cursor/artifacts';
   fs.mkdirSync(artDir, { recursive: true });
-  const editorShot = await cdp.shot('editor-fx-tab-375');
-  fs.copyFileSync(editorShot, path.join(artDir, 'editor-fx-tab-375.png'));
+  const saveShot = async (name) => {
+    const p = await cdp.shot(name);
+    fs.copyFileSync(p, path.join(artDir, name + '.png'));
+    return p;
+  };
+  await saveShot('editor-fx-tab-375');
+  await setSize(390, 844);
+  await sleep(80);
+  await saveShot('editor-fx-tab-390');
+  await setSize(375, 812);
+  await cdp.eval(`document.querySelector('[data-fx="harbour"]').click()`);
+  await sleep(220);
+  const harbourPrev = await cdp.eval(`(() => { const wrap = document.querySelector('.pe-av .av-wrap'); const cs = getComputedStyle(wrap); const b = getComputedStyle(wrap, '::before'); return { cls: wrap.className, anim: cs.animationName, transform: cs.transform, burst: b.animationName }; })()`);
+  assert(/fx-harbour/.test(harbourPrev.cls) && !/\benter\b/.test(harbourPrev.cls) && harbourPrev.anim !== 'enter' && harbourPrev.transform === 'none' && harbourPrev.burst !== 'none', 'picker plays 維港煙花 without bouncing the avatar ' + JSON.stringify(harbourPrev));
+  await saveShot('picker-hk-harbour-375');
+  await cdp.eval(`document.querySelector('[data-fx="hop"]').click()`);
+  await sleep(220);
+  const hopPrev = await cdp.eval(`(() => { const wrap = document.querySelector('.pe-av .av-wrap'); const cs = getComputedStyle(wrap); const b = getComputedStyle(wrap, '::before'); return { cls: wrap.className, anim: cs.animationName, transform: cs.transform, hop: b.animationName }; })()`);
+  assert(/fx-hop/.test(hopPrev.cls) && !/\benter\b/.test(hopPrev.cls) && hopPrev.anim !== 'enter' && hopPrev.transform === 'none' && hopPrev.hop !== 'none', 'picker plays 兔兔跳跳 without bouncing the avatar ' + JSON.stringify(hopPrev));
+  await saveShot('picker-animal-hop-375');
+  const shotHowl = async (name) => {
+    await cdp.eval(`document.querySelector('[data-fx="howl"]').click()`);
+    await sleep(420);
+    const howlPrev = await cdp.eval(`(() => {
+      const wrap = document.querySelector('.pe-av .av-wrap');
+      const cs = getComputedStyle(wrap);
+      const b = getComputedStyle(wrap, '::before');
+      const av = wrap.querySelector('.av').getBoundingClientRect();
+      const wr = wrap.getBoundingClientRect();
+      const wolfBottom = wr.top + (parseFloat(b.top) || 0) + (parseFloat(b.height) || 0);
+      return { cls: wrap.className, anim: cs.animationName, transform: cs.transform, wolf: b.animationName, w: parseFloat(b.width), h: parseFloat(b.height), gap: av.top - wolfBottom, audio: !!document.querySelector('audio,video') };
+    })()`);
+    assert(/fx-howl/.test(howlPrev.cls) && !/\benter\b/.test(howlPrev.cls) && howlPrev.anim === 'none' && howlPrev.transform === 'none' && howlPrev.wolf === 'howlwolf' && howlPrev.w >= 50 && howlPrev.h >= 40 && howlPrev.gap > -2 && !howlPrev.audio, 'picker plays a large silent werewolf above the still avatar ' + JSON.stringify(howlPrev));
+    await saveShot(name);
+  };
+  await shotHowl('picker-howl-375');
+  await setSize(390, 844);
+  await sleep(60);
+  await shotHowl('picker-howl-390');
+  await setSize(375, 812);
   await cdp.eval(`document.querySelector('#modal').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
   await cdp.eval(`(() => { const b = document.createElement('button'); b.dataset.a = 'ptab'; b.dataset.t = 'fx'; b.id = 'deeplink'; document.body.appendChild(b); b.click(); })()`);
   await wait(`document.querySelector('.pe-tabs [data-t="fx"].sel') && document.querySelector('[data-fx="howl"]')`);
@@ -191,41 +244,93 @@ try { localStorage.setItem('cc.profile', JSON.stringify({ name:'雪人', avatar:
   assert(stillPendant === 0, '頭像掛件 deep link still opens pendant without the fx list');
   await cdp.eval(`document.querySelector('#modal').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
 
+  const ladder = await cdp.eval(`(async () => {
+    const hdr = { Authorization: 'Bearer ' + localStorage.getItem('cc.token'), 'Content-Type': 'application/json' };
+    const put = async (fx) => {
+      const r = await fetch('/api/me', { method: 'PUT', headers: hdr, body: JSON.stringify({ fx, name: '雪人' }) });
+      const j = await r.json();
+      return j.user && j.user.fx;
+    };
+    const ding = await put('ding');
+    const signs = await put('signs');
+    const hop = await put('hop');
+    const back = await put('snow');
+    return { ding, signs, hop, back };
+  })()`);
+  assert(ladder.ding === 'spot' && ladder.signs === 'signs' && ladder.hop === 'hop' && ladder.back === 'snow', 'server locks 叮叮電車 and keeps the free effects ' + JSON.stringify(ladder));
+
   await cdp.eval(`document.querySelector('[data-a="create"]').click()`);
-  await wait(`document.querySelector('.rt .st.enter.fx-snow')`);
+  await wait(`document.querySelector('.rt .st.fx-snow')`);
   const born = await seats();
   const host0 = byName(born, '雪人');
-  assert(host0 && host0.enter && host0.fx === 'fx-snow', 'first sit plays the selected effect ' + JSON.stringify(born));
+  assert(host0 && !host0.enter && host0.fx === 'fx-snow', 'first sit plays the effect on a still seat ' + JSON.stringify(born));
+  const still0 = await cdp.eval(`(() => { const st = document.querySelector('.rt .st.fx-snow'); const cs = getComputedStyle(st); return { anim: cs.animationName, transform: cs.transform }; })()`);
+  assert(still0.anim === 'none' && still0.transform === 'none', 'the seat element does not scale or bounce ' + JSON.stringify(still0));
   await sleep(160);
-  const before = await cdp.eval(`(() => { const el = document.querySelector('.rt .st.fx-snow'); const a = el && el.getAnimations().find(x => x.animationName === 'enter'); return a ? a.currentTime : -1; })()`);
+  const before = await cdp.eval(`(() => { const anims = document.getAnimations(); const a = anims.find(x => x.animationName === 'xmasstar'); const enter = anims.find(x => x.animationName === 'enter'); return { t: a ? a.currentTime : -1, enter: enter ? 1 : 0 }; })()`);
   await sleep(240);
   const face = await cdp.eval(`(() => { const st = document.querySelector('.rt .st.fx-snow'); const av = st.querySelector('.av').getBoundingClientRect(); const nm = st.querySelector('.nm').getBoundingClientRect(); const img = st.querySelector('.av img').getBoundingClientRect(); return { avt: av.top, nmt: nm.top, nmw: nm.width, nmb: nm.bottom, imgw: img.width, ih: innerHeight, iw: innerWidth, sw: document.documentElement.scrollWidth }; })()`);
   assert(face.imgw > 28 && face.nmw > 10 && face.nmt >= face.avt + 20 && face.nmb < face.ih - 1 && face.sw <= face.iw + 1, 'effect leaves the face and name readable ' + JSON.stringify(face));
-  const lobby375 = await cdp.shot('seat-fx-lobby-375');
-  fs.copyFileSync(lobby375, path.join(artDir, 'seat-fx-lobby-375.png'));
+  await saveShot('seat-fx-lobby-375');
   const watcher = bot('旁觀', 'none');
   await watcher.ready;
   const earlyCode = await cdp.eval(`document.querySelector('.top-code').textContent.trim()`);
   await watcher.emit('join', { code: earlyCode });
   assert((await watcher.act('sit', { seat: 8 })).ok, 'a none player can sit during the effect');
   await wait(`[...document.querySelectorAll('.rt .nm')].some(n => n.textContent === '旁觀')`);
-  const after = await cdp.eval(`(() => { const el = [...document.querySelectorAll('.rt .st')].find(s => (s.querySelector('.nm')||{}).textContent === '雪人'); const a = el && el.getAnimations().find(x => x.animationName === 'enter'); return { t: a ? a.currentTime : -1, name: el ? el.querySelector('.nm').textContent : '', cls: el ? el.className : '' }; })()`);
-  assert(after.name === '雪人' && before > 50 && (after.t < 0 || after.t > before), 'a re-render does not restart the entrance (' + before + ' -> ' + after.t + ' ' + after.cls + ')');
+  const after = await cdp.eval(`(() => { const el = [...document.querySelectorAll('.rt .st')].find(s => (s.querySelector('.nm')||{}).textContent === '雪人'); const anims = document.getAnimations(); const a = anims.find(x => x.animationName === 'xmasstar'); const enter = anims.find(x => x.animationName === 'enter'); return { t: a ? a.currentTime : -1, enter: enter ? 1 : 0, name: el ? el.querySelector('.nm').textContent : '', cls: el ? el.className : '' }; })()`);
+  assert(after.name === '雪人' && before.enter === 0 && after.enter === 0 && !/\benter\b/.test(after.cls) && before.t > 50 && (after.t < 0 || after.t > before.t), 'a re-render does not restart the effect or bounce the seat (' + before.t + ' -> ' + after.t + ' ' + after.cls + ')');
 
-  const at30 = await advance(30000);
-  assert(at30 === 30000, 'fake clock reached 30s');
+  const flashFx = async (cls, file) => {
+    await cdp.eval(`(() => {
+      const st = [...document.querySelectorAll('.rt .st')].find(s => (s.querySelector('.nm')||{}).textContent === '雪人');
+      [...st.classList].filter(c => c.startsWith('fx-') || c === 'enter').forEach(c => st.classList.remove(c));
+      void st.offsetWidth;
+      st.classList.add('${cls}');
+    })()`);
+    await sleep(240);
+    const pose = await cdp.eval(`(() => {
+      const st = document.querySelector('.rt .st.${cls}');
+      const cs = getComputedStyle(st);
+      const before = getComputedStyle(st, '::before');
+      const avEl = st.querySelector('.av').getBoundingClientRect();
+      const av = st.querySelector('.av img').getBoundingClientRect();
+      const nm = st.querySelector('.nm').getBoundingClientRect();
+      const wolfBottom = st.getBoundingClientRect().top + (parseFloat(before.top) || 0) + (parseFloat(before.height) || 0);
+      return { enter: st.classList.contains('enter'), anim: cs.animationName, transform: cs.transform, layer: before.animationName, img: av.width, nm: nm.width, nmt: nm.top, avb: av.bottom, gap: avEl.top - wolfBottom };
+    })()`);
+    assert(!pose.enter && pose.anim === 'none' && pose.transform === 'none' && pose.layer !== 'none' && pose.img > 24 && pose.nm > 8 && pose.nmt >= pose.avb - 8 && pose.gap > -2, cls + ' plays on a still seat ' + JSON.stringify(pose));
+    await saveShot(file);
+    await cdp.eval(`(() => {
+      const st = document.querySelector('.rt .st.${cls}');
+      st.classList.remove('${cls}');
+      st.classList.add('fx-snow');
+    })()`);
+  };
+  await flashFx('fx-ding', 'lobby-hk-ding-375');
+  await flashFx('fx-hop', 'lobby-animal-hop-375');
+  await flashFx('fx-howl', 'lobby-howl-375');
   await setSize(390, 844);
-  await sleep(480);
-  const face390 = await cdp.eval(`(() => { const st = document.querySelector('.rt .st.fx-snow'); const av = st.querySelector('.av').getBoundingClientRect(); const nm = st.querySelector('.nm').getBoundingClientRect(); return { enter: st.classList.contains('enter'), w: innerWidth, avw: av.width, nmt: nm.top, avb: av.bottom, sw: document.documentElement.scrollWidth }; })()`);
-  assert(face390.enter && face390.w === 390 && face390.avw > 28 && face390.nmt >= face390.avb - 8 && face390.sw <= 391, '30s replay is on screen at 390 ' + JSON.stringify(face390));
-  const lobby390 = await cdp.shot('seat-fx-lobby-390');
-  fs.copyFileSync(lobby390, path.join(artDir, 'seat-fx-lobby-390.png'));
+  await sleep(40);
+  await flashFx('fx-howl', 'lobby-howl-390');
   await setSize(375, 812);
 
-  let now = await advance(2800);
+  let now = await advance(30000);
   let rows = await seats();
-  assert(now === 32800 && byName(rows, '雪人') && !byName(rows, '雪人').enter, 'effect ends before the next interval ' + JSON.stringify(rows));
-  const quiet = await cdp.eval(`document.querySelectorAll('.rt .st.enter').length`);
+  assert(now === 30000 && byName(rows, '雪人') && !byName(rows, '雪人').fx && !byName(rows, '雪人').enter, '30s does not replay ' + JSON.stringify(rows));
+  const at60 = await advance(30000);
+  assert(at60 === 60000, 'fake clock reached 60s');
+  await setSize(390, 844);
+  await sleep(480);
+  const face390 = await cdp.eval(`(() => { const st = document.querySelector('.rt .st.fx-snow'); const cs = getComputedStyle(st); const av = st.querySelector('.av').getBoundingClientRect(); const nm = st.querySelector('.nm').getBoundingClientRect(); return { enter: st.classList.contains('enter'), fx: st.classList.contains('fx-snow'), anim: cs.animationName, transform: cs.transform, w: innerWidth, avw: av.width, nmt: nm.top, avb: av.bottom, sw: document.documentElement.scrollWidth }; })()`);
+  assert(!face390.enter && face390.fx && face390.anim === 'none' && face390.transform === 'none' && face390.w === 390 && face390.avw > 28 && face390.nmt >= face390.avb - 8 && face390.sw <= 391, '60s replay is on screen at 390 without bouncing the seat ' + JSON.stringify(face390));
+  await saveShot('seat-fx-lobby-390');
+  await setSize(375, 812);
+
+  now = await advance(2800);
+  rows = await seats();
+  assert(now === 62800 && byName(rows, '雪人') && !byName(rows, '雪人').fx && !byName(rows, '雪人').enter, 'effect ends before the next interval ' + JSON.stringify(rows));
+  const quiet = await cdp.eval(`[...document.querySelectorAll('.rt .st')].filter(s => s.classList.contains('enter') || [...s.classList].some(c => c.startsWith('fx-'))).length`);
   assert(quiet === 0, 'nothing keeps playing between intervals');
 
   const noneBot = bot('無效', 'none');
@@ -243,19 +348,19 @@ try { localStorage.setItem('cc.profile', JSON.stringify({ name:'雪人', avatar:
   assert((await goldBot.act('sit', { seat: 3 })).ok, 'gold player sits');
   await wait(`document.querySelector('.rt .st.fx-gold')`);
   rows = await seats();
-  assert(byName(rows, '金光').enter && byName(rows, '金光').fx === 'fx-gold', 'a later sitter plays on their own clock');
-  assert(!byName(rows, '雪人').enter && !byName(rows, '無效').enter, 'other seats do not flash when someone sits');
-  now = await advance(27200);
+  assert(!byName(rows, '金光').enter && byName(rows, '金光').fx === 'fx-gold', 'a later sitter plays on their own clock');
+  assert(!byName(rows, '雪人').fx && !byName(rows, '無效').fx && !byName(rows, '雪人').enter && !byName(rows, '無效').enter, 'other seats do not flash when someone sits');
+  now = await advance(57200);
   rows = await seats();
-  assert(now === 60000 && byName(rows, '雪人').enter && byName(rows, '雪人').fx === 'fx-snow', 'host replays on the 30s mark ' + now);
-  assert(!byName(rows, '金光').enter && !byName(rows, '無效').fx, 'gold and none stay quiet on the host tick ' + JSON.stringify(rows));
+  assert(now === 120000 && !byName(rows, '雪人').enter && byName(rows, '雪人').fx === 'fx-snow', 'host replays on the 60s mark ' + now);
+  assert(!byName(rows, '金光').fx && !byName(rows, '無效').fx, 'gold and none stay quiet on the host tick ' + JSON.stringify(rows));
 
   now = await advance(2800);
   rows = await seats();
-  assert(now === 62800 && !byName(rows, '雪人').enter && byName(rows, '金光').enter, 'gold replays on a later clock ' + JSON.stringify(rows));
+  assert(now === 122800 && !byName(rows, '雪人').fx && !byName(rows, '金光').enter && byName(rows, '金光').fx === 'fx-gold', 'gold replays on a later clock ' + JSON.stringify(rows));
   await advance(2800);
   rows = await seats();
-  assert(!rows.some(s => s.enter), 'seats are quiet before the game starts');
+  assert(!rows.some(s => s.enter || s.fx), 'seats are quiet before the game starts');
 
   const extra = [bot('丙', 'none'), bot('丁', 'none')];
   await Promise.all(extra.map(b => b.ready));
@@ -275,11 +380,11 @@ try { localStorage.setItem('cc.profile', JSON.stringify({ name:'雪人', avatar:
   await wait(`document.querySelector('.track')`);
   await cdp.eval(`document.querySelector('#modal').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
   rows = await seats();
-  assert(rows.every(s => s.game) && !rows.some(s => s.enter), 'starting the game does not retrigger ' + JSON.stringify(rows));
-  now = await advance(24400);
+  assert(rows.every(s => s.game) && !rows.some(s => s.enter || s.fx), 'starting the game does not retrigger ' + JSON.stringify(rows));
+  now = await advance(54400);
   rows = await seats();
-  assert(now === 90000 && byName(rows, '雪人').game && byName(rows, '雪人').enter && byName(rows, '雪人').fx === 'fx-snow', 'in-game seat replays on its 30s clock');
-  assert(!byName(rows, '金光').enter && !byName(rows, '無效').enter, 'in-game neighbours stay on their own clocks');
+  assert(now === 180000 && byName(rows, '雪人').game && !byName(rows, '雪人').enter && byName(rows, '雪人').fx === 'fx-snow', 'in-game seat replays on its 60s clock');
+  assert(!byName(rows, '金光').fx && !byName(rows, '無效').fx && !byName(rows, '金光').enter, 'in-game neighbours stay on their own clocks');
   await cdp.eval(`(() => { const b = document.querySelector('#sheet #ok'); if (b) b.click(); })()`);
   await wait(`document.querySelector('#modal').classList.contains('hidden')`);
   await sleep(380);
@@ -295,11 +400,11 @@ try { localStorage.setItem('cc.profile', JSON.stringify({ name:'雪人', avatar:
   await sleep(200);
   const reduced = await seats();
   assert(reduced.some(s => s.name === '雪人') && reduced.every(s => !s.enter && !s.fx), 'reduced motion does not play on appear ' + JSON.stringify(reduced));
-  await advance(120000);
+  await advance(180000);
   const reducedLater = await seats();
   assert(reducedLater.every(s => !s.enter && !s.fx), 'reduced motion does not loop ' + JSON.stringify(reducedLater));
-  const anim = await cdp.eval(`(() => { const st = document.querySelector('.rt .st'); if (!st) return { missing: 1 }; st.classList.add('enter', 'fx-snow'); const a = getComputedStyle(st).animationName; const b = getComputedStyle(st, '::before').animationName; return { a, b }; })()`);
-  assert(anim.a === 'none' && anim.b === 'none', 'reduced motion CSS does not run the entrance ' + JSON.stringify(anim));
+  const anim = await cdp.eval(`(() => { const st = document.querySelector('.rt .st'); if (!st) return { missing: 1 }; st.classList.add('enter', 'fx-snow'); const a = getComputedStyle(st).animationName; const b = getComputedStyle(st, '::before').animationName; st.classList.remove('fx-snow'); st.classList.add('fx-harbour'); const h = getComputedStyle(st, '::before').animationName; return { a, b, h }; })()`);
+  assert(anim.a === 'none' && anim.b === 'none' && anim.h === 'none', 'reduced motion CSS does not run the entrance ' + JSON.stringify(anim));
 
   console.log('ENTRANCE FX TESTS PASSED');
   killAll();

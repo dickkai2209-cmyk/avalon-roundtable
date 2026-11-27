@@ -1516,12 +1516,14 @@ function canonicalSlots(seats) {
 }
 function roundTable(seats, o = {}) {
   const n = seats.length;
-  // Large ring: icon centres sit near the card edge so the middle stays open (5–12 seats).
-  const R = n >= 12 ? 39 : n >= 10 ? 40 : 42;
-  // One numeral radius for every seat: 0.55 of the avatar-centre ring (target ~190/350).
-  // Same angle as the icon, so avatar-centre to number-centre distance is identical.
-  const numR = Math.round(R * 0.55 * 10) / 10;
-  const avSize = o.avSize || (n >= 12 ? 46 : n >= 10 ? 52 : 58);
+  // One shared radius and equal angles for every seat (rotational symmetry).
+  // The ring steps out a little from the previous 42/40/39, and from 8 seats up
+  // the face is 2px smaller, so neighbours have a wider gap without going lopsided.
+  const R = n >= 12 ? 40.5 : n >= 10 ? 41 : 43;
+  // Numerals share that angle on a tighter inner ring (0.41 of the avatar ring).
+  // The extra radial gap keeps charms, frames, names, and host/我 pills off the digits.
+  const numR = Math.round(R * 0.41 * 10) / 10;
+  const avSize = o.avSize || (n >= 12 ? 44 : n >= 10 ? 50 : n >= 8 ? 56 : 58);
   const nums = [];
   const st = canonicalSlots(seats).map((s, i) => {
     const seatNo = i + 1;

@@ -1063,7 +1063,7 @@ img,canvas,svg,video{max-width:100%}
 .rt{container-type:inline-size}
 /* Numerals are fixed to the physical slot, not children of the moving occupant. */
 .rt > .no{
-  position:absolute;z-index:2;pointer-events:none;margin:0;padding:0;
+  position:absolute;z-index:7;pointer-events:none;margin:0;padding:0;
   width:auto;height:auto;line-height:1;border-radius:0;box-shadow:none;
   background:none !important;border:0 !important;
   font-size:12px;font-weight:500;color:#c5c9d4 !important;

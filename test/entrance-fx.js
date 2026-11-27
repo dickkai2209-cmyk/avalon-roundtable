@@ -42,6 +42,7 @@ const avatarBranch = bodyFn.slice(bodyFn.indexOf('photoOn'));
 assert(!avatarBranch.includes('data-fx') && !avatarBranch.includes('pe-fx') && !avatarBranch.includes('pe-fxlab'), 'avatar pane no longer embeds the fx list');
 assert(!bodyFn.includes('pe-fxlab'), 'the old embedded heading is gone');
 assert(cssSrc.includes('.fx-signs') && cssSrc.includes('.fx-ding') && cssSrc.includes('.fx-harbour') && cssSrc.includes('.fx-ferry') && cssSrc.includes('.fx-hop') && cssSrc.includes('.fx-waddle') && cssSrc.includes('.fx-ham'), 'seven new effect styles exist');
+assert(cssSrc.includes('width:58px;height:44px') && cssSrc.includes('howlwolf') && !cssSrc.includes('M4 40c6-2') && !/\.fx-howl\{[^}]*animation:howlwave/.test(cssSrc), '狼人咆哮 is a large werewolf on the effect layer, not the old silhouette');
 const fxCss = cssSrc.slice(cssSrc.indexOf('/* Entrance art sits above the avatar'));
 assert(/prefers-reduced-motion[\s\S]{0,700}\.fx-signs/.test(fxCss) && fxCss.includes('.fx-hop') && fxCss.includes('.fx-harbour'), 'reduced motion stills the new effects');
 assert(appSrc.includes('prefers-reduced-motion') && cssSrc.includes('.rt .st.enter') && /prefers-reduced-motion[\s\S]{0,400}\.rt \.st\.enter/.test(cssSrc), 'reduced motion suppresses the seat entrance');
@@ -213,6 +214,26 @@ try { localStorage.setItem('cc.profile', JSON.stringify({ name:'雪人', avatar:
   const hopPrev = await cdp.eval(`(() => { const wrap = document.querySelector('.pe-av .av-wrap'); const cs = getComputedStyle(wrap); const b = getComputedStyle(wrap, '::before'); return { cls: wrap.className, anim: cs.animationName, transform: cs.transform, hop: b.animationName }; })()`);
   assert(/fx-hop/.test(hopPrev.cls) && !/\benter\b/.test(hopPrev.cls) && hopPrev.anim !== 'enter' && hopPrev.transform === 'none' && hopPrev.hop !== 'none', 'picker plays 兔兔跳跳 without bouncing the avatar ' + JSON.stringify(hopPrev));
   await saveShot('picker-animal-hop-375');
+  const shotHowl = async (name) => {
+    await cdp.eval(`document.querySelector('[data-fx="howl"]').click()`);
+    await sleep(420);
+    const howlPrev = await cdp.eval(`(() => {
+      const wrap = document.querySelector('.pe-av .av-wrap');
+      const cs = getComputedStyle(wrap);
+      const b = getComputedStyle(wrap, '::before');
+      const av = wrap.querySelector('.av').getBoundingClientRect();
+      const wr = wrap.getBoundingClientRect();
+      const wolfBottom = wr.top + (parseFloat(b.top) || 0) + (parseFloat(b.height) || 0);
+      return { cls: wrap.className, anim: cs.animationName, transform: cs.transform, wolf: b.animationName, w: parseFloat(b.width), h: parseFloat(b.height), gap: av.top - wolfBottom, audio: !!document.querySelector('audio,video') };
+    })()`);
+    assert(/fx-howl/.test(howlPrev.cls) && !/\benter\b/.test(howlPrev.cls) && howlPrev.anim === 'none' && howlPrev.transform === 'none' && howlPrev.wolf === 'howlwolf' && howlPrev.w >= 50 && howlPrev.h >= 40 && howlPrev.gap > -2 && !howlPrev.audio, 'picker plays a large silent werewolf above the still avatar ' + JSON.stringify(howlPrev));
+    await saveShot(name);
+  };
+  await shotHowl('picker-howl-375');
+  await setSize(390, 844);
+  await sleep(60);
+  await shotHowl('picker-howl-390');
+  await setSize(375, 812);
   await cdp.eval(`document.querySelector('#modal').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
   await cdp.eval(`(() => { const b = document.createElement('button'); b.dataset.a = 'ptab'; b.dataset.t = 'fx'; b.id = 'deeplink'; document.body.appendChild(b); b.click(); })()`);
   await wait(`document.querySelector('.pe-tabs [data-t="fx"].sel') && document.querySelector('[data-fx="howl"]')`);
@@ -271,12 +292,14 @@ try { localStorage.setItem('cc.profile', JSON.stringify({ name:'雪人', avatar:
     const pose = await cdp.eval(`(() => {
       const st = document.querySelector('.rt .st.${cls}');
       const cs = getComputedStyle(st);
-      const layer = getComputedStyle(st, '::before').animationName;
+      const before = getComputedStyle(st, '::before');
+      const avEl = st.querySelector('.av').getBoundingClientRect();
       const av = st.querySelector('.av img').getBoundingClientRect();
       const nm = st.querySelector('.nm').getBoundingClientRect();
-      return { enter: st.classList.contains('enter'), anim: cs.animationName, transform: cs.transform, layer, img: av.width, nm: nm.width, nmt: nm.top, avb: av.bottom };
+      const wolfBottom = st.getBoundingClientRect().top + (parseFloat(before.top) || 0) + (parseFloat(before.height) || 0);
+      return { enter: st.classList.contains('enter'), anim: cs.animationName, transform: cs.transform, layer: before.animationName, img: av.width, nm: nm.width, nmt: nm.top, avb: av.bottom, gap: avEl.top - wolfBottom };
     })()`);
-    assert(!pose.enter && pose.anim === 'none' && pose.transform === 'none' && pose.layer !== 'none' && pose.img > 24 && pose.nm > 8 && pose.nmt >= pose.avb - 8, cls + ' plays on a still seat ' + JSON.stringify(pose));
+    assert(!pose.enter && pose.anim === 'none' && pose.transform === 'none' && pose.layer !== 'none' && pose.img > 24 && pose.nm > 8 && pose.nmt >= pose.avb - 8 && pose.gap > -2, cls + ' plays on a still seat ' + JSON.stringify(pose));
     await saveShot(file);
     await cdp.eval(`(() => {
       const st = document.querySelector('.rt .st.${cls}');
@@ -286,6 +309,11 @@ try { localStorage.setItem('cc.profile', JSON.stringify({ name:'雪人', avatar:
   };
   await flashFx('fx-ding', 'lobby-hk-ding-375');
   await flashFx('fx-hop', 'lobby-animal-hop-375');
+  await flashFx('fx-howl', 'lobby-howl-375');
+  await setSize(390, 844);
+  await sleep(40);
+  await flashFx('fx-howl', 'lobby-howl-390');
+  await setSize(375, 812);
 
   let now = await advance(30000);
   let rows = await seats();

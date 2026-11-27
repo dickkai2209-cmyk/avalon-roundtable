@@ -1738,7 +1738,7 @@ function showRole(first) {
       rv.classList.toggle('opened', on);
       $('#kn', el).classList.toggle('hidden', !on);
       $('#cov', el).classList.toggle('hidden', on);
-      if (on) burst($('#fxc', el), side);
+      if (on) { burst($('#fxc', el), side); if (window.AvalonAudio) AvalonAudio.cue('card'); }
     };
     $('#ok', el).onclick = closeModal;
   }, !!first);
@@ -1768,7 +1768,7 @@ function showVote(ev) {
     <div class="tally ${ev.approved ? 'result-good' : 'result-evil'}" id="tl">${ev.approved ? '✅ 組隊通過' : '❌ 組隊被否決'}<div class="small muted" style="font-family:sans-serif;font-weight:500">贊成 ${ev.yes} : 反對 ${ev.no}${ev.approved ? '' : `　（否決第 ${ev.attempt} 次）`}</div></div>
     <button class="btn" id="ok">繼續</button>`, async (el) => {
     $('#ok', el).onclick = closeModal;
-    const cs = $$('.vc', el); for (const c of cs) { await sleep(140); c.classList.add('on'); }
+    const cs = $$('.vc', el); for (const c of cs) { await sleep(140); c.classList.add('on'); if (window.AvalonAudio) AvalonAudio.cue('tick'); }
     await sleep(450); const t = $('#tl', el); t && t.classList.add('on');
   });
 }
@@ -1791,7 +1791,7 @@ function showQuest(ev) {
     for (let i = 0; i < cs.length; i++) {
       const last = i === cs.length - 1;
       if (last && cs.length > 1) { cs[i].classList.add('tense'); await sleep(1100); cs[i].classList.remove('tense'); }
-      cs[i].classList.add('on'); qBurst(cs[i], cards[i]); if (navigator.vibrate && !cards[i]) navigator.vibrate(60);
+      cs[i].classList.add('on'); qBurst(cs[i], cards[i]); if (window.AvalonAudio) AvalonAudio.cue('tick'); if (navigator.vibrate && !cards[i]) navigator.vibrate(60);
       await sleep(last ? 500 : 800);
     }
     const t = $('#tl', el); t && t.classList.add('on');
@@ -1803,7 +1803,7 @@ function showLady(ev) {
   if (!mine) return toast(`🌊 ${P(ev.holder, list).name} 用湖中仙女查驗了 ${P(ev.target, list).name}`);
   openModal(`<h2>湖中仙女的啟示</h2><div class="center">${chip(ev.target, list)}</div>
     <div class="flip" id="flip" style="width:min(56vw,200px)"><div class="in"><div class="face back"><div class="hint">點擊查看陣營</div></div><div class="face front"><div class="rc ${mine.side} lady-reveal"><div class="art" style="background-image:url(${img('lady')})"></div><div class="cap"><div class="rn" style="font-size:20px">${mine.side === 'good' ? '好人陣營' : '壞人陣營'}</div></div></div></div></div></div>
-    <p class="center small muted">只有你看到這個結果，你可以選擇說真話或說謊。</p><button class="btn" id="ok">知道了</button>`, (el) => { const f = $('#flip', el); f.onclick = () => f.classList.add('on'); $('#ok', el).onclick = closeModal; }, true);
+    <p class="center small muted">只有你看到這個結果，你可以選擇說真話或說謊。</p><button class="btn" id="ok">知道了</button>`, (el) => { const f = $('#flip', el); f.onclick = () => { if (f.classList.contains('on')) return; f.classList.add('on'); if (window.AvalonAudio) AvalonAudio.cue('card'); }; $('#ok', el).onclick = closeModal; }, true);
 }
 function factionText(s) {
   return String(s || '')
@@ -1966,6 +1966,7 @@ function render() {
   const app = $('#app'); const inRoom = S && S.code;
   if (view !== 'skins') app.dataset.v = view || '';
   if (view === 'room' && !inRoom && !waitingRoom) view = 'home';
+  if (window.AvalonAudio) AvalonAudio.scene(view === 'room' && S && S.code && S.game && S.game.phase !== 'end' ? 'game' : 'lobby');
   $('#backBtn').classList.toggle('hidden', view === 'home');
   const titles = { home: 'HK阿瓦隆', support: '支持我哋', room: inRoom ? null : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就', board: '排行榜' };
   const acts = $('#topRoomActs');
@@ -2900,6 +2901,428 @@ function saveSkins(prev) {
     throw err;
   });
 }
+
+// Original music and UI sounds for HK阿瓦隆.
+// Synthesized in the browser (Web Audio). No samples, no third-party recordings,
+// no game / film / character themes. The mixer is its own AudioContext and never
+// touches the room voice graph in voice.js.
+const AUDIO_KEY = 'cc.audio';
+const AUDIO_DEFAULT_VOL = 0.4;
+const AUDIO_BGM_BASE = 0.2;
+const AUDIO_SFX_BASE = 0.62;
+const AUDIO_SFX_PEAK = 0.4;
+const AUDIO_BUF_PEAK = 0.72;
+const AUDIO_ICON_ON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.1L11.5 18V6L7.1 9.5H4z" fill="currentColor"/><path d="M14.2 9.2a3.4 3.4 0 0 1 0 5.6M16.7 7a6.2 6.2 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+const AUDIO_ICON_OFF = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.1L11.5 18V6L7.1 9.5H4z" fill="currentColor"/><path d="M15 10l4.5 4.5M19.5 10L15 14.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+const AUDIO_CONFIRM = new Set(['start', 'propose', 'ready', 'sword', 'lady', 'assassinate', 'cfgclose', 'floorend', 'lobby', 'supportpay', 'toroom']);
+const AUDIO_OPEN = new Set(['menu', 'cfg', 'create', 'join', 'invite', 'profile', 'ptab', 'about', 'emote', 'releaselist', 'role']);
+const AUDIO_CANCEL = new Set(['swordskip', 'leave', 'voteremind-x', 'abandonseat', 'logout', 'floorskip']);
+let audioPrefs = { m: 0, v: AUDIO_DEFAULT_VOL };
+let audioOptIn = null;
+let audioCtx = null, audioMaster = null, audioBgmBus = null, audioSfxBus = null;
+let audioArmed = false, audioScene = 'lobby', audioActive = '', audioToken = 0;
+let audioSrc = null, audioFade = null, audioEngine = '';
+let audioBuffers = {}, audioMeta = {}, audioBufferJob = null, audioError = '';
+let audioRequested = [], audioPlayed = [], audioLastCard = 0;
+function audioReduced() {
+  try { return matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  catch (e) { return false; }
+}
+function audioLoad() {
+  try {
+    const o = JSON.parse(LS.getItem(AUDIO_KEY) || 'null');
+    if (!o || typeof o !== 'object') return;
+    if (o.m === 0 || o.m === 1) audioPrefs.m = o.m;
+    if (typeof o.v === 'number' && o.v >= 0 && o.v <= 1) audioPrefs.v = o.v;
+    if (o.b === 0 || o.b === 1) audioOptIn = o.b === 1;
+  } catch (e) {}
+}
+function audioSave() {
+  try {
+    const o = { m: audioPrefs.m ? 1 : 0, v: Math.round(audioPrefs.v * 100) / 100 };
+    if (audioOptIn != null) o.b = audioOptIn ? 1 : 0;
+    LS.setItem(AUDIO_KEY, JSON.stringify(o));
+  } catch (e) {}
+}
+function audioSilent() { return !!(audioPrefs.m || audioPrefs.v <= 0.001); }
+function audioBgmAllowed() {
+  if (audioSilent() || !audioArmed || !audioCtx || audioCtx.state !== 'running') return false;
+  if (audioReduced() && audioOptIn !== true) return false;
+  return true;
+}
+function audioTarget() { return audioSilent() ? 0 : audioPrefs.v; }
+function audioApply() {
+  if (!audioMaster || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  const target = audioTarget();
+  const cur = audioMaster.gain.value;
+  audioMaster.gain.cancelScheduledValues(now);
+  audioMaster.gain.setValueAtTime(cur, now);
+  audioMaster.gain.linearRampToValueAtTime(target, now + (target === 0 ? 0.12 : 0.08));
+}
+function audioPaint() {
+  const btn = document.getElementById('audioMute');
+  const slider = document.getElementById('audioVol');
+  const ctl = document.getElementById('audioCtl');
+  if (!btn || !ctl) return;
+  const off = audioSilent();
+  btn.setAttribute('aria-pressed', off ? 'true' : 'false');
+  btn.setAttribute('aria-label', off ? '開啟遊戲音樂同音效' : '關閉遊戲音樂同音效');
+  btn.innerHTML = off ? AUDIO_ICON_OFF : AUDIO_ICON_ON;
+  ctl.classList.toggle('is-muted', off);
+  if (slider && document.activeElement !== slider) {
+    const next = String(Math.round(audioPrefs.v * 100));
+    if (slider.value !== next) slider.value = next;
+  }
+}
+function audioEnsure() {
+  if (audioCtx) return audioCtx;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  audioCtx = new AC();
+  audioMaster = audioCtx.createGain();
+  audioMaster.gain.value = audioTarget();
+  audioBgmBus = audioCtx.createGain();
+  audioBgmBus.gain.value = AUDIO_BGM_BASE;
+  audioSfxBus = audioCtx.createGain();
+  audioSfxBus.gain.value = AUDIO_SFX_BASE;
+  const comp = audioCtx.createDynamicsCompressor();
+  comp.threshold.value = -9;
+  comp.knee.value = 6;
+  comp.ratio.value = 8;
+  comp.attack.value = 0.004;
+  comp.release.value = 0.12;
+  audioBgmBus.connect(audioMaster);
+  audioSfxBus.connect(audioMaster);
+  audioMaster.connect(comp);
+  comp.connect(audioCtx.destination);
+  return audioCtx;
+}
+function audioTone(t, freq, freq2, dur, peak, type, attack) {
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type || 'sine';
+  const f1 = Math.max(40, freq);
+  o.frequency.setValueAtTime(f1, t);
+  const d = Math.max(0.04, dur);
+  if (freq2 && freq2 !== freq) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq2), t + d);
+  const a = Math.min(d * 0.45, Math.max(0.004, attack || 0.012));
+  const pk = Math.min(AUDIO_SFX_PEAK, Math.max(0.0008, peak));
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(pk, t + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g); g.connect(audioSfxBus);
+  o.start(t); o.stop(t + d + 0.03);
+}
+const AUDIO_CUES = {
+  tap: (t) => audioTone(t, 740, 560, 0.07, 0.28, 'sine', 0.008),
+  open: (t) => audioTone(t, 523, 784, 0.12, 0.3, 'triangle', 0.012),
+  confirm: (t) => { audioTone(t, 392, 392, 0.08, 0.26, 'triangle', 0.01); audioTone(t + 0.07, 523, 659, 0.14, 0.24, 'sine', 0.01); },
+  voteYes: (t) => audioTone(t, 494, 784, 0.16, 0.3, 'sine', 0.012),
+  voteNo: (t) => audioTone(t, 349, 196, 0.16, 0.28, 'triangle', 0.01),
+  cancel: (t) => audioTone(t, 440, 294, 0.11, 0.22, 'sine', 0.01),
+  questOk: (t) => { audioTone(t, 587, 880, 0.18, 0.26, 'sine', 0.014); audioTone(t + 0.02, 1174, 1174, 0.12, 0.08, 'sine', 0.02); },
+  questBad: (t) => audioTone(t, 220, 146, 0.2, 0.26, 'triangle', 0.012),
+  tick: (t) => audioTone(t, 988, 740, 0.05, 0.14, 'sine', 0.004),
+  card: (t) => { audioTone(t, 392, 587, 0.62, 0.3, 'sine', 0.045); audioTone(t + 0.03, 784, 988, 0.5, 0.09, 'sine', 0.06); },
+};
+function audioPlay(name) {
+  const fn = AUDIO_CUES[name] || AUDIO_CUES.tap;
+  const t = audioCtx.currentTime;
+  if (name === 'card') {
+    if (t - audioLastCard < 0.45) return;
+    audioLastCard = t;
+  }
+  audioPlayed.push(name);
+  if (audioPlayed.length > 40) audioPlayed.shift();
+  fn(t);
+}
+function audioCue(name) {
+  if (!name) return false;
+  audioRequested.push(name);
+  if (audioRequested.length > 40) audioRequested.shift();
+  if (audioSilent()) return false;
+  if (!audioArmed && (!audioCtx || audioCtx.state !== 'running')) return false;
+  audioEnsure();
+  if (!audioCtx) return false;
+  const run = () => { if (audioCtx && audioCtx.state === 'running' && !audioSilent()) audioPlay(name); };
+  if (audioCtx.state === 'running') run();
+  else audioCtx.resume().then(run).catch(() => {});
+  return true;
+}
+function audioCueFor(target) {
+  if (!target || !target.closest) return '';
+  if (target.closest('#audioCtl')) return '';
+  if (target.closest('#flip')) return '';
+  const host = target.closest('[data-a], button, #backBtn');
+  if (!host) return '';
+  if (host.disabled || host.getAttribute('aria-disabled') === 'true') return '';
+  const a = host.dataset.a || '';
+  const id = host.id || '';
+  if (a === 'vote') return host.dataset.v === '1' ? 'voteYes' : 'voteNo';
+  if (a === 'quest') return host.dataset.v === '1' ? 'questOk' : 'questBad';
+  if (AUDIO_CONFIRM.has(a) || id === 'ok' || id === 'sp-eq' || id === 'cropok' || id === 'ab-yes') return 'confirm';
+  if (AUDIO_CANCEL.has(a) || id === 'backBtn' || id === 'cc' || id === 'sp-x' || id === 'cropcancel' || id === 'ab-no' || id === 'rel-list-x' || id === 'room-menu-close') return 'cancel';
+  if (AUDIO_OPEN.has(a)) return 'open';
+  if (a || host.tagName === 'BUTTON') return 'tap';
+  return '';
+}
+function audioFromClick(e) {
+  const name = audioCueFor(e.target);
+  if (name) audioCue(name);
+}
+function audioRetire(sec) {
+  const g = audioFade, src = audioSrc;
+  if (!g || !src || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  try {
+    g.gain.cancelScheduledValues(now);
+    g.gain.setValueAtTime(g.gain.value, now);
+    g.gain.linearRampToValueAtTime(0, now + sec);
+  } catch (e) {}
+  setTimeout(() => { try { src.stop(); } catch (e) {} try { g.disconnect(); } catch (e) {} }, Math.ceil(sec * 1000) + 60);
+}
+function audioNormalize(buf) {
+  const data = buf.getChannelData(0);
+  let peak = 0;
+  for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+  const g = peak > 0.0001 ? AUDIO_BUF_PEAK / peak : 1;
+  if (g !== 1) for (let i = 0; i < data.length; i++) data[i] *= g;
+  let after = 0;
+  for (let i = 0; i < data.length; i++) after = Math.max(after, Math.abs(data[i]));
+  return { peak: after, edge: Math.abs(data[0] - data[data.length - 1]) };
+}
+function audioRenderLoop(kind, sampleRate) {
+  const seconds = 8;
+  const length = Math.round(seconds * sampleRate);
+  const off = new OfflineAudioContext(1, length, sampleRate);
+  const master = off.createGain();
+  master.gain.value = 1;
+  master.connect(off.destination);
+  const add = (freq, peak, type, t0, dur, attack, release) => {
+    const o = off.createOscillator();
+    o.type = type || 'sine';
+    o.frequency.value = freq;
+    const g = off.createGain();
+    const start = t0 || 0;
+    const end = dur ? Math.min(seconds - 0.05, start + dur) : seconds;
+    if (dur) {
+      const a = Math.min(attack || 0.04, (end - start) * 0.35);
+      g.gain.setValueAtTime(0, start);
+      g.gain.linearRampToValueAtTime(peak, start + a);
+      g.gain.linearRampToValueAtTime(0, end);
+    } else g.gain.value = peak;
+    o.connect(g); g.connect(master);
+    o.start(start); o.stop(Math.min(seconds, end + 0.01));
+  };
+  if (kind === 'game') {
+    add(98, 0.15, 'sine');
+    add(146, 0.07, 'sine');
+    add(196, 0.035, 'sine');
+    [262, 330, 392, 330, 294, 392, 440, 392, 330].forEach((f, i) => add(f, 0.09, 'triangle', 0.4 + i * 0.8, 0.62, 0.025, 0.32));
+  } else {
+    add(130, 0.16, 'sine');
+    add(196, 0.06, 'sine');
+    add(262, 0.03, 'sine');
+    [330, 392, 494, 440].forEach((f, i) => add(f, 0.11, 'sine', 0.55 + i * 2, 1.25, 0.04, 0.62));
+  }
+  return off.startRendering();
+}
+function audioEnsureBuffers() {
+  if (audioBufferJob) return audioBufferJob;
+  audioBufferJob = (async () => {
+    const rate = audioCtx.sampleRate;
+    const lobby = await audioRenderLoop('lobby', rate);
+    const game = await audioRenderLoop('game', rate);
+    audioBuffers.lobby = lobby;
+    audioBuffers.game = game;
+    audioMeta.lobby = audioNormalize(lobby);
+    audioMeta.game = audioNormalize(game);
+    audioEngine = 'buffer';
+  })().catch((err) => { audioError = String(err && err.message || err); audioBufferJob = null; throw err; });
+  return audioBufferJob;
+}
+function audioStartBuffer(scene) {
+  const buf = audioBuffers[scene];
+  if (!buf || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(1, now + 0.55);
+  src.connect(g); g.connect(audioBgmBus);
+  src.start();
+  audioRetire(0.55);
+  audioSrc = src;
+  audioFade = g;
+  audioActive = scene;
+}
+function audioStartLive(scene) {
+  const freqs = scene === 'game' ? [98, 146, 196] : [130, 196, 262];
+  const now = audioCtx.currentTime;
+  const mine = [];
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(0.45, now + 0.5);
+  freqs.forEach((f, i) => {
+    const o = audioCtx.createOscillator();
+    o.type = 'sine';
+    o.frequency.value = f;
+    const og = audioCtx.createGain();
+    og.gain.value = i === 0 ? 0.34 : 0.12;
+    o.connect(og); og.connect(g); o.start();
+    mine.push(o);
+  });
+  g.connect(audioBgmBus);
+  const handle = { stop() { mine.forEach((o) => { try { o.stop(); } catch (e) {} }); } };
+  audioRetire(0.4);
+  audioSrc = handle;
+  audioFade = g;
+  audioActive = scene;
+  if (!audioEngine) audioEngine = 'live';
+}
+async function audioEnsureBgm() {
+  if (!audioBgmAllowed()) return;
+  const token = ++audioToken;
+  const want = audioScene;
+  let ok = false;
+  try { await audioEnsureBuffers(); ok = true; } catch (e) { ok = false; }
+  if (token !== audioToken || !audioBgmAllowed() || want !== audioScene) return;
+  if (audioActive === want && audioSrc) return;
+  if (ok && audioBuffers[want]) audioStartBuffer(want);
+  else audioStartLive(want);
+}
+function audioGesture() {
+  audioArmed = true;
+  audioEnsure();
+  if (!audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume().then(() => { if (audioBgmAllowed()) audioEnsureBgm(); }).catch(() => {});
+  else if (audioBgmAllowed()) audioEnsureBgm();
+}
+function audioSceneTo(name) {
+  audioScene = name === 'game' ? 'game' : 'lobby';
+  if (audioBgmAllowed()) audioEnsureBgm();
+}
+function audioSetVol(v, fromUser) {
+  const next = Math.min(1, Math.max(0, Number(v) || 0));
+  audioPrefs.v = next;
+  if (fromUser) {
+    audioOptIn = true;
+    if (next > 0) audioPrefs.m = 0;
+  }
+  audioSave();
+  audioApply();
+  audioPaint();
+  if (fromUser && !audioSilent()) audioEnsureBgm();
+}
+function audioToggle() {
+  if (!audioSilent()) {
+    audioCue('tap');
+    audioPrefs.m = 1;
+  } else {
+    audioPrefs.m = 0;
+    if (audioPrefs.v <= 0.001) audioPrefs.v = AUDIO_DEFAULT_VOL;
+    audioOptIn = true;
+    audioApply();
+    audioCue('tap');
+  }
+  audioSave();
+  audioApply();
+  audioPaint();
+  if (!audioSilent()) audioEnsureBgm();
+}
+function audioSetMuted(on) {
+  audioPrefs.m = on ? 1 : 0;
+  if (!on) {
+    if (audioPrefs.v <= 0.001) audioPrefs.v = AUDIO_DEFAULT_VOL;
+    audioOptIn = true;
+  }
+  audioSave();
+  audioApply();
+  audioPaint();
+  if (!on) audioEnsureBgm();
+}
+function audioDebug() {
+  return {
+    vol: audioPrefs.v,
+    muted: !!audioPrefs.m,
+    silent: audioSilent(),
+    defaultVol: AUDIO_DEFAULT_VOL,
+    bgmBase: AUDIO_BGM_BASE,
+    sfxBase: AUDIO_SFX_BASE,
+    sfxPeak: AUDIO_SFX_PEAK,
+    bufPeak: AUDIO_BUF_PEAK,
+    ceiling: AUDIO_BGM_BASE * AUDIO_BUF_PEAK + AUDIO_SFX_BASE * AUDIO_SFX_PEAK,
+    targetGain: audioTarget(),
+    masterNow: audioMaster ? audioMaster.gain.value : 0,
+    contextState: audioCtx ? audioCtx.state : 'idle',
+    started: !!audioCtx,
+    armed: audioArmed,
+    scene: audioScene,
+    activeScene: audioActive,
+    bgmPlaying: !!(audioSrc && audioBgmAllowed()),
+    bgmOptIn: audioOptIn,
+    reduced: audioReduced(),
+    requested: audioRequested.slice(),
+    played: audioPlayed.slice(),
+    engine: audioEngine,
+    loopDelta: { lobby: audioMeta.lobby ? audioMeta.lobby.edge : null, game: audioMeta.game ? audioMeta.game.edge : null },
+    bufferPeak: { lobby: audioMeta.lobby ? audioMeta.lobby.peak : null, game: audioMeta.game ? audioMeta.game.peak : null },
+    license: 'original-synthesis',
+    routesVoice: false,
+    error: audioError,
+  };
+}
+function audioBind() {
+  const btn = document.getElementById('audioMute');
+  const slider = document.getElementById('audioVol');
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); audioGesture(); audioToggle(); });
+  if (slider) {
+    slider.addEventListener('input', () => {
+      audioGesture();
+      audioSetVol(Number(slider.value) / 100, true);
+    });
+  }
+  document.addEventListener('pointerdown', () => audioGesture(), true);
+  document.addEventListener('keydown', (e) => { if (!e.repeat) audioGesture(); }, true);
+  document.addEventListener('click', (e) => { audioGesture(); audioFromClick(e); }, true);
+  document.addEventListener('visibilitychange', () => {
+    if (!audioCtx || document.hidden || !audioArmed) return;
+    audioCtx.resume().then(() => { if (audioBgmAllowed()) audioEnsureBgm(); }).catch(() => {});
+  });
+  try {
+    matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => {
+      if (audioBgmAllowed()) audioEnsureBgm();
+      else if (audioFade && audioCtx) {
+        const now = audioCtx.currentTime;
+        audioFade.gain.cancelScheduledValues(now);
+        audioFade.gain.setValueAtTime(audioFade.gain.value, now);
+        audioFade.gain.linearRampToValueAtTime(0, now + 0.35);
+        const src = audioSrc;
+        audioSrc = null; audioFade = null; audioActive = '';
+        setTimeout(() => { try { src && src.stop(); } catch (e) {} }, 420);
+      }
+    });
+  } catch (e) {}
+}
+audioLoad();
+audioPaint();
+audioBind();
+window.AvalonAudio = {
+  cue: audioCue,
+  scene: audioSceneTo,
+  gesture: audioGesture,
+  setMuted: audioSetMuted,
+  setVol: audioSetVol,
+  toggleMuted: audioToggle,
+  cueFor: audioCueFor,
+  debug: audioDebug,
+};
+
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-a]'); if (!el || !document.body.contains(el)) return;
   if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.closest('form')) e.preventDefault();

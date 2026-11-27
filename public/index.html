@@ -17,13 +17,19 @@
 <link rel="apple-touch-icon" href="/img/icon-192.png?v=68">
 <meta property="og:image" content="https://avalon-roundtable-10t9.onrender.com/img/icon-512.png?v=68">
 <meta property="og:description" content="HK阿瓦隆 HK AVALON · by Amigosparty">
-<link rel="stylesheet" href="/style.css?v=68">
+<link rel="stylesheet" href="/style.css?v=83">
 </head>
 <body>
 <header class="topbar">
   <div class="top-left"><button id="backBtn" class="icon-btn hidden" aria-label="返回">‹</button></div>
   <div class="title"><img class="tlogo merlin" src="/img/logo-merlin.webp" alt="" width="28" height="28"><span id="topTitle">HK阿瓦隆</span></div>
   <div class="top-right">
+    <div id="audioCtl" class="audio-ctl">
+      <button type="button" id="audioMute" class="audio-mute" aria-pressed="false" aria-label="關閉遊戲音樂同音效">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.1L11.5 18V6L7.1 9.5H4z" fill="currentColor"/><path d="M14.2 9.2a3.4 3.4 0 0 1 0 5.6M16.7 7a6.2 6.2 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      </button>
+      <label class="audio-vol"><span class="sr-only">遊戲音量</span><input type="range" id="audioVol" min="0" max="100" value="40" step="1" aria-label="遊戲音量"></label>
+    </div>
     <div id="topRoomActs" class="top-room-acts hidden"></div>
     <div class="conn" id="conn" title="連線狀態"></div>
   </div>
@@ -35,6 +41,6 @@
 <script defer src="/vendor/socket.io.min.js"></script>
 <script defer src="/review.js?v=2"></script>
 <script defer src="/voice.js?v=5"></script>
-  <script defer src="/app.js?v=76"></script>
+  <script defer src="/app.js?v=83"></script>
 </body>
 </html>

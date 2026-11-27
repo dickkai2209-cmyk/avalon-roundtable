@@ -1643,3 +1643,30 @@ body:has(.end-next) .release-row{display:none}
 .support-charm b{display:block;font-size:11px;line-height:1.25;font-weight:800;color:#1d2333}
 .support-charm em{display:block;margin-top:1px;font-style:normal;font-size:10px;line-height:1.2;font-weight:800;color:#0f766e}
 .support{overflow:visible}
+
+/* Game music / button sounds. Sits in the top bar so it never covers faces, seat numbers, or the bottom actions. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.audio-ctl{display:flex;align-items:center;gap:1px;flex:none;height:32px;padding:0 6px 0 1px;border-radius:999px;background:#f4f6fb;border:1px solid #e3e6ef;color:#1d2333}
+.audio-mute{width:32px;height:32px;border:0;background:transparent;color:inherit;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:50%}
+.audio-mute svg{width:16px;height:16px;display:block}
+.audio-ctl.is-muted{color:#8b919e}
+.audio-vol{display:flex;align-items:center;height:32px;margin:0}
+.audio-vol input[type=range]{-webkit-appearance:none;appearance:none;width:44px;height:32px;margin:0;background:transparent;cursor:pointer}
+.audio-vol input[type=range]:focus-visible{outline:2px solid #1d2333;outline-offset:1px;border-radius:8px}
+.audio-vol input[type=range]::-webkit-slider-runnable-track{height:3px;background:#d5d9e4;border-radius:99px}
+.audio-vol input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:12px;height:12px;margin-top:-4.5px;border:0;border-radius:50%;background:#1d2333}
+.audio-ctl.is-muted input[type=range]::-webkit-slider-thumb{background:#8b919e}
+.audio-vol input[type=range]::-moz-range-track{height:3px;background:#d5d9e4;border:0;border-radius:99px}
+.audio-vol input[type=range]::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:#1d2333}
+@media (max-width:389px){
+  .audio-ctl{padding-right:4px}
+  .audio-vol input[type=range]{width:34px}
+  .top-right{gap:4px}
+  .top-room-acts{gap:4px}
+  .top-room-acts .rbtn{padding:4px 6px}
+}
+@media (prefers-reduced-motion: reduce){
+  .audio-ctl,.audio-mute{transition:none}
+}
+/* Keep copy/status toasts under the safe-area top bar so they do not cover the volume control. */
+.toast{top:calc(60px + env(safe-area-inset-top))}

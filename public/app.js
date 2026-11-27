@@ -184,7 +184,150 @@ async function ensureSession0() {
 
 // ================= state & socket =================
 let S = null, view = 'home', viewArg = null;
-let selected = new Set(), lastSeatIds = [], enterIds = new Set();
+let selected = new Set(), lastSeatIds = [];
+const FX_EVERY = 30000;
+const FX_HOLD = 2800;
+const fxBurst = new Map();
+const fxClocks = new Map();
+const fxEpoch = new Map();
+const fxPainted = new Map();
+function reducedFx() {
+  try { return matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  catch (e) { return false; }
+}
+function fxAfter(fn, ms) {
+  const hook = window.__fxTimers;
+  if (hook && typeof hook.after === 'function') return hook.after(fn, ms);
+  return setTimeout(fn, ms);
+}
+function fxCancel(id) {
+  const hook = window.__fxTimers;
+  if (hook && typeof hook.clear === 'function') return hook.clear(id);
+  clearTimeout(id);
+}
+function seatedNow(st) {
+  if (!st) return [];
+  const list = st.game ? (st.game.seats || []) : (st.seats || []);
+  return list.filter(s => s && !s.empty && !s.claimable && s.id);
+}
+function validFx(fx) {
+  return fx && fx !== 'none' && FXS.some(x => x[0] === fx) ? fx : '';
+}
+function seatNode(id) {
+  const safe = window.CSS && CSS.escape ? CSS.escape(id) : id;
+  return document.querySelector('.rt .st[data-id="' + safe + '"]');
+}
+function stopSeat(id) {
+  const c = fxClocks.get(id);
+  if (c) { fxCancel(c.timer); fxCancel(c.hold); fxClocks.delete(id); }
+  fxBurst.delete(id);
+  fxEpoch.delete(id);
+  fxPainted.delete(id);
+  const node = seatNode(id);
+  if (!node) return;
+  node.classList.remove('enter');
+  FXS.forEach(([k]) => node.classList.remove('fx-' + k));
+}
+function stopAllEntrance() {
+  for (const id of [...fxClocks.keys()]) stopSeat(id);
+  fxBurst.clear();
+}
+function applyEntrance(el, fx) {
+  el.classList.remove('enter');
+  FXS.forEach(([k]) => el.classList.remove('fx-' + k));
+  void el.offsetWidth;
+  el.classList.add('enter', 'fx-' + fx);
+}
+function playSeat(id, fx) {
+  if (!fx || fx === 'none' || reducedFx()) return stopSeat(id);
+  const c = fxClocks.get(id);
+  if (c) c.fx = fx;
+  const epoch = (fxEpoch.get(id) || 0) + 1;
+  fxEpoch.set(id, epoch);
+  fxBurst.set(id, fx);
+  const el = seatNode(id);
+  if (el) {
+    applyEntrance(el, fx);
+    fxPainted.set(id, epoch);
+  }
+  if (!c) return;
+  fxCancel(c.hold);
+  c.hold = fxAfter(() => {
+    if (fxBurst.get(id) !== fx) return;
+    fxBurst.delete(id);
+    const node = seatNode(id);
+    if (!node) return;
+    node.classList.remove('enter');
+    node.classList.remove('fx-' + fx);
+  }, FX_HOLD);
+}
+function armSeat(id, ms, fn) {
+  const c = fxClocks.get(id);
+  if (!c) return;
+  fxCancel(c.timer);
+  c.timer = fxAfter(fn || (() => beginSeat(id)), ms);
+}
+function beginSeat(id) {
+  const c = fxClocks.get(id);
+  const cur = seatedNow(S).find(s => s && s.id === id);
+  const fx = cur && validFx(cur.fx);
+  if (!c || !fx || reducedFx()) return stopSeat(id);
+  c.fx = fx;
+  playSeat(id, fx);
+  armSeat(id, FX_EVERY);
+}
+function paintUnshown() {
+  if (reducedFx()) return;
+  for (const [id, fx] of fxBurst) {
+    if (fxPainted.get(id) === fxEpoch.get(id)) continue;
+    const el = seatNode(id);
+    if (!el) continue;
+    applyEntrance(el, fx);
+    fxPainted.set(id, fxEpoch.get(id));
+  }
+}
+function syncEntranceFx(prevIds) {
+  if (reducedFx() || !S || !S.code) { stopAllEntrance(); return; }
+  const occ = seatedNow(S);
+  const live = new Set(occ.map(p => p.id));
+  for (const id of [...fxClocks.keys()]) if (!live.has(id)) stopSeat(id);
+  const known = prevIds instanceof Set;
+  const fresh = [];
+  for (const p of occ) {
+    const fx = validFx(p.fx);
+    if (!fx) { stopSeat(p.id); continue; }
+    const clock = fxClocks.get(p.id);
+    if (!clock) {
+      fxClocks.set(p.id, { fx, timer: 0, hold: 0 });
+      if (known && prevIds.has(p.id)) {
+        playSeat(p.id, fx);
+        armSeat(p.id, FX_EVERY);
+      } else fresh.push(p);
+    } else if (clock.fx !== fx) {
+      clock.fx = fx;
+      playSeat(p.id, fx);
+      armSeat(p.id, FX_EVERY);
+    }
+  }
+  fresh.forEach((p, i) => {
+    const delay = fresh.length > 1 ? i * 450 : 0;
+    if (delay === 0) beginSeat(p.id);
+    else armSeat(p.id, delay, () => beginSeat(p.id));
+  });
+}
+try {
+  matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => {
+    if (reducedFx()) { stopAllEntrance(); return; }
+    if (!S || !S.code) return;
+    for (const p of seatedNow(S)) {
+      const fx = validFx(p.fx);
+      if (!fx) continue;
+      if (!fxClocks.has(p.id)) fxClocks.set(p.id, { fx, timer: 0, hold: 0 });
+      fxClocks.get(p.id).fx = fx;
+      armSeat(p.id, FX_EVERY);
+    }
+  });
+} catch (e) {}
 let seenEvent = 0;
 (function pickGoogleToken() {
   const h = new URLSearchParams(location.hash.slice(1));
@@ -263,12 +406,9 @@ socket.on('state', (st) => {
     st = m;
   }
   const prev = S;
-  const occ = (st.seats || []).filter(s => !s.empty);
-  if (prev && prev.code === st.code && !st.game) {
-    const old = new Set(lastSeatIds);
-    occ.forEach(p => { if (!old.has(p.id)) { enterIds.add(p.id); setTimeout(() => enterIds.delete(p.id), 2800); } });
-  }
-  lastSeatIds = occ.map(p => p.id);
+  const sameRoom = !!(prev && st && prev.code && prev.code === st.code);
+  const prevIds = sameRoom ? new Set(lastSeatIds) : null;
+  lastSeatIds = seatedNow(st).map(p => p.id);
   if (!prev || !!prev.game !== !!st.game || (prev.game && st.game && prev.game.gid !== st.game.gid)) selected = new Set();
   if (st.game && ['vote', 'quest', 'end'].includes(st.game.phase)) selected = new Set();
   if (st.game && prev && prev.game && prev.game.phase !== st.game.phase) selected = new Set();
@@ -287,6 +427,7 @@ socket.on('state', (st) => {
   }
   if (autoRoom && view === 'home' && st.code) { autoRoom = false; view = 'room'; }
   handleEvent(st);
+  syncEntranceFx(prevIds);
   if (actConfirm && !actConfirm.busy && !confirmStillValid(actConfirm)) {
     toast(actConfirm.kind === 'lady' ? '查驗已經失效' : '刺殺已經失效', 'bad');
     closeModal();
@@ -296,8 +437,8 @@ socket.on('state', (st) => {
   if (cfgOpen && !st.game && !$('#modal').classList.contains('hidden')) $('#sheet').innerHTML = cfgSheetHtml();
   syncVoteRemind();
 });
-socket.on('kicked', () => { S = null; toast('你已被房主移出房間'); go('home'); });
-socket.on('dissolved', () => { S = null; toast('房間已解散'); go('home'); });
+socket.on('kicked', () => { stopAllEntrance(); S = null; toast('你已被房主移出房間'); go('home'); });
+socket.on('dissolved', () => { stopAllEntrance(); S = null; toast('房間已解散'); go('home'); });
 const emit = (ev, data) => new Promise((res) => socket.emit(ev, data, (r) => { if (r && r.error) toast(r.error); if (r && r.dissolved) { S = null; go('home'); } res(r || {}); }));
 const act = (type, data) => emit('act', { type, data });
 
@@ -849,7 +990,7 @@ function openPhotoCrop(bitmap, opts) {
 }
 
 function editProfile(after, startTab) {
-  const d = { ...profile, bg: profile.bg || '#ffffff' }; let tab = startTab === 'fx' ? 'avatar' : (startTab || 'avatar');
+  const d = { ...profile, bg: profile.bg || '#ffffff' }; let tab = startTab === 'pendant' || startTab === 'fx' ? startTab : 'avatar';
   const FX_IC = { none:'—', spot:'💡', gold:'✨', snow:'❄️', spark:'🌟', petals:'🌸', howl:'🐺', fire:'🔥', lightning:'⚡' };
   const peek = (el) => {
     const avHost = el.querySelector('.pe-av');
@@ -883,6 +1024,9 @@ function editProfile(after, startTab) {
   const markSel = (root, sel, btn) => { $$(sel, root).forEach(x => { x.classList.toggle('sel', x === btn); const ck = x.querySelector('.ck'); if (x === btn) { if (!ck) x.insertAdjacentHTML('beforeend', '<span class="ck">✓</span>'); } else if (ck) ck.remove(); }); };
   const pickMsg = (name) => toast(`已選擇：${name}，按保存套用`);
   const bodyHtml = () => {
+    if (tab === 'fx') {
+      return `<div class="pe-fx">${FXS.map(([k,n,need]) => `<button type="button" data-fx="${k}" class="${d.fx===k?'sel':''} ${fxUnlocked(k)?'':'off'}">${FX_IC[k]||''} ${n}${fxUnlocked(k)?'':` 🔒${need}場`}</button>`).join('')}</div>`;
+    }
     if (tab === 'pendant') {
       const cells = [`<button type="button" class="pdc ${!d.pendant || d.pendant==='none'?'sel':''}" data-pd="none"><div class="pdv"><span class="pdx">不佩戴</span></div><b>不佩戴</b></button>`]
         .concat(PENDANTS.map(x => {
@@ -897,8 +1041,7 @@ function editProfile(after, startTab) {
     const tiles = [`<button type="button" class="${photoOn?'sel':''}" data-upload="1"><div class="cell pe-camcell">📷</div><div class="lb">上載相片</div>${photoOn?'<span class="ck">✓</span>':''}</button>`]
       .concat(ANIMALS.map(([k,n]) => `<button type="button" data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div>${k===d.avatar?'<span class="ck">✓</span>':''}</button>`));
     const sw = `<div class="swatches">${BGS.map(c => `<button type="button" data-c="${c}" class="${c===d.bg?'sel':''}" style="background:${c}"></button>`).join('')}</div>`;
-    const fxs = `<div class="pe-fxlab">入場特效</div><div class="pe-fx">${FXS.map(([k,n,need]) => `<button type="button" data-fx="${k}" class="${d.fx===k?'sel':''} ${fxUnlocked(k)?'':'off'}">${FX_IC[k]||''} ${n}${fxUnlocked(k)?'':` 🔒${need}場`}</button>`).join('')}</div>`;
-    return `${sw}<div class="pe-grid">${tiles.join('')}</div>${fxs}`;
+    return `${sw}<div class="pe-grid">${tiles.join('')}</div>`;
   };
   const draw = (el) => {
     const n = d.name || '';
@@ -913,18 +1056,19 @@ function editProfile(after, startTab) {
           <span class="pe-cnt"><i id="nlen">${Array.from(n).length}</i>/10</span>
         </div>
       </div>
-      <div class="seg pe-tabs"><button type="button" data-t="avatar" class="${tab==='avatar'?'sel':''}">頭像</button><button type="button" data-t="pendant" class="${tab==='pendant'?'sel':''}">掛件</button></div>
+      <div class="seg pe-tabs"><button type="button" data-t="avatar" class="${tab==='avatar'?'sel':''}">頭像</button><button type="button" data-t="pendant" class="${tab==='pendant'?'sel':''}">掛件</button><button type="button" data-t="fx" class="${tab==='fx'?'sel':''}">入場特效</button></div>
       <div class="pe-body">${bodyHtml()}</div>
       <input id="file" type="file" accept="image/*" hidden>
       <div class="pe-bot"><button type="button" class="btn pe-save" id="ok">保存</button></div>
     </div>`;
     bind(el);
     if (d._photo && d.avatar === 'photo') { const img = el.querySelector('.pe-av .av img'); if (img) img.src = d._photo; }
+    if (tab === 'fx') replayEntrancePreview(el, d._fxPreview || d.fx);
   };
   const bind = (el) => {
     const nm = $('#nm', el);
     if (nm) nm.oninput = () => { d.name = nm.value; const nlen = $('#nlen', el); if (nlen) nlen.textContent = Array.from(d.name||'').length; };
-    $$('[data-t]', el).forEach(b => b.onclick = () => { tab = b.dataset.t; const body = el.querySelector('.pe-body'); if (body) body.innerHTML = bodyHtml(); $$('.pe-tabs [data-t]', el).forEach(x => x.classList.toggle('sel', x.dataset.t === tab)); bindBody(el); });
+    $$('[data-t]', el).forEach(b => b.onclick = () => { tab = b.dataset.t; const body = el.querySelector('.pe-body'); if (body) body.innerHTML = bodyHtml(); $$('.pe-tabs [data-t]', el).forEach(x => x.classList.toggle('sel', x.dataset.t === tab)); bindBody(el); if (tab === 'fx') replayEntrancePreview(el, d._fxPreview || d.fx); });
     bindBody(el);
     const pickFile = () => { const f = $('#file', el); if (f) f.click(); };
     $$('[data-cam]', el).forEach(b => b.onclick = (ev) => { ev.preventDefault(); pickFile(); });
@@ -1262,7 +1406,7 @@ function roundTable(seats, o = {}) {
     if (s.claimable) {
       return `<div class="st claim click" style="${pos}" data-sid="${s.id}" data-id="${s.id}" data-seat="${seatNo}" data-a="sit"><div class="av-empty">+</div><div class="nm">${esc(s.name || '可接手')}</div><div class="st-pills"><span class="claimpill">可接手</span></div></div>`;
     }
-    const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '') + (enterIds.has(s.id) ? ` enter fx-${s.fx || 'spot'}` : '');
+    const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '');
     const action = o.action || 'sel';
     const actAttr = o.click && o.click(s, i) ? `data-a="${action}"` : (o.seatClick ? `data-a="${o.seatClick}"` : '');
     const mic = (window.AvalonVoice && AvalonVoice.glyph(s.id)) || '';
@@ -1650,7 +1794,18 @@ function showEnd() {
 // ---- tiny DOM morph: patch only what changed (keeps images/animations, avoids full re-render jank) ----
 function morphAttrs(a, b) {
   for (const { name } of Array.from(a.attributes)) if (!b.hasAttribute(name)) a.removeAttribute(name);
-  for (const { name, value } of Array.from(b.attributes)) if (a.getAttribute(name) !== value) a.setAttribute(name, value);
+  for (const { name, value } of Array.from(b.attributes)) {
+    if (a.getAttribute(name) === value) continue;
+    // Token edits keep an in-flight entrance animation. Replacing the whole
+    // class attribute restarts it on every unrelated seat update.
+    if (name === 'class' && a.classList) {
+      const next = new Set(value.split(/\s+/).filter(Boolean));
+      for (const c of [...a.classList]) if (!next.has(c)) a.classList.remove(c);
+      for (const c of next) if (!a.classList.contains(c)) a.classList.add(c);
+      continue;
+    }
+    a.setAttribute(name, value);
+  }
 }
 function morphChildren(a, b) {
   const an = a.childNodes, bn = Array.from(b.childNodes);
@@ -1706,7 +1861,7 @@ function render() {
     // avatars first would then find no placeholder to swap back onto, and the
     // next identical render would have nothing left to save.
     if (app._html !== nextHtml) $$('.rt .st[data-id] .av-wrap').forEach(wrap => { const id = wrap.closest('.st').dataset.id; if (id && !faces.has(id)) { faces.set(id, wrap); wrap.remove(); } });
-    setHTML(app, nextHtml); enterIds.clear();
+    setHTML(app, nextHtml);
     faces.forEach((wrap, id) => {
       const st = document.querySelector('.rt .st[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
       if (!st) return;
@@ -1732,6 +1887,7 @@ function render() {
       if (!(S && S.settings && S.settings.mic === true)) AvalonVoice.stripIcons();
       else AvalonVoice.afterRender();
     }
+    paintUnshown();
   }
   else if (view === 'rules') { app.innerHTML = rulesHtml(); mountRules(); }
   else if (view === 'history') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadHistory(); }

@@ -961,13 +961,16 @@ img,canvas,svg,video{max-width:100%}
 
 /* ---- t113-t117 layout patch ---- */
 
-/* Sticky topbar: back | title+code | 邀請 ⋯ conn; no horizontal scroll at 375/390 */
+/* Sticky topbar. Other pages: back | centered title | conn.
+   In a room: back + logo + 圓桌 + code | centered 釋出座位 | 邀請 ⋯ conn. */
 .topbar{display:grid;grid-template-columns:minmax(36px,auto) minmax(0,1fr) minmax(36px,auto);align-items:center;gap:4px;height:52px;padding:env(safe-area-inset-top) 6px 0;box-sizing:content-box;max-width:100vw;overflow:hidden}
 .topbar .icon-btn{position:relative;left:auto;flex-shrink:0;padding:2px 8px}
-.top-left,.top-right{display:flex;align-items:center;min-width:0}
-.top-left{justify-content:flex-start}
-.top-right{justify-content:flex-end;gap:6px}
+.top-left,.top-right,.top-center{grid-row:1;display:flex;align-items:center;min-width:0}
+.top-left{grid-column:1;justify-content:flex-start}
+.top-center{grid-column:2;justify-content:center}
+.top-right{grid-column:3;justify-content:flex-end;gap:6px}
 .topbar .title{min-width:0;justify-content:center;overflow:hidden;font-size:16px;letter-spacing:.4px;white-space:nowrap}
+.topbar:not(.in-room) .title{position:absolute;left:50%;top:env(safe-area-inset-top);height:52px;transform:translateX(-50%);z-index:1}
 .topbar .tlogo{height:24px;width:auto;flex-shrink:0}
 #topTitle{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .top-code{border:0;background:none;font:inherit;font-weight:800;letter-spacing:1px;cursor:pointer;color:inherit;padding:0 1px;font-family:ui-monospace,Menlo,monospace}
@@ -975,10 +978,27 @@ img,canvas,svg,video{max-width:100%}
 .top-room-acts.hidden{display:none}
 .top-room-acts .rbtn{padding:4px 10px;font-size:13px;white-space:nowrap;line-height:1.2}
 .topbar .conn{position:static;margin:0 2px 0 2px;flex-shrink:0}
+.topbar.in-room{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);column-gap:6px;padding-left:4px;padding-right:4px}
+.topbar:not(.in-room) #backBtn,.topbar:not(.in-room) .top-right{position:relative;z-index:2}
+.topbar.in-room .top-left{gap:1px;z-index:2}
+.topbar.in-room .top-right{z-index:2}
+.topbar.in-room .title{position:static;left:auto;top:auto;height:auto;transform:none;justify-content:flex-start;flex:0 1 auto;font-size:14px;gap:4px;letter-spacing:0}
+.topbar.in-room .icon-btn{padding:6px 2px;font-size:28px}
+.topbar.in-room .top-code{letter-spacing:0;padding:0}
+.top-release{
+  flex:none;height:32px;margin:0;padding:0 9px;border-radius:999px;
+  font-size:13px;font-weight:800;line-height:1;letter-spacing:0;white-space:nowrap;
+}
+.top-release:focus-visible{outline:2px solid #1d2333;outline-offset:2px}
 @media (max-width:389px){
   .topbar .title{font-size:15px;gap:5px;letter-spacing:0}
   .top-room-acts .rbtn{padding:4px 8px;font-size:12px}
   .topbar .tlogo{height:22px}
+  .topbar.in-room .title{font-size:13px;gap:3px}
+  .topbar.in-room .icon-btn{padding:6px 1px;font-size:26px}
+  .topbar.in-room .top-room-acts{gap:4px}
+  .topbar.in-room .top-room-acts .rbtn{padding:3px 6px;font-size:12px}
+  .top-release{height:30px;padding:0 7px;font-size:12px}
 }
 
 /* Compact lobby meta: no code pill, no waiting copy, no seated-count duplicate */
@@ -1047,7 +1067,7 @@ img,canvas,svg,video{max-width:100%}
   box-shadow:none !important;
   border-radius:0;
 }
-.card.tbl{padding:18px 8px 18px;margin-top:8px}
+.card.tbl{padding:18px 8px 40px;margin-top:8px}
 .card.tbl .rt{max-width:none;width:100%;margin:0 auto}
 .card.tbl .emote-btn{top:2px;right:2px;width:32px;height:32px}
 
@@ -1410,16 +1430,8 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
 .modal:has(.actconf){z-index:80 !important;background:rgba(16,20,32,.62)}
 .sheet:has(.actconf){animation:none;opacity:1;background:#fff;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
-/* Host opener only. Compact, bottom-right of the table card, so the bottom
-   seat's name and number keep a clear gap. Hidden once the next-game dock is up. */
-.release-row{display:flex;justify-content:flex-end;align-items:center;margin:40px 0 0;min-height:44px}
-.release-row .btn.ghost.release-open{
-  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
-  width:auto;max-width:68%;min-height:44px;margin:0;padding:0 16px;border-radius:999px;
-  font-size:14px;font-weight:800;line-height:1;letter-spacing:0;box-shadow:none;
-}
-.release-row .release-open:focus-visible{outline:2px solid #1d2333;outline-offset:2px}
-body:has(.end-next) .release-row{display:none}
+/* 釋出座位 lives in the top bar. The table card keeps a short tail so the
+   bottom seat's name and pills stay inside the card without the old button. */
 .rt .st.claim .claimpill{display:inline-block;margin-top:2px;font-size:10px;line-height:14px;padding:0 6px;border-radius:7px;background:#eef3ff;color:#2f6be0;font-weight:800}
 .toast{z-index:90}
 .voicebar{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e3e6ef;border-radius:14px;padding:8px 10px;margin:8px 0}
@@ -1584,8 +1596,10 @@ body:has(.end-next) .release-row{display:none}
 
 /* Merlin head is the primary mark. Amigos stays a small sponsor credit. */
 .topbar .tlogo.merlin{width:28px;height:28px;border-radius:50%;object-fit:cover;object-position:center;flex:none}
+.topbar.in-room .tlogo.merlin{width:24px;height:24px}
 @media (max-width:389px){
   .topbar .tlogo.merlin{width:26px;height:26px}
+  .topbar.in-room .tlogo.merlin{width:22px;height:22px}
 }
 .splash img.merlin,.logo.merlin{width:88px;height:88px;border-radius:50%;object-fit:cover;object-position:center;display:block}
 .logo.merlin{margin:0 auto}

@@ -1,7 +1,7 @@
-// The host's 釋出座位 opener is a compact control at the bottom-right of the
-// table card. A long bottom-seat name must stay clear of it on 375 and 390,
-// in the lobby and mid-game. After the game ends it must not cover the
-// settlement or the next-game dock.
+// The host's 釋出座位 opener sits in the center of the top bar, with the
+// back button, logo, 圓桌 and room code packed on the left. It must not cover
+// seats on 375 and 390, in the lobby or mid-game. After the game ends it
+// must not cover the settlement or the next-game dock.
 const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
@@ -123,31 +123,21 @@ function bot(key, name) {
   };
   async function frameTable() {
     await evalj(`(() => {
-      const btn = document.querySelector('[data-a="releaselist"]');
-      const card = btn && btn.closest('.card');
-      if (!card) return;
       const main = document.querySelector('main');
-      const head = document.querySelector('.topbar');
-      const headB = head ? head.getBoundingClientRect().bottom : 0;
-      const fab = document.querySelector('.myrole-fab');
-      const bar = document.querySelector('.bottombar');
-      const limit = Math.min(
-        fab ? fab.getBoundingClientRect().top : innerHeight,
-        bar ? bar.getBoundingClientRect().top : innerHeight,
-        innerHeight
-      ) - 12;
+      const rt = document.querySelector('.rt');
       const scroller = main && getComputedStyle(main).position === 'fixed' ? main : document.scrollingElement;
-      const delta = card.getBoundingClientRect().top - headB - 8;
-      scroller.scrollTop += delta;
-      const btnB = () => document.querySelector('[data-a="releaselist"]').getBoundingClientRect().bottom;
-      for (let i = 0; i < 6 && btnB() > limit; i++) scroller.scrollTop += Math.ceil(btnB() - limit);
+      if (!scroller) return;
+      scroller.scrollTop = 0;
+      window.scrollTo(0, 0);
+      if (!rt || scroller === document.scrollingElement) return;
+      scroller.scrollTop += rt.getBoundingClientRect().top - main.getBoundingClientRect().top - 8;
     })()`);
   }
   async function measure() {
     return evalj(`(() => {
       const box = (el) => { const r = el.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; };
       const btn = document.querySelector('[data-a="releaselist"]');
-      const card = btn ? btn.closest('.card') : document.querySelector('.rt').closest('.card');
+      const card = document.querySelector('.rt').closest('.card');
       const rt = card.querySelector('.rt');
       const seats = [...rt.querySelectorAll('.st')].map(s => {
         const face = s.querySelector('.av') || s.querySelector('.av-empty');
@@ -171,9 +161,11 @@ function bot(key, name) {
         return { seat: el.dataset.seat, l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height };
       });
       const probe = document.createElement('div');
-      probe.style.cssText = 'position:absolute;left:-999px;padding-bottom:env(safe-area-inset-bottom)';
+      probe.style.cssText = 'position:absolute;left:-999px;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)';
       document.body.appendChild(probe);
-      const inset = parseFloat(getComputedStyle(probe).paddingBottom) || 0;
+      const pcs = getComputedStyle(probe);
+      const inset = parseFloat(pcs.paddingBottom) || 0;
+      const insetTop = parseFloat(pcs.paddingTop) || 0;
       probe.remove();
       const fab = document.querySelector('.myrole-fab');
       const bar = document.querySelector('.bottombar');
@@ -190,12 +182,51 @@ function bot(key, name) {
         }
       }
       const cs = btn ? getComputedStyle(btn) : null;
+      const title = document.querySelector('#topTitle');
+      const code = document.querySelector('.top-code');
+      const logo = document.querySelector('.topbar .tlogo');
+      const back = document.querySelector('#backBtn');
+      const inv = document.querySelector('.top-inv');
+      const more = document.querySelector('.top-more');
+      const conn = document.querySelector('#conn');
+      const header = document.querySelector('.topbar');
+      const hitOf = (el) => {
+        if (!el) return '';
+        const r = el.getBoundingClientRect();
+        const node = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        if (!node) return '';
+        if (node.closest('[data-a="releaselist"]')) return 'release';
+        if (node.closest('.top-inv')) return 'invite';
+        if (node.closest('.top-more')) return 'more';
+        if (node.closest('.top-code')) return 'code';
+        if (node.closest('#backBtn')) return 'back';
+        return String(node.className || node.tagName).slice(0, 40);
+      };
+      const doc = document.documentElement;
       return {
-        iw: innerWidth, ih: innerHeight, inset,
+        iw: innerWidth, ih: innerHeight, inset, insetTop,
+        sw: doc.scrollWidth, cw: doc.clientWidth,
         btn: btn ? box(btn) : null,
         text: btn ? btn.textContent.trim() : '',
         action: btn ? btn.getAttribute('data-a') : '',
         display: cs ? cs.display : '',
+        inHeader: !!(btn && btn.closest('.topbar')),
+        inCard: !!document.querySelector('.card [data-a="releaselist"]'),
+        releaseHit: hitOf(btn),
+        inviteHit: hitOf(inv),
+        moreHit: hitOf(more),
+        codeHit: hitOf(code),
+        backHit: hitOf(back),
+        titleClip: title ? title.scrollWidth - title.clientWidth : 99,
+        relClip: btn ? btn.scrollWidth - btn.clientWidth : 99,
+        titleText: title ? title.textContent.replace(/\\s+/g, ' ').trim() : '',
+        codeText: code ? code.textContent.trim() : '',
+        headerBottom: header ? header.getBoundingClientRect().bottom : 0,
+        clusterRight: Math.max(back ? box(back).r : 0, logo ? box(logo).r : 0, title ? box(title).r : 0),
+        toolsLeft: Math.min(inv ? box(inv).l : 9999, more ? box(more).l : 9999),
+        toolsRight: conn ? box(conn).r : 0,
+        backLeft: back ? box(back).l : 99,
+        orderOk: !!(back && logo && title && code && box(back).r <= box(logo).l + 1 && box(logo).r <= box(title).l + 2),
         card: box(card),
         seats, nums, hit,
         fab: fab ? box(fab) : null,
@@ -209,13 +240,18 @@ function bot(key, name) {
   function assertPlace(tag, m) {
     const b = m.btn;
     assert(b && m.text === '釋出座位' && m.action === 'releaselist', tag + ' shows the release opener');
-    assert(m.display !== 'block' || b.w < m.card.w * 0.6, tag + ' opener is not a stretched block');
-    assert(b.w <= m.card.w * 0.55 && b.w >= 72 && b.w <= 160, tag + ' opener is compact (' + b.w.toFixed(0) + '×' + b.h.toFixed(0) + ')');
-    assert(b.h >= 40 && b.h <= 52, tag + ' opener stays easy to tap (' + b.h.toFixed(0) + ')');
-    assert(b.l >= m.card.l + m.card.w * 0.45, tag + ' opener sits in the right half');
-    assert(m.card.r - b.r <= 22 && b.r <= m.card.r + 1, tag + ' opener is at the card’s right edge (' + (m.card.r - b.r).toFixed(1) + ')');
-    assert(m.card.b - b.b <= 26 && m.card.b - b.b >= 4, tag + ' opener sits at the bottom of the card (' + (m.card.b - b.b).toFixed(1) + ')');
-    assert(b.b <= m.ih - m.inset + 1, tag + ' opener clears the home indicator');
+    assert(m.inHeader && !m.inCard, tag + ' opener is in the header, not on the table');
+    assert(m.releaseHit === 'release', tag + ' opener is the control under the finger (' + m.releaseHit + ')');
+    assert(m.backHit === 'back' && m.codeHit === 'code' && m.inviteHit === 'invite' && m.moreHit === 'more', tag + ' back, room code, 邀請 and the menu stay tappable (' + [m.backHit, m.codeHit, m.inviteHit, m.moreHit].join(',') + ')');
+    assert(m.display !== 'block' || b.w < m.iw * 0.5, tag + ' opener is not a stretched block');
+    assert(b.w >= 64 && b.w <= 120, tag + ' opener is compact (' + b.w.toFixed(0) + '×' + b.h.toFixed(0) + ')');
+    assert(b.h >= 28 && b.h <= 40, tag + ' opener stays easy to tap (' + b.h.toFixed(0) + ')');
+    assert(Math.abs((b.l + b.r) / 2 - m.iw / 2) <= 6, tag + ' opener is centered in the top bar (' + ((b.l + b.r) / 2).toFixed(1) + ')');
+    assert(b.t >= m.insetTop - 1 && b.b <= m.headerBottom + 1, tag + ' opener sits inside the top bar below the safe area');
+    assert(m.relClip <= 1 && m.titleClip <= 1, tag + ' header text is not clipped');
+    assert(/圓桌/.test(m.titleText) && m.codeText.length === 4 && m.titleText.includes(m.codeText) && m.orderOk, tag + ' back, logo, 圓桌 and the room code read left to right');
+    assert(m.backLeft <= 8 && m.clusterRight <= b.l - 4, tag + ' left cluster clears 釋出座位 (' + (b.l - m.clusterRight).toFixed(1) + ')');
+    assert(b.r <= m.toolsLeft - 4 && m.toolsRight <= m.iw + 1 && m.sw <= m.cw + 1, tag + ' 釋出座位 clears 邀請 and the menu (' + (m.toolsLeft - b.r).toFixed(1) + ')');
     if (m.bar) assert(b.b <= m.bar.t - 4, tag + ' opener stays above the lobby bar (' + b.b.toFixed(0) + '/' + m.bar.t.toFixed(0) + ')');
     if (m.fab) assert(!overlap(b, m.fab) && gap(b, m.fab) >= 8, tag + ' opener stays clear of the identity chip');
     const bottom = m.seats.slice().sort((a, c) => c.cy - a.cy)[0];
@@ -223,6 +259,8 @@ function bot(key, name) {
     assert(bottom.name === LONG, tag + ' bottom seat keeps the long name');
     assert(bottom.wide >= 70, tag + ' long name uses the wide label (' + bottom.wide.toFixed(0) + ')');
     assert(bottom.nameBox && !overlap(bottom.nameBox, b) && gap(bottom.nameBox, b) >= 12, tag + ' long bottom name stays clear (' + gap(bottom.nameBox, b).toFixed(1) + 'px)');
+    assert(bottom.nameBox.b <= m.card.b + 1.5 && bottom.face.b <= m.card.b + 1.5, tag + ' bottom seat stays inside the table card');
+    if (bottom.pov) assert(bottom.pov.b <= m.card.b + 1.5 && bottom.pov.t >= m.card.t - 1.5, tag + ' bottom charm stays inside the table card');
     const num = m.nums.find(n => n.seat === bottom.seat);
     assert(num && !overlap(num, b) && gap(num, b) >= 8, tag + ' bottom seat number stays clear (' + (num && gap(num, b).toFixed(1)) + ')');
     assert(m.hit !== 'release', tag + ' the name is not covered by the opener (' + m.hit + ')');
@@ -249,11 +287,13 @@ function bot(key, name) {
     let m = await measure();
     assertPlace('lobby 375', m);
     await shot('release-lobby-375.png');
+    await shot('header-lobby-375.png');
     await setSize(390, 844);
     await frameTable();
     m = await measure();
     assertPlace('lobby 390', m);
     await shot('release-lobby-390.png');
+    await shot('header-lobby-390.png');
 
     await evalj(`document.querySelector('[data-a="releaselist"]').click()`);
     for (let i = 0; i < 20 && !(await evalj(`!!document.querySelector('#rel-list-title')`)); i++) await sleep(50);
@@ -270,6 +310,12 @@ function bot(key, name) {
     m = await measure();
     assertPlace('mid-game 375', m);
     await shot('release-midgame-375.png');
+    await shot('header-midgame-375.png');
+    await setSize(390, 844);
+    await frameTable();
+    m = await measure();
+    assertPlace('mid-game 390', m);
+    await shot('header-midgame-390.png');
 
     if ((await bots[0].act('endearly')).error) throw new Error('endearly');
     for (let i = 0; i < 40 && !(bots[0].st.game && bots[0].st.game.phase === 'end'); i++) await sleep(50);

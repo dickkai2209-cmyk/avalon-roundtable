@@ -179,6 +179,6 @@ const chainFn = app.slice(app.indexOf('function ladyChainHtml'), app.indexOf('fu
 assert(chainFn.includes('reveal && l.side'), 'mid-game public lady row still gates alignment on reveal');
 assert(app.includes('ladyRecapHtml') && app.includes('voteRecapHtml') && !app.includes('查驗同傳遞'), 'the recap uses the chain and grid');
 const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
-assert(html.includes('style.css?v=65') && html.includes('app.js?v=73') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'cache versions bumped only for changed assets');
+assert(html.includes('style.css?v=66') && html.includes('app.js?v=74') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'cache versions bumped only for changed assets');
 
 console.log('RECAP TESTS PASSED');

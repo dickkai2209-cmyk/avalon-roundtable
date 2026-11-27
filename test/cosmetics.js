@@ -31,6 +31,10 @@ const ANIMALS = [
   ['puffer', '河豚'], ['alien', '外星人'], ['wolfking', '狼王'], ['frog', '青蛙'],
   ['dragonet', '小龍'], ['tiger', '老虎'], ['hero', '超人'],
 ];
+const ROLES = [
+  ['merlin', '梅林'], ['percival', '派西維爾'], ['servant', '忠臣'], ['assassin', '刺客'],
+  ['mordred', '莫德雷特'], ['oberon', '奧柏倫'], ['morgana', '莫甘娜'],
+];
 const ICE = ['frostmirror', 'icesword'];
 
 function webpInfo(buf) {
@@ -66,8 +70,8 @@ const serverSrc = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const cssSrc = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 
-assert(html.includes('style.css?v=71') && html.includes('app.js?v=79'), 'cache bust moves past the versions on main');
-assert(!html.includes('style.css?v=70') && !html.includes('app.js?v=78') && !html.includes('style.css?v=69') && !html.includes('app.js?v=77') && !html.includes('style.css?v=68') && !html.includes('app.js?v=76') && !html.includes('style.css?v=67') && !html.includes('app.js?v=75') && !html.includes('style.css?v=66') && !html.includes('app.js?v=74') && !html.includes('style.css?v=65') && !html.includes('app.js?v=73') && !html.includes('style.css?v=64') && !html.includes('app.js?v=72') && !html.includes('style.css?v=63') && !html.includes('app.js?v=71') && !html.includes('style.css?v=62') && !html.includes('app.js?v=70') && !html.includes('style.css?v=61') && !html.includes('app.js?v=69'), 'live cache versions are not reused');
+assert(html.includes('style.css?v=72') && html.includes('app.js?v=80'), 'cache bust moves past the versions on main');
+assert(!html.includes('style.css?v=68') && !html.includes('app.js?v=76') && !html.includes('style.css?v=67') && !html.includes('app.js?v=75') && !html.includes('style.css?v=66') && !html.includes('app.js?v=74') && !html.includes('style.css?v=65') && !html.includes('app.js?v=73') && !html.includes('style.css?v=64') && !html.includes('app.js?v=72') && !html.includes('style.css?v=63') && !html.includes('app.js?v=71') && !html.includes('style.css?v=62') && !html.includes('app.js?v=70') && !html.includes('style.css?v=61') && !html.includes('app.js?v=69'), 'live cache versions are not reused');
 assert(appSrc.includes('const PD_V = 6'), 'pendant image cache key bumped');
 assert(cssSrc.includes('iceSweep') && cssSrc.includes('pdSheen') && cssSrc.includes('pdPalSway') && cssSrc.includes('prefers-reduced-motion') && cssSrc.includes('pd-ice') && cssSrc.includes('.pd-pal'), 'frame motion and charms honor reduced motion');
 const palCss = cssSrc.slice(cssSrc.indexOf('.pd-pal{'), cssSrc.indexOf('.pd-pal svg'));
@@ -102,12 +106,15 @@ for (const [k, n, type, need] of FRAMES) {
 }
 assert(FRAMES.filter(x => x[2] === 'free').map(x => x[0]).join() === ICE.join(), 'only the two ice frames are free');
 assert(FRAMES.filter(x => x[2] !== 'free').every(x => x[2] === 'games' || x[2] === 'wins'), 'the other ten use the play/win ladder');
-for (const [k, n] of ANIMALS) {
+const serverAnimals = serverSrc.slice(serverSrc.indexOf('const ANIMALS = ['), serverSrc.indexOf('];', serverSrc.indexOf('const ANIMALS = [')));
+for (const [k, n] of ANIMALS.concat(ROLES)) {
   assert(appSrc.includes(`['${k}','${n}']`), 'picker lists ' + n);
-  assert(serverSrc.includes("'" + k + "'"), 'server accepts ' + k);
+  assert(serverAnimals.includes("'" + k + "'"), 'server accepts ' + k);
   const info = webpInfo(fs.readFileSync(path.join(root, 'public/img/av', k + '.webp')));
   assert(info.alpha && info.w === 192 && info.h === 192, n + ' is a 192 alpha icon');
 }
+assert(appSrc.includes('.concat(ROLE_AV)'), 'role faces stay on the same avatar allow-list as the animals');
+assert(!appSrc.includes("'merlin':'") && !/🧙|👑|🗡️/.test(appSrc.slice(appSrc.indexOf('const EMOJI_MAP'), appSrc.indexOf('const BGS'))), 'role faces do not invent emoji shortcuts');
 assert(!appSrc.includes('炭治郎') && !appSrc.includes('善逸') && !appSrc.includes('ちいかわ'), 'no official character names');
 
 class Page {
@@ -182,7 +189,7 @@ class Page {
     assert(lockedWin.pendant === 'none', '星垂平野 stays locked at 0 wins');
     const noLaurel = await put(tokens[fresh.id], { pendant: 'laurel' });
     assert(noLaurel.pendant === 'none', 'laurel still refuses 0 MVP');
-    for (const [k] of ANIMALS) {
+    for (const [k] of ANIMALS.concat(ROLES)) {
       const u = await put(tokens[fresh.id], { avatar: k });
       assert(u.avatar === k, 'server keeps the ' + k + ' icon');
     }
@@ -284,6 +291,23 @@ class Page {
       const hit = animals.buttons.find(b => b.k === k);
       assert(hit && hit.n === n && hit.src.includes('/img/av/' + k + '.webp'), 'picker shows ' + n);
     }
+    const roleGroup = await cdp.eval(`(() => {
+      const heads = [...document.querySelectorAll('.pe-h')].map(el => el.textContent.trim());
+      const roleGrid = document.querySelector('.pe-roles');
+      const roles = roleGrid ? [...roleGrid.querySelectorAll('[data-e]')].map(b => ({ k: b.dataset.e, n: (b.querySelector('.lb') || {}).textContent || '', src: (b.querySelector('img') || {}).src || '', off: b.classList.contains('off') })) : [];
+      const animal = [...document.querySelectorAll('.pe-grid')].find(g => !g.classList.contains('pe-roles'));
+      const beasts = animal ? [...animal.querySelectorAll('[data-e]')].map(b => b.dataset.e) : [];
+      const roleAfter = !!(animal && roleGrid && (animal.compareDocumentPosition(roleGrid) & Node.DOCUMENT_POSITION_FOLLOWING));
+      return { heads, roles, beasts, upload: !!(animal && animal.querySelector('[data-upload]')), roleAfter };
+    })()`);
+    assert(roleGroup.heads.join() === '動物,角色' && roleGroup.roleAfter, '角色 group sits at the bottom, after the animals ' + JSON.stringify(roleGroup.heads));
+    assert(roleGroup.roles.map(r => r.k).join() === ROLES.map(r => r[0]).join(), '角色 group order');
+    for (const [k, n] of ROLES) {
+      const hit = roleGroup.roles.find(b => b.k === k);
+      assert(hit && hit.n === n && hit.src.includes('/img/av/' + k + '.webp') && !hit.off, '角色 group shows free ' + n);
+      assert(!roleGroup.beasts.includes(k), n + ' is not lost in the animal list');
+    }
+    assert(roleGroup.upload && roleGroup.beasts.includes('fox') && roleGroup.beasts.includes('hero'), 'photo upload and the animal faces stay');
     const animalBtn = await cdp.eval(`document.querySelector('[data-e="puffer"]').scrollIntoView({ block: 'center' }); 1`);
     assert(animalBtn, 'scrolled to the new animals');
     await cdp.eval(`Promise.all([...document.querySelectorAll('.pe-grid img, .pe-av img')].map(i => i.decode().catch(() => 0)))`);
@@ -439,6 +463,34 @@ class Page {
     await size(390, 844);
     await sleep(80);
     await cdp.shot('seat-foxqiu-tiger-390');
+    await size(375, 812);
+    const merlinSeat = await cdp.eval(`(async () => {
+      const st = document.querySelector('.rt .st');
+      st.querySelector('.av-wrap').outerHTML = window.__av.av({ pendant: 'icesword', avatar: 'merlin', bg: '#bcd6ff', name: '梅林' }, 58);
+      const img = st.querySelector('.av img');
+      await img.decode().catch(() => 0);
+      const palEl = st.querySelector('.pd-pal');
+      palEl.style.animation = 'none';
+      palEl.style.transform = 'none';
+      const face = st.querySelector('.av').getBoundingClientRect();
+      const pal = palEl.getBoundingClientRect();
+      const noEl = document.querySelector('.rt > .no[data-seat="' + st.dataset.seat + '"]');
+      const no = noEl.getBoundingClientRect();
+      const nm = st.querySelector('.nm').getBoundingClientRect();
+      const overlap = (a, b) => a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
+      const cx = face.left + face.width / 2, cy = face.top + face.height / 2, rad = face.width / 2 - 1;
+      const qx = Math.max(pal.left, Math.min(cx, pal.right));
+      const qy = Math.max(pal.top, Math.min(cy, pal.bottom));
+      return {
+        src: img.src, pal: palEl.dataset.pal, noText: noEl.textContent,
+        topLeft: pal.left < cx && pal.top < cy,
+        onFace: (qx - cx) ** 2 + (qy - cy) ** 2 < rad * rad,
+        onNo: overlap(pal, no), onName: overlap(pal, nm),
+        noW: no.width, noH: no.height,
+      };
+    })()`);
+    assert(String(merlinSeat.src).includes('/img/av/merlin.webp') && merlinSeat.pal === 'sword', 'merlin seat wears the painted sword charm ' + JSON.stringify(merlinSeat));
+    assert(merlinSeat.topLeft && !merlinSeat.onFace && !merlinSeat.onNo && !merlinSeat.onName && merlinSeat.noText && merlinSeat.noW > 4, 'merlin charm stays top-left and the seat number stays visible ' + JSON.stringify(merlinSeat));
 
     await size(375, 812);
     const clearFrames = await cdp.eval(`(async () => {

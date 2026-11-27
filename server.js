@@ -18,7 +18,7 @@ const PORT = process.env.PORT || 3000;
 const pubId = (pid) => crypto.createHash('sha256').update(String(pid)).digest('hex').slice(0, 10);
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const cleanName = (s) => Array.from(String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim()).slice(0, 10).join('') || '騎士';
-const ANIMALS = ['fox','panda','duck','squirrel','hedgehog','bunny','bear','redpanda','otter','hamster','shiba','dalmatian','capybara','penguin','koala','cat','wolf','lion','piglet','guineapig','puffer','alien','wolfking','frog','dragonet','tiger','hero'];
+const ANIMALS = ['fox','panda','duck','squirrel','hedgehog','bunny','bear','redpanda','otter','hamster','shiba','dalmatian','capybara','penguin','koala','cat','wolf','lion','piglet','guineapig','puffer','alien','wolfking','frog','dragonet','tiger','hero','merlin','percival','servant','assassin','mordred','oberon','morgana'];
 const FXS = ['none','spot','gold','snow','spark','petals','howl','fire','lightning','signs','ding','harbour','ferry','hop','waddle','ham','silver'];
 const EMOTES = ['1f602','1f62d','1f631','1f914','1f60e','1f621','1f64f','1f44d','1f44f','1f525','2764_fe0f','1f608','1f92b','1f440','1f389'];
 const emoteAt = new Map();

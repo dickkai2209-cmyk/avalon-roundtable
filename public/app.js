@@ -57,12 +57,16 @@ function skinLabel(role, skin) {
   if (role === 'servant' && (skin.id === 'classic' || skin.id === 'casual' || skin.id === 'festive')) return skin.n + ' · 女';
   return skin.n;
 }
+const ROLE_AV = [
+  ['merlin','梅林'],['percival','派西維爾'],['servant','忠臣'],['assassin','刺客'],
+  ['mordred','莫德雷特'],['oberon','奧柏倫'],['morgana','莫甘娜'],
+];
 const ANIMALS = [
   ['fox','狐狸'],['panda','熊貓'],['duck','小鴨'],['squirrel','松鼠'],['hedgehog','刺蝟'],['bunny','兔子'],
   ['bear','棕熊'],['redpanda','小熊貓'],['otter','水獺'],['hamster','倉鼠'],['shiba','柴犬'],['dalmatian','斑點狗'],
   ['capybara','水豚'],['penguin','企鵝'],['koala','無尾熊'],['cat','貓咪'],['wolf','狼仔'],['lion','獅子'],['piglet','豬仔'],['guineapig','天竺鼠'],
-  ['puffer','河豚'],['alien','外星人'],['wolfking','狼王'],['frog','青蛙'],['dragonet','小龍'],['tiger','老虎'],['hero','超人']
-];
+  ['puffer','河豚'],['alien','外星人'],['wolfking','狼王'],['frog','青蛙'],['dragonet','小龍'],['tiger','老虎'],['hero','超人'],
+].concat(ROLE_AV);
 const EMOJI_MAP = {'🦊':'fox','🐼':'panda','🦆':'duck','🐿️':'squirrel','🦔':'hedgehog','🐰':'bunny','🐻':'bear','🦝':'redpanda','🦦':'otter','🐹':'hamster','🐕':'shiba','🐶':'shiba','🦫':'capybara','🐧':'penguin','🐨':'koala','🐱':'cat','🐺':'wolf','🦁':'lion','🐷':'piglet','🐖':'piglet','🐡':'puffer','👽':'alien','🐸':'frog','🐯':'tiger','🐉':'dragonet'};
 const BGS = ['#ffffff', '#f3d9a4', '#f7c1c8', '#bfe3c9', '#bcd6ff', '#d9c6ff', '#ffe08a', '#c8eef0', '#ffcfa6', '#2b3a6e', '#3a2a1c'];
 const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['snow','聖誕飄雪',0],['spark','星火',1],['petals','花瓣',3],['howl','狼人咆哮',4],['fire','火焰圈',6],['lightning','閃電',10],['signs','旺角燈牌',0],['ding','叮叮電車',2],['harbour','維港煙花',5],['ferry','渡海小輪',8],['hop','兔兔跳跳',0],['waddle','小鴨巡遊',3],['ham','倉鼠滾滾',7],['silver','銀白追光',0]];
@@ -1140,10 +1144,12 @@ function editProfile(after, startTab) {
       return `<div class="pe-grid">${cells.join('')}</div>`;
     }
     const photoOn = d.avatar === 'photo' || (d.avatar && String(d.avatar).startsWith('data:')) || d._forceSub === 'photo';
-    const tiles = [`<button type="button" class="${photoOn?'sel':''}" data-upload="1"><div class="cell pe-camcell">📷</div><div class="lb">上載相片</div>${photoOn?'<span class="ck">✓</span>':''}</button>`]
-      .concat(ANIMALS.map(([k,n]) => `<button type="button" data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div>${k===d.avatar?'<span class="ck">✓</span>':''}</button>`));
+    const avTile = ([k, n]) => `<button type="button" data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div>${k===d.avatar?'<span class="ck">✓</span>':''}</button>`;
+    const photoBtn = `<button type="button" class="${photoOn?'sel':''}" data-upload="1"><div class="cell pe-camcell">📷</div><div class="lb">上載相片</div>${photoOn?'<span class="ck">✓</span>':''}</button>`;
+    const roleKeys = new Set(ROLE_AV.map(([k]) => k));
+    const beasts = ANIMALS.filter(([k]) => !roleKeys.has(k));
     const sw = `<div class="swatches">${BGS.map(c => `<button type="button" data-c="${c}" class="${c===d.bg?'sel':''}" style="background:${c}"></button>`).join('')}</div>`;
-    return `${sw}<div class="pe-grid">${tiles.join('')}</div>`;
+    return `${sw}<div class="pe-h">動物</div><div class="pe-grid">${photoBtn}${beasts.map(avTile).join('')}</div><div class="pe-h">角色</div><div class="pe-grid pe-roles">${ROLE_AV.map(avTile).join('')}</div>`;
   };
   const draw = (el) => {
     const n = d.name || '';

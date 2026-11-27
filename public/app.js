@@ -1974,12 +1974,23 @@ function render() {
   if (view === 'room' && !inRoom && !waitingRoom) view = 'home';
   $('#backBtn').classList.toggle('hidden', view === 'home');
   const titles = { home: 'HK阿瓦隆', support: '支持我哋', room: inRoom ? null : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就', board: '排行榜' };
+  const inRoomView = !!(view === 'room' && inRoom);
+  const bar = document.querySelector('.topbar');
+  if (bar) bar.classList.toggle('in-room', inRoomView);
   const acts = $('#topRoomActs');
   if (acts) {
-    const show = !!(view === 'room' && inRoom);
+    const show = inRoomView;
     acts.classList.toggle('hidden', !show);
     if (show) acts.innerHTML = `<button type="button" class="rbtn top-inv" data-a="invite">邀請</button><button type="button" class="rbtn top-more" data-a="menu" aria-label="更多" aria-haspopup="dialog" aria-expanded="${document.querySelector('.room-menu') ? 'true' : 'false'}">⋯</button>`;
     else acts.innerHTML = '';
+  }
+  // Same gate as the old table control: host only, and not after the round ends.
+  const center = $('#topCenter');
+  if (center) {
+    const showRel = inRoomView && !!(S && S.isHost && !(S.game && S.game.phase === 'end'));
+    const relHtml = showRel ? '<button type="button" class="rbtn top-release" data-a="releaselist">釋出座位</button>' : '';
+    if (center._html !== relHtml) { center._html = relHtml; center.innerHTML = relHtml; }
+    center.classList.toggle('hidden', !showRel);
   }
   const titleEl = $('#topTitle');
   if (view === 'room' && inRoom) {
@@ -2226,9 +2237,6 @@ function cfgSheetHtml() {
     ${s.advanced ? `<div class="small muted" style="margin-top:8px">進階模式會改寫上方預設陣容</div>${[['percival','派西維爾'],['morgana','莫甘娜'],['mordred','莫德雷德'],['oberon','奧伯倫']].map(([k, nm]) => `<div class="toggle"><div class="grow"><b>${nm}</b></div><button class="sw ${s[k] ? 'on' : ''}" data-a="tg" data-k="${k}" ${dis}></button></div>`).join('')}` : ''}
     <button class="btn" data-a="cfgclose" style="margin-top:12px">完成</button>`;
 }
-function releaseOpen() {
-  return '<div class="release-row"><button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button></div>';
-}
 function lobbyHtml() {
   const n = S.capacity, x = S.seated, s = S.settings, host = S.isHost;
   const me = (S.seats || []).find(p => p && p.id === S.meId);
@@ -2241,7 +2249,6 @@ function lobbyHtml() {
       cls: p => (p.isHost || p.id === S.hostId ? 'host' : ''),
       sub: p => (p.isHost || p.id === S.hostId ? '<span class="hostpill">房主</span>' : '') + (p.id === S.meId ? '<span class="mepill">我</span>' : ''),
       center: `<div class="seatcount"><b>${x}<small>/${n}</small></b><span>已就座</span></div>` })}
-    ${host ? releaseOpen() : ''}
     </div>
   <div class="card cfgcard" data-a="cfg">
     <div class="row between"><h3 style="margin:0">${n} 人局</h3><span class="small gold">${host ? '調整 ›' : '查看 ›'}</span></div>
@@ -2339,7 +2346,7 @@ function gameHtml() {
   });
   const micCard = S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : '';
   return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${!me ? '<div class="specbar" data-spec="live">👁 觀戰中 · 唔會看到隱藏身分</div>' : ''}<div class="card">${trackHtml(g)}</div>
-  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:42px 10px 16px">${table}${S.isHost && !ended ? releaseOpen() : ''}</div>
+  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:42px 10px 40px">${table}</div>
   <div class="card thist" id="teamhist">${teamHistoryHtml(g)}${ended ? '' : markLegend()}</div>
   ${micCard}
   ${ladyChainHtml(g.ladyLog, g.seats, ended) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats, ended)}</div>` : ''}

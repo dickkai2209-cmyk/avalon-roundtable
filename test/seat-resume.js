@@ -246,7 +246,7 @@ function noRole(st) {
     await sleep(500);
     await quiet();
     await evalj(`window.confirm = () => { window.__usedConfirm = true; return false; }; window.__usedConfirm = false;`);
-    assert(await evalj(`!!document.querySelector('[data-a="releaselist"]')`), 'the host sees 釋出座位 on the table');
+    assert(await evalj(`!!document.querySelector('.topbar [data-a="releaselist"]') && !document.querySelector('.card [data-a="releaselist"]')`), 'the host sees 釋出座位 in the header, not on the table');
     const faces = await boxes('.rt .av');
     const btn = (await boxes('[data-a="releaselist"]'))[0];
     assert(btn && faces.length && faces.every(f => !hit(btn, f)), 'the release control does not cover a face');

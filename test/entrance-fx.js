@@ -23,7 +23,7 @@ process.on('exit', killAll);
 const appSrc = fs.readFileSync(path.join(ROOT, 'public/app.js'), 'utf8');
 const cssSrc = fs.readFileSync(path.join(ROOT, 'public/style.css'), 'utf8');
 const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
-assert(html.includes('style.css?v=74') && html.includes('app.js?v=81'), 'cache bust moves past live 68/76');
+assert(html.includes('style.css?v=75') && html.includes('app.js?v=82'), 'cache bust moves past live 67/75');
 assert(!html.includes('style.css?v=67') && !html.includes('app.js?v=75'), 'live cache versions are not reused');
 assert(appSrc.includes("['none','無',0]") && appSrc.includes("['spot','聚光燈',0]") && appSrc.includes("['gold','金光',0]") && appSrc.includes("['snow','聖誕飄雪',0]") && appSrc.includes("['spark','星火',1]") && appSrc.includes("['petals','花瓣',3]") && appSrc.includes("['howl','狼人咆哮',4]") && appSrc.includes("['fire','火焰圈',6]") && appSrc.includes("['lightning','閃電',10]"), 'unlock ladder is unchanged');
 assert(appSrc.includes("['signs','旺角燈牌',0]") && appSrc.includes("['ding','叮叮電車',2]") && appSrc.includes("['harbour','維港煙花',5]") && appSrc.includes("['ferry','渡海小輪',8]") && appSrc.includes("['hop','兔兔跳跳',0]") && appSrc.includes("['waddle','小鴨巡遊',3]") && appSrc.includes("['ham','倉鼠滾滾',7]"), 'new effects use the play-count ladder');

@@ -1440,6 +1440,7 @@ body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))
 .near-item .av-wrap{flex:none}
 .near-item b,.near-item .near-copy span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .near-item span{font-size:12px;color:#6b7286}
+.near-live{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;background:#eef3ff;color:#3b6fd9;font-style:normal;font-size:11px;font-weight:800;line-height:16px;vertical-align:1px}
 
 /* Leader pick: a thin gold ring and three rim sparkles. The face stays open. */
 .rt .st.gold-pick .av{

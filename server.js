@@ -472,7 +472,10 @@ async function act(room, pid, type, data) {
       if (g && g.phase !== 'end') return '遊戲已開始';
       const e = await startGame(room);
       if (!e && room.game) {
-        discovery.delete(room.code);
+        // An opted-in room stays searchable. Late arrivals join as spectators
+        // and do not take a seat. The pin still expires if the host leaves.
+        const pin = discovery.get(room.code);
+        if (pin) pin.at = Date.now();
         room.game.vetoInv = {};
         for (const s of room.game.seats) { const c = await db.getVetoCards(s.pid).catch(() => 0); room.game.vetoInv[s.id] = c; vetoCache.set(s.pid, c); }
       }
@@ -821,6 +824,7 @@ function broadcast(room) {
     bcastPending.delete(room.code);
     if (!rooms.has(room.code)) return;
     room.touched = Date.now(); persistRoom(room);
+    touchDiscovery(room);
     for (const s of io.sockets.sockets.values()) if (s.data.room === room.code) {
       const v = viewFor(room, s.data.pid);
       const d = stateDiff(s, v); if (d) s.emit('state', d); // only changed keys after the first full push
@@ -1272,17 +1276,26 @@ function hostPublic(room) {
     : `/img/av/${hostAvatar}.webp`;
   return { hostName, hostAvatar, hostBg, hostPhoto };
 }
+function touchDiscovery(room) {
+  if (!room || !room.game || room.game.phase === 'end') return;
+  const pin = discovery.get(room.code);
+  if (pin) pin.at = Date.now();
+}
 function searchNearby(origin) {
   const now = Date.now(), out = [];
   for (const [code, pin] of discovery) {
     if (!pin || now - pin.at > DISCOVER_TTL_MS) { discovery.delete(code); continue; }
     const room = rooms.get(code);
-    if (!room || room.game || !hostInRoom(room)) { discovery.delete(code); continue; }
+    if (!room || !hostInRoom(room)) { discovery.delete(code); continue; }
+    // The public recap is not a waiting room. Keep the pin so the lobby
+    // listing returns when the host starts the next round.
+    if (room.game && room.game.phase === 'end') continue;
     if (pin.hostPid !== room.hostPid) pin.hostPid = room.hostPid;
     const km = haversineKm(origin, pin);
     if (km > DISCOVER_RADIUS_KM) continue;
     const seatedN = seated(room).length;
-    out.push({ code: room.code, name: '房間 ' + room.code, ...hostPublic(room), seated: seatedN, capacity: room.capacity, distance: distanceLabel(km), _km: km });
+    const playing = !!(room.game && room.game.phase !== 'end');
+    out.push({ code: room.code, name: '房間 ' + room.code, ...hostPublic(room), seated: seatedN, capacity: room.capacity, playing, distance: distanceLabel(km), _km: km });
   }
   out.sort((a, b) => a._km - b._km || (a.code < b.code ? -1 : 1));
   return out.slice(0, DISCOVER_MAX).map(({ _km, ...pub }) => pub);

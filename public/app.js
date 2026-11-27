@@ -102,32 +102,36 @@ const PD_FX = {
   whiteling: 'white', darkling: 'dark', skydragon: 'dragon', foxdance: 'dance',
   frostmirror: 'ice', icesword: 'ice', fairylake: 'lake', odineye: 'eye',
 };
-// A companion only when the frame name names a creature. Stars, snow, sword and the eye stay plain.
-const PD_PAL = { foxqiu: 'fox', foxheart: 'fox', foxdance: 'fox', skydragon: 'dragon', whiteling: 'white', darkling: 'dark', fairylake: 'fairy' };
+// One original charm per round frame, tied to the distinctive word in the name.
+const PD_PAL = {
+  foxqiu: 'fox', foxheart: 'heart', starmoon: 'moon', starplain: 'stars',
+  whiteling: 'white', darkling: 'dark', skydragon: 'dragon', foxdance: 'dance',
+  frostmirror: 'snow', icesword: 'sword', fairylake: 'fairy', odineye: 'eye',
+};
 function pdFxCls(k) {
   const fx = PD_FX[k];
   if (!fx) return '';
   return fx === 'ice' ? ' pd-round pd-ice' : ' pd-round pd-sheen pd-sheen-' + fx;
 }
 const PD_PAL_SVG = {
-  fox: `<svg viewBox="0 0 64 64" aria-hidden="true"><path class="tail" d="M12 42c-8 2-10 14-2 16 8 1 14-6 14-12" fill="#f0a04c" stroke="#7a4012" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><ellipse class="fur" cx="30" cy="46" rx="15" ry="11" fill="#f6b25a" stroke="#7a4012" stroke-width="4"/><circle class="fur" cx="44" cy="30" r="12" fill="#f6b25a" stroke="#7a4012" stroke-width="4"/><path class="fur" d="M34 24l2-12 8 10z" fill="#f6b25a" stroke="#7a4012" stroke-width="4" stroke-linejoin="round"/><path class="fur" d="M44 20l6-10 4 12z" fill="#f6b25a" stroke="#7a4012" stroke-width="4" stroke-linejoin="round"/><path class="ear" d="M37 20l1-6 5 6z" fill="#ffd8c4"/><path class="ear" d="M46 16l4-6 3 8z" fill="#ffd8c4"/><circle cx="41" cy="30" r="1.8" fill="#2a2118"/><circle cx="48" cy="30" r="1.8" fill="#2a2118"/><ellipse cx="50" cy="34" rx="3" ry="2.1" fill="#fff6ee"/><circle cx="51" cy="34.2" r="1.2" fill="#e07a86"/></svg>`,
-  dragon: `<svg viewBox="0 0 64 64" aria-hidden="true"><path class="body" d="M14 46c2 10 14 12 22 6 6-4 4-12-2-14 8-2 16-10 14-18-3-9-16-10-22-2" fill="#f2c84a" stroke="#8a5c10" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><circle cx="44" cy="24" r="11" fill="#f6d56a" stroke="#8a5c10" stroke-width="4"/><path d="M38 16l-2-9 9 7z" fill="#e8a028" stroke="#8a5c10" stroke-width="3.5" stroke-linejoin="round"/><path d="M52 26c6 0 9 3 11 2" fill="none" stroke="#8a5c10" stroke-width="3" stroke-linecap="round"/><circle cx="47" cy="23" r="1.7" fill="#2a2118"/><path d="M24 44c3 4 10 4 12 0" fill="none" stroke="#fff6d8" stroke-width="3" stroke-linecap="round"/></svg>`,
-  fairy: `<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="20" cy="30" rx="11" ry="7" fill="#dffaf4" stroke="#1d7a72" stroke-width="3.5"/><ellipse cx="48" cy="30" rx="11" ry="7" fill="#dffaf4" stroke="#1d7a72" stroke-width="3.5"/><path d="M26 40c1 12 16 14 18 2 1-8-6-12-9-12s-10 4-9 10z" fill="#7fd0c8" stroke="#1d7a72" stroke-width="4" stroke-linejoin="round"/><circle cx="35" cy="24" r="11" fill="#ffe3d2" stroke="#1d7a72" stroke-width="4"/><path d="M30 16c2-6 8-6 10 0" fill="#ffe3d2" stroke="#1d7a72" stroke-width="3" stroke-linecap="round"/><circle cx="32" cy="24" r="1.6" fill="#1d3a36"/><circle cx="39" cy="24" r="1.6" fill="#1d3a36"/><path d="M33 28c1.2 1.2 3.2 1.2 4.2 0" fill="none" stroke="#c46a78" stroke-width="2" stroke-linecap="round"/></svg>`,
+  fox: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 46c-8 6-2 16 8 12 4-2 6-8 4-12" fill="#e8943a" stroke="#5c320c" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><ellipse cx="28" cy="44" rx="16" ry="13" fill="#f6b14a" stroke="#5c320c" stroke-width="4"/><circle cx="46" cy="30" r="14" fill="#f6b14a" stroke="#5c320c" stroke-width="4"/><path d="M34 22 32 4 46 20z" fill="#f6b14a" stroke="#5c320c" stroke-width="4" stroke-linejoin="round"/><path d="M46 18 54 2 58 22z" fill="#f6b14a" stroke="#5c320c" stroke-width="4" stroke-linejoin="round"/><path d="M36 16l1-7 6 7z" fill="#ffd2be"/><path d="M48 12l5-7 4 9z" fill="#ffd2be"/><ellipse cx="56" cy="33" rx="6" ry="4" fill="#fff6ee" stroke="#5c320c" stroke-width="3"/><circle cx="42" cy="29" r="2.3" fill="#2a1c12"/><circle cx="50" cy="29" r="2.3" fill="#2a1c12"/><circle cx="26" cy="50" r="4.6" fill="#ffe08a" stroke="#8a5a10" stroke-width="2.6"/><path d="M26 46v8" stroke="#8a5a10" stroke-width="1.8"/></svg>`,
+  heart: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 58C12 44 4 32 8 18 12 8 24 8 32 20 40 8 52 8 56 18 60 32 52 44 32 58z" fill="#e4255c" stroke="#7a1236" stroke-width="4.5" stroke-linejoin="round"/><path d="M22 24c3-7 10-7 12 0" fill="none" stroke="#ffe0ea" stroke-width="3.5" stroke-linecap="round"/><circle cx="32" cy="36" r="4.5" fill="#ffe08a" stroke="#a86b12" stroke-width="2.4"/></svg>`,
+  moon: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M48 4a26 26 0 1 0 .2 52A17 17 0 1 1 48 4z" fill="#f7fbff" stroke="#243656" stroke-width="4"/><path d="M4 28h24L16 12z" fill="#f0d060" stroke="#7a5810" stroke-width="3.5" stroke-linejoin="round"/><path d="M6 42h20L16 30z" fill="#e7c24a" stroke="#7a5810" stroke-width="3.5" stroke-linejoin="round"/><rect x="13" y="42" width="6" height="14" rx="1.2" fill="#9bb4cc" stroke="#243656" stroke-width="3"/><path d="M10 58h12" stroke="#243656" stroke-width="3.5" stroke-linecap="round"/></svg>`,
+  stars: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 56 30 18" stroke="#fff6d0" stroke-width="9" stroke-linecap="round"/><path d="M8 56 30 18" stroke="#e2b028" stroke-width="4.5" stroke-linecap="round"/><path d="M36 4l5 16 18 2-13 11 4 17-14-9-14 9 4-17L16 22l16-2z" fill="#ffe36a" stroke="#6a4a08" stroke-width="3.6" stroke-linejoin="round"/><circle cx="54" cy="8" r="4.2" fill="#fff" stroke="#6a4a08" stroke-width="2.6"/><circle cx="56" cy="40" r="3.3" fill="#ffe36a" stroke="#6a4a08" stroke-width="2.6"/></svg>`,
+  white: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 40c-2 12 10 16 16 8" fill="#fff" stroke="#6e5424" stroke-width="4" stroke-linecap="round"/><ellipse cx="30" cy="44" rx="16" ry="12" fill="#fffaf2" stroke="#6e5424" stroke-width="4"/><circle cx="48" cy="30" r="13" fill="#fffaf2" stroke="#6e5424" stroke-width="4"/><path d="M44 18 49 2 55 18z" fill="#f0c84a" stroke="#6e5424" stroke-width="3.6" stroke-linejoin="round"/><path d="M22 52v8M30 54v8M38 52v8" stroke="#6e5424" stroke-width="4" stroke-linecap="round"/><circle cx="52" cy="29" r="2.2" fill="#3a2a14"/><ellipse cx="57" cy="34" rx="4.2" ry="2.8" fill="#f6d0d4" stroke="#6e5424" stroke-width="2.4"/></svg>`,
+  dark: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M58 42c6 8-2 16-12 10" fill="#14302c" stroke="#d8ffee" stroke-width="4" stroke-linecap="round"/><ellipse cx="36" cy="44" rx="18" ry="11" fill="#173430" stroke="#e7fff4" stroke-width="4.2"/><circle cx="16" cy="32" r="13" fill="#173430" stroke="#e7fff4" stroke-width="4.2"/><path d="M12 22 7 4 20 20z" fill="#5ee0b8" stroke="#e7fff4" stroke-width="3.4" stroke-linejoin="round"/><path d="M20 20 26 2 30 22z" fill="#5ee0b8" stroke="#e7fff4" stroke-width="3.4" stroke-linejoin="round"/><circle cx="12" cy="31" r="2.4" fill="#f3fff9"/><path d="M8 37c2.4 2.4 6.4 2.4 8.4 0" fill="none" stroke="#8cf0cc" stroke-width="2.4" stroke-linecap="round"/><path d="M46 50c8 6 12 1 8-4" fill="#5ee0b8" stroke="#e7fff4" stroke-width="3.2" stroke-linejoin="round"/></svg>`,
+  dragon: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M2 52c6 14 28 16 38 2 6-8 1-16-8-16 16 2 30-10 30-24C62 2 46-2 36 8" fill="#f6c431" stroke="#6a3c04" stroke-width="4.4" stroke-linejoin="round" stroke-linecap="round"/><ellipse cx="44" cy="24" rx="16" ry="13" fill="#ffe27a" stroke="#6a3c04" stroke-width="4.4"/><ellipse cx="58" cy="28" rx="7" ry="5" fill="#ffe27a" stroke="#6a3c04" stroke-width="3.6"/><path d="M30 16 22 2 42 16z" fill="#e23a22" stroke="#6a3c04" stroke-width="3.4" stroke-linejoin="round"/><path d="M46 12 56 0 62 16z" fill="#e23a22" stroke="#6a3c04" stroke-width="3.4" stroke-linejoin="round"/><path d="M60 20c7-2 10 2 8 6" fill="none" stroke="#6a3c04" stroke-width="2.8" stroke-linecap="round"/><circle cx="48" cy="22" r="2.6" fill="#2a1604"/><path d="M12 50c8 7 18 5 22-3" fill="none" stroke="#fff6d0" stroke-width="3.6" stroke-linecap="round"/></svg>`,
+  dance: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M16 8a22 22 0 1 0 .2 44A14 14 0 1 1 16 8z" fill="#f4f0ff" stroke="#3d3568" stroke-width="3.6"/><path d="M34 60c1-14 6-20 8-28 5 8 8 16 5 24" fill="#f3b48a" stroke="#7a3c20" stroke-width="4" stroke-linejoin="round"/><circle cx="44" cy="22" r="11" fill="#f8c6a2" stroke="#7a3c20" stroke-width="4"/><path d="M36 16 32 2 44 15z" fill="#f8c6a2" stroke="#7a3c20" stroke-width="3.5" stroke-linejoin="round"/><path d="M46 14 54 2 56 16z" fill="#f8c6a2" stroke="#7a3c20" stroke-width="3.5" stroke-linejoin="round"/><path d="M52 32c6-4 10-12 10-12" fill="none" stroke="#7a3c20" stroke-width="5" stroke-linecap="round"/><circle cx="60" cy="16" r="4.2" fill="#f8c6a2" stroke="#7a3c20" stroke-width="3"/><circle cx="41" cy="22" r="1.9" fill="#3a2418"/><circle cx="48" cy="22" r="1.9" fill="#3a2418"/></svg>`,
+  snow: `<svg viewBox="0 0 64 64" aria-hidden="true"><g fill="#e7f7ff" stroke="#0f4e78" stroke-width="4" stroke-linejoin="round"><path d="M32 2 37 22 32 26 27 22z"/><path d="M32 62 27 42 32 38 37 42z"/><path d="M2 32 22 27 26 32 22 37z"/><path d="M62 32 42 37 38 32 42 27z"/><path d="M10 10 26 24 24 28 16 20z"/><path d="M54 54 38 40 40 36 48 44z"/><path d="M54 10 40 24 36 22 46 14z"/><path d="M10 54 24 40 28 42 18 50z"/></g><circle cx="32" cy="32" r="8" fill="#fff" stroke="#0f4e78" stroke-width="3.6"/><circle cx="32" cy="32" r="3.6" fill="#7ec8ee"/></svg>`,
+  sword: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 1 43 18 38 40 32 47 26 40 21 18z" fill="#f5fcff" stroke="#14385a" stroke-width="4.2" stroke-linejoin="round"/><path d="M32 16v22" stroke="#6ebcea" stroke-width="3.4" stroke-linecap="round"/><path d="M8 45h48" stroke="#e7f4fc" stroke-width="8" stroke-linecap="round"/><path d="M10 45h44" stroke="#14385a" stroke-width="3.2" stroke-linecap="round"/><rect x="27" y="47" width="10" height="10" rx="2" fill="#2a6ea2" stroke="#14385a" stroke-width="3"/><circle cx="32" cy="60" r="4.2" fill="#eaf6ff" stroke="#14385a" stroke-width="3"/></svg>`,
+  fairy: `<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="14" cy="34" rx="13" ry="9" fill="#d9fff4" stroke="#0c5c54" stroke-width="3.6"/><ellipse cx="50" cy="34" rx="13" ry="9" fill="#d9fff4" stroke="#0c5c54" stroke-width="3.6"/><path d="M22 40c1 16 19 16 20 0 0-7-5-10-10-10s-10 3-10 10z" fill="#1fb8ae" stroke="#0c5c54" stroke-width="4" stroke-linejoin="round"/><circle cx="32" cy="24" r="11" fill="#ffe0d0" stroke="#0c5c54" stroke-width="4"/><path d="M24 16c2-8 12-8 14 0" fill="#fff" stroke="#0c5c54" stroke-width="3.2" stroke-linecap="round"/><circle cx="28" cy="24" r="2" fill="#14322e"/><circle cx="36" cy="24" r="2" fill="#14322e"/><path d="M29 28c1.5 1.8 4.5 1.8 6 0" fill="none" stroke="#d06078" stroke-width="2.2" stroke-linecap="round"/></svg>`,
+  eye: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M2 32C14 14 24 8 32 8s18 6 30 24c-12 18-22 24-30 24S14 50 2 32z" fill="#f6f7fc" stroke="#221c40" stroke-width="4.2" stroke-linejoin="round"/><circle cx="32" cy="32" r="13" fill="#6848d0" stroke="#221848" stroke-width="3.6"/><circle cx="32" cy="32" r="6.5" fill="#140c28"/><circle cx="37" cy="27" r="3.2" fill="#fff"/></svg>`,
 };
-function beastSvg(tone) {
-  const dark = tone === 'dark';
-  const fill = dark ? '#314840' : '#f7f4ee';
-  const stroke = dark ? '#101c18' : '#8a7040';
-  const horn = dark ? '#8fd8b4' : '#e2b33a';
-  const mane = dark ? '#1b2e28' : '#fff';
-  const eye = dark ? '#e7fff4' : '#2a2118';
-  return `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M12 38c-6 8 0 16 8 12" fill="${mane}" stroke="${stroke}" stroke-width="4" stroke-linecap="round"/><ellipse cx="32" cy="44" rx="16" ry="11" fill="${fill}" stroke="${stroke}" stroke-width="4"/><circle cx="46" cy="31" r="11" fill="${fill}" stroke="${stroke}" stroke-width="4"/><path d="M42 22l2-11 7 9z" fill="${horn}" stroke="${stroke}" stroke-width="3.5" stroke-linejoin="round"/><path d="M18 48v8M26 50v8M36 50v8M44 47v7" fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round"/><circle cx="49" cy="30" r="1.6" fill="${eye}"/><ellipse cx="52" cy="34" rx="2.5" ry="1.7" fill="${dark ? '#d7a0b4' : '#f3c1c8'}"/></svg>`;
-}
-function pdPalHtml(k) {
+function pdPalHtml(k, side) {
   const kind = PD_PAL[k];
   if (!kind) return '';
-  const svg = kind === 'white' || kind === 'dark' ? beastSvg(kind) : PD_PAL_SVG[kind];
-  return `<span class="pd-pal pd-pal-${kind}" data-pal="${kind}">${svg}</span>`;
+  const flip = side === 'right' ? ' pd-pal-right' : '';
+  return `<span class="pd-pal pd-pal-${kind}${flip}" data-pal="${kind}">${PD_PAL_SVG[kind]}</span>`;
 }
 const PD_IMG = Object.fromEntries(PENDANTS.map(x => [x[0], 1]));
 const PHASE = { team: '組隊', vote: '投票', sword: '授予王者之劍', quest: '任務', swordflip: '王者之劍', lady: '湖中仙女', assassin: '刺殺梅林', end: '遊戲結束' };
@@ -603,12 +607,12 @@ const pendantBack = (p) => { const k = (p && p.pendant) || 'none'; return PD_BAC
 function faceCirc(p) {
   return `<span class="pdcirc"><img src="${esc(photoSrc(p))}" alt=""></span>`;
 }
-function av(p, size = 36) {
+function av(p, size = 36, palSide = '') {
   const src = esc(photoSrc(p));
   const bg = esc((p && p.bg) || '#ffffff');
   const k = (p && p.pendant) || 'none';
-  // Photo/circle is clipped inside .av only. Pendant overlays and the companion sit higher in an unclipped wrapper.
-  return `<span class="av-wrap${pdFxCls(k)}">${pendantBack(p)}<span class="av s${size}" style="width:${size}px;height:${size}px;background:${bg}"><img src="${src}" alt="" width="${size}" height="${size}" decoding="async"></span>${pendantHtml(p)}${pdPalHtml(k)}</span>`;
+  // Photo/circle is clipped inside .av only. Pendant overlays and the charm sit higher in an unclipped wrapper.
+  return `<span class="av-wrap${pdFxCls(k)}">${pendantBack(p)}<span class="av s${size}" style="width:${size}px;height:${size}px;background:${bg}"><img src="${src}" alt="" width="${size}" height="${size}" decoding="async"></span>${pendantHtml(p)}${pdPalHtml(k, palSide)}</span>`;
 }
 const chip = (id, list) => { const p = P(id, list); return `<span class="chip">${av(p, 22)}${esc(p.name)}</span>`; };
 function voteTeamHtml(ids) {
@@ -1331,6 +1335,7 @@ function roundTable(seats, o = {}) {
     // is what the move animation translates, so the numeral must not live inside it.
     nums.push(`<span class="no" data-seat="${seatNo}" style="left:${nx}%;top:${ny}%">${seatNo}</span>`);
     const pos = `left:${x}%;top:${y}%;--av:${avSize}px`;
+    const palSide = x < 40 ? 'right' : '';
     if (!s || s.empty) {
       return `<div class="st empty click" style="${pos}" data-a="sit" data-seat="${seatNo}"><div class="av-empty">+</div><div class="nm">空位</div></div>`;
     }
@@ -1345,7 +1350,7 @@ function roundTable(seats, o = {}) {
     const speakCls = (S && S.settings && S.settings.mic === true && S.floor && S.floor.speaker === s.id) ? ' is-speak' : '';
     const sparks = String(cls).includes('gold-pick') ? '<i class="gspark a" aria-hidden="true"></i><i class="gspark b" aria-hidden="true"></i><i class="gspark c" aria-hidden="true"></i>' : '';
     return `<div class="st ${cls}${speakCls}" style="${pos}" data-sid="${s.id}" data-id="${s.id}" data-seat="${seatNo}" ${actAttr}>
-      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${o.marks ? o.marks(s, i) : ''}${av(s, avSize)}${sparks}${mic}${pres}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
+      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${o.marks ? o.marks(s, i) : ''}${av(s, avSize, palSide)}${sparks}${mic}${pres}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
   }).join('');
   return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="currentColor"/><circle cx="13.8" cy="10.3" r="1.2" fill="currentColor"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${nums.join('')}${st}</div>`;
 }
@@ -2793,5 +2798,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
-window.__av = { av, makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
+window.__av = { av, roundTable, makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

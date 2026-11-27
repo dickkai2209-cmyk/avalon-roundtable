@@ -70,14 +70,16 @@ const serverSrc = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const cssSrc = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 
-assert(html.includes('style.css?v=85') && html.includes('app.js?v=85'), 'cache bust moves past the versions on main');
+assert(html.includes('style.css?v=86') && html.includes('app.js?v=85'), 'style cache is 86 and app cache stays 85');
+assert(!html.includes('style.css?v=85'), 'previous style cache 85 is not reused');
 assert(!html.includes('style.css?v=67') && !html.includes('app.js?v=75') && !html.includes('style.css?v=66') && !html.includes('app.js?v=74') && !html.includes('style.css?v=65') && !html.includes('app.js?v=73') && !html.includes('style.css?v=64') && !html.includes('app.js?v=72') && !html.includes('style.css?v=63') && !html.includes('app.js?v=71') && !html.includes('style.css?v=62') && !html.includes('app.js?v=70') && !html.includes('style.css?v=61') && !html.includes('app.js?v=69'), 'live cache versions are not reused');
 assert(appSrc.includes('const PD_V = 8'), 'pendant image cache key bumped');
 assert(cssSrc.includes('iceSweep') && cssSrc.includes('pdSheen') && cssSrc.includes('pdPalSway') && cssSrc.includes('prefers-reduced-motion') && cssSrc.includes('pd-ice') && cssSrc.includes('.pd-pal'), 'frame motion and charms honor reduced motion');
 assert(cssSrc.includes('transparent 0 42%, #000 44%, #000 49%, transparent 52%'), 'sheen mask sits on the slimmer ring');
 assert(cssSrc.includes('.pdv.pd-round>.pdcirc{border:0}'), 'round frames have no pale border between the photo and the ring');
 const palCss = cssSrc.slice(cssSrc.indexOf('.pd-pal{'), cssSrc.indexOf('.pd-pal svg'));
-assert(!palCss.includes('width:28%') && palCss.includes('width:52%') && palCss.includes('drop-shadow'), 'charms are a large moderate size with a separating halo');
+assert(!palCss.includes('width:28%') && palCss.includes('width:52%') && palCss.includes('height:52%') && palCss.includes('drop-shadow'), 'charms are a large moderate size with a separating halo');
+assert(palCss.includes('left:-36%') && palCss.includes('top:-32%') && palCss.includes('right:-36%') && !palCss.includes('left:-40%') && !palCss.includes('top:-36%') && !palCss.includes('right:-40%'), 'charms sit closer to the frame rim');
 const palBlock = appSrc.slice(appSrc.indexOf('const PD_PAL'), appSrc.indexOf('function pdFxCls'));
 const PALS = {
   foxqiu: 'fox', foxheart: 'heart', starmoon: 'moon', starplain: 'stars',
@@ -243,7 +245,43 @@ class Page {
       await cdp.send('Page.navigate', { url: APP });
       const ready = await cdp.eval(`new Promise(r => { const t = setInterval(() => { if (document.querySelector('[data-a="profile"]') && document.querySelector('[data-a="create"]')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 8000); })`);
       assert(ready, 'home screen is ready');
+      await cdp.eval(INSTALL_PAL);
     };
+    const INSTALL_PAL = `window.__palPaintsFace = async (pal, face) => {
+      if (!pal || !face) return 0;
+      pal.style.animation = 'none';
+      pal.style.transform = 'none';
+      const node = pal.querySelector('image');
+      const href = node && node.getAttribute('href');
+      if (!href) return 0;
+      const key = pal.dataset.pal || 'x';
+      const cache = (window.__palImg = window.__palImg || {});
+      if (!cache[key]) {
+        const img = new Image();
+        img.src = href;
+        await img.decode();
+        cache[key] = img;
+      }
+      const im = cache[key];
+      const pr = pal.getBoundingClientRect();
+      const fr = face.getBoundingClientRect();
+      const sc = 2;
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(pr.width * sc));
+      c.height = Math.max(1, Math.round(pr.height * sc));
+      const g = c.getContext('2d');
+      g.clearRect(0, 0, c.width, c.height);
+      g.drawImage(im, 0, 0, c.width, c.height);
+      const data = g.getImageData(0, 0, c.width, c.height).data;
+      const cx = fr.left + fr.width / 2, cy = fr.top + fr.height / 2, rad = fr.width / 2 - 1;
+      let hit = 0;
+      for (let y = 0; y < c.height; y += 2) for (let x = 0; x < c.width; x += 2) {
+        if (data[(y * c.width + x) * 4 + 3] < 28) continue;
+        const sx = pr.left + x / sc, sy = pr.top + y / sc;
+        if ((sx - cx) * (sx - cx) + (sy - cy) * (sy - cy) < rad * rad) hit++;
+      }
+      return hit;
+    }; 1`;
     const openProfile = async (tab) => {
       await cdp.eval(`document.querySelector('[data-a="profile"]').click()`);
       const ok = await cdp.eval(`new Promise(r => { const t = setInterval(() => { if (document.querySelector('.pe-grid')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 8000); })`);
@@ -371,18 +409,16 @@ class Page {
     })()`);
     for (const [k, v] of Object.entries(PALS)) assert(palPick[k] === v, 'picker charm for ' + k + ' is ' + v + ' (' + palPick[k] + ')');
     assert(new Set(Object.values(palPick)).size === 12, 'picker charms are all different');
-    const pickerClear = await cdp.eval(`(() => {
+    const pickerClear = await cdp.eval(`(async () => {
       const overlap = (a, b) => a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
       const cards = [...document.querySelectorAll('[data-pd]')].filter(b => b.querySelector('.pd-pal'));
       const names = cards.map(b => ({ k: b.dataset.pd, r: b.querySelector('b').getBoundingClientRect(), text: b.querySelector('b').textContent }));
       const bad = [];
       for (const card of cards) {
-        const pal = card.querySelector('.pd-pal').getBoundingClientRect();
-        const face = card.querySelector('.pdcirc').getBoundingClientRect();
-        const cx = face.left + face.width / 2, cy = face.top + face.height / 2, rad = face.width / 2 - 1;
-        const qx = Math.max(pal.left, Math.min(cx, pal.right));
-        const qy = Math.max(pal.top, Math.min(cy, pal.bottom));
-        if ((qx - cx) ** 2 + (qy - cy) ** 2 < rad * rad) bad.push(card.dataset.pd + ' face');
+        const palEl = card.querySelector('.pd-pal');
+        const faceEl = card.querySelector('.pdcirc');
+        if (await window.__palPaintsFace(palEl, faceEl)) bad.push(card.dataset.pd + ' face');
+        const pal = palEl.getBoundingClientRect();
         for (const n of names) if (overlap(pal, n.r)) bad.push(card.dataset.pd + ' covers ' + n.text);
       }
       return bad.slice(0, 8);
@@ -480,13 +516,11 @@ class Page {
       const no = noEl.getBoundingClientRect();
       const nm = st.querySelector('.nm').getBoundingClientRect();
       const overlap = (a, b) => a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
-      const cx = face.left + face.width / 2, cy = face.top + face.height / 2, rad = face.width / 2 - 1;
-      const qx = Math.max(pal.left, Math.min(cx, pal.right));
-      const qy = Math.max(pal.top, Math.min(cy, pal.bottom));
+      const cx = face.left + face.width / 2, cy = face.top + face.height / 2;
       return {
         src: img.src, pal: palEl.dataset.pal, noText: noEl.textContent,
         topLeft: pal.left < cx && pal.top < cy,
-        onFace: (qx - cx) ** 2 + (qy - cy) ** 2 < rad * rad,
+        onFace: await window.__palPaintsFace(palEl, st.querySelector('.av')),
         onNo: overlap(pal, no), onName: overlap(pal, nm),
         noW: no.width, noH: no.height,
       };
@@ -538,13 +572,7 @@ class Page {
             for (let i = 3; i < data.length; i += 4) if (data[i] > 28) faceHit++;
           }
           const overlap = (a, b) => !!(a && b && a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5);
-          let palFace = false;
-          if (pr) {
-            const cx = face.left + face.width / 2, cy = face.top + face.height / 2, rad = face.width / 2 - 1;
-            const qx = Math.max(pr.left, Math.min(cx, pr.right));
-            const qy = Math.max(pr.top, Math.min(cy, pr.bottom));
-            palFace = (qx - cx) ** 2 + (qy - cy) ** 2 < rad * rad;
-          }
+          const palFace = pal ? await window.__palPaintsFace(pal, wrap.querySelector('.av')) : 0;
           const ratio = pr && face.width ? pr.width / face.width : 0;
           out.push({
             k, name, hit, faceHit, palFace,
@@ -598,16 +626,10 @@ class Page {
     await sleep(80);
     await cdp.shot('seat-icesword-dickson-390');
     await size(375, 812);
-    const crowd = await cdp.eval(`(() => {
+    const crowd = await cdp.eval(`(async () => {
       const keys = ${JSON.stringify(FRAMES.map(x => x[0]))};
       const names = ['Dickson', '龍吟九霄呀哈'];
       const overlap = (a, b) => a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
-      const faceHit = (pal, face) => {
-        const cx = face.left + face.width / 2, cy = face.top + face.height / 2, rad = face.width / 2 - 1;
-        const qx = Math.max(pal.left, Math.min(cx, pal.right));
-        const qy = Math.max(pal.top, Math.min(cy, pal.bottom));
-        return (qx - cx) ** 2 + (qy - cy) ** 2 < rad * rad;
-      };
       const probe = document.createElement('div');
       probe.className = 'card tbl';
       probe.style.cssText = 'position:fixed;left:0;top:0;width:100%;z-index:40;background:#fff';
@@ -620,20 +642,21 @@ class Page {
             probe.innerHTML = window.__av.roundTable(seats);
             const people = [...probe.querySelectorAll('.rt .st')].filter(s => s.querySelector('.pd-pal'));
             const nameBoxes = people.map(s => s.querySelector('.nm').getBoundingClientRect());
-            people.forEach((s, i) => {
-              const pal = s.querySelector('.pd-pal').getBoundingClientRect();
-              const face = s.querySelector('.av').getBoundingClientRect();
+            for (let i = 0; i < people.length; i++) {
+              const s = people[i];
+              const palEl = s.querySelector('.pd-pal');
+              const pal = palEl.getBoundingClientRect();
               const nm = s.querySelector('.nm');
               if (nm.scrollWidth > nm.clientWidth + 1) bad.push(focus + '@' + seat + ' ellipsis ' + nm.textContent);
-              if (faceHit(pal, face)) bad.push(focus + '@' + seat + ' face');
+              if (await window.__palPaintsFace(palEl, s.querySelector('.av'))) bad.push(focus + '@' + seat + ' face');
               nameBoxes.forEach((box, j) => { if (overlap(pal, box)) bad.push('seat ' + (i + 1) + ' ' + focus + ' covers seat ' + (j + 1) + ' ' + people[j].querySelector('.nm').textContent + ' overlapY=' + Math.round(box.bottom - pal.top)); });
-            });
+            }
           }
         }
       }
       probe.remove();
       return bad.slice(0, 8);
-    })()`);
+    })()`, 90000);
     assert(!crowd.length, 'charms stay off every name and face around the table ' + JSON.stringify(crowd));
     await cdp.eval(`(() => {
       const keys = ${JSON.stringify(FRAMES.map(x => x[0]))};

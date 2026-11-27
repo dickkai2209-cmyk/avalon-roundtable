@@ -628,9 +628,9 @@ main{padding:8px 16px 96px}
 @keyframes iceSweep{to{transform:rotate(360deg)}}
 @keyframes pdSheen{to{transform:rotate(360deg)}}
 @keyframes iceGlow{0%,100%{filter:brightness(1)}50%{filter:brightness(1.08) drop-shadow(0 0 1px rgba(190,230,255,.7))}}
-/* Charm sits on the upper-left rim: large enough to read, outside the face, above the name. */
-.pd-pal{position:absolute;width:52%;height:52%;left:-40%;top:-36%;z-index:6;pointer-events:none;transform-origin:100% 100%;animation:pdPalSway 3.6s ease-in-out infinite;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1.6px #fff) drop-shadow(0 1px 1.5px rgba(16,24,40,.5))}
-.pd-pal-right{left:auto;right:-40%;transform-origin:0% 100%}
+/* Charm sits tight on the upper-left rim: close to the painted frame, still outside the photo, above the name. */
+.pd-pal{position:absolute;width:52%;height:52%;left:-36%;top:-32%;z-index:6;pointer-events:none;transform-origin:100% 100%;animation:pdPalSway 3.6s ease-in-out infinite;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1.6px #fff) drop-shadow(0 1px 1.5px rgba(16,24,40,.5))}
+.pd-pal-right{left:auto;right:-36%;transform-origin:0% 100%}
 .pd-pal svg{width:100%;height:100%;display:block;overflow:hidden}
 @keyframes pdPalSway{0%,100%{transform:rotate(-2.2deg)}50%{transform:rotate(2.2deg)}}
 .pdc.off .pdv.pd-sheen::after,.pdc.off .pdv.pd-ice::after{animation:none;opacity:0}

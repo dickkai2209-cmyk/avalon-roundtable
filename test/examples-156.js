@@ -357,7 +357,7 @@ async function stopRec(proc) {
   await stopRec(ff);
   let poster = null;
   for (let i = 0; i < 20 && !poster; i++) {
-    poster = fs.readdirSync(OUT).find(f => !beforeFiles.has(f) && f.endsWith('.png') && f.startsWith('mongkok-avalon-'));
+    poster = fs.readdirSync(OUT).find(f => !beforeFiles.has(f) && f.endsWith('.png') && f.startsWith('hk-avalon-'));
     if (!poster) await sleep(200);
   }
   if (!poster) throw new Error('the app did not export a poster file');

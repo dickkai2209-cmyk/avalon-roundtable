@@ -1562,3 +1562,50 @@ body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))
 .vrec-res.ok{color:#15915a}
 .vrec-res.bad{color:#e11d48}
 .vrec-res.go{color:#8b919e}
+
+/* Merlin head is the primary mark. Amigos stays a small sponsor credit. */
+.topbar .tlogo.merlin{width:28px;height:28px;border-radius:50%;object-fit:cover;object-position:center;flex:none}
+@media (max-width:389px){
+  .topbar .tlogo.merlin{width:26px;height:26px}
+}
+.splash img.merlin,.logo.merlin{width:88px;height:88px;border-radius:50%;object-fit:cover;object-position:center;display:block}
+.logo.merlin{margin:0 auto}
+.amigos-mark{height:16px;width:auto;vertical-align:-3px;margin-right:3px}
+.footer .sponsor,.tiny.sponsor{display:inline-flex;align-items:center;justify-content:center;gap:4px}
+.supb{display:inline-block;margin-left:6px;vertical-align:1px;font-size:10px;font-weight:800;line-height:16px;padding:0 6px;border-radius:999px;color:#0f766e;background:#d8f6ee;border:1px solid #b7eadf}
+.namecard .name{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px}
+
+/* Coffee charm sits beside the face, not over it. */
+.av-wrap>.pov.coffee{left:auto;right:-22%;top:auto;bottom:-8%;width:46%;height:46%;z-index:4}
+
+/* Silver-white spotlight when a supporter sits in the lobby. It fades and stays off the name. */
+.fx-silver{position:relative}
+.fx-silver::before{content:"";position:absolute;left:50%;top:-42px;width:46px;height:64px;margin-left:-23px;pointer-events:none;z-index:0;
+  background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(214,224,236,.45) 55%,rgba(255,255,255,0));
+  clip-path:polygon(38% 0,62% 0,100% 100%,0 100%);
+  filter:drop-shadow(0 0 8px rgba(255,255,255,.8));
+  animation:fx 2.4s ease forwards}
+@media (prefers-reduced-motion: reduce){
+  .fx-silver::before{animation:none;opacity:.55}
+}
+
+.support-entry{display:flex;align-items:center;justify-content:center;width:100%;margin-top:12px;border:0;border-radius:14px;background:#1677ff;color:#fff;font:inherit;font-weight:800;font-size:16px;line-height:1.2;padding:13px 14px;cursor:pointer}
+.support-entry:active{transform:translateY(1px)}
+.support{padding:6px 0 calc(8px + env(safe-area-inset-bottom))}
+.support h1{margin:8px 2px 6px;font-size:22px;line-height:1.25;font-weight:800;letter-spacing:0;color:#1d2333}
+.support-intro,.support-note,.support-status{margin:0 2px;color:#8a909c;font-size:14px;line-height:1.45}
+.support-status{margin-top:8px;color:#3b6fd9}
+.support-list{margin-top:14px;background:#f3f4f8;border-radius:18px;padding:6px}
+.support-row{display:flex;align-items:center;gap:12px;padding:10px 10px}
+.support-row b{display:block;font-size:16px;line-height:1.25;font-weight:800;color:#1d2333}
+.support-row span{display:block;margin-top:2px;font-size:13px;line-height:1.35;color:#8a909c}
+.support-row em{margin-left:auto;font-style:normal;font-size:12px;font-weight:700;color:#0f766e;white-space:nowrap}
+.support-ic{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
+.support-ic.cup{background:#fff;border-radius:50%}
+.support-ic.heart{background:#e7f8f3}
+.support-ic.spark{background:#fff4e2}
+.support-ic.emo{background:#fff6ea}
+.support-ic svg{width:30px;height:30px;display:block}
+.support-ic .pov.coffee{position:static;width:34px;height:34px;left:auto;right:auto;top:auto;bottom:auto}
+.support-note{margin-top:14px}
+.support .support-pay{background:#1677ff;color:#fff;border-radius:12px;height:48px;margin-top:16px;font-size:17px;font-weight:800;letter-spacing:0}

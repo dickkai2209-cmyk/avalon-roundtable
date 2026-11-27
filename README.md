@@ -1,4 +1,4 @@
-# 旺角阿瓦隆
+# HK阿瓦隆
 
 by Amigosparty
 
@@ -14,6 +14,15 @@ by Amigosparty
 - 完整流程：隊長輪替、組隊、同時公開投票、5 次否決、秘密任務卡、7 人以上第 4 輪需 2 張失敗、刺殺梅林
 - 結算：全員身份、MVP / 亞軍計分、精彩時刻、組隊投票全記錄、戰報海報
 - 互動規則頁：概覽 / 陣營 / 誰知道誰 / 一輪點行 / 任務 / 勝負 / 思路 / 擴展
+
+## 支持我哋（HK$15）
+
+可選一次過付款，經 Yellowpayhk 嘅 Stripe 帳戶收款。未設定環境變數時，畫面同路由仍然在，但唔會發起收款，亦唔會解鎖。
+
+- `STRIPE_SECRET_KEY`：Stripe 限制金鑰（`rk_` 優先）。只從環境讀取，唔好寫入程式。
+- `STRIPE_WEBHOOK_SECRET`：`POST /api/stripe/webhook` 嘅簽署密鑰。解鎖只會喺核對過嘅 `checkout.session.completed`（`payment_status=paid`）、`checkout.session.async_payment_succeeded` 或 `payment_intent.succeeded` 之後發生。
+- 金額係 `hkd` `1500`（HK$15.00），`mode=payment`，唔係訂閱。
+- 唔好設定 `STRIPE_MOCK`。呢個只係自動測試用，而且只接受 `sk_test_` / `rk_test_`。
 
 ## 本地運行
 

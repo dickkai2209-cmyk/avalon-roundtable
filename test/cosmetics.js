@@ -66,7 +66,7 @@ const serverSrc = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const cssSrc = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 
-assert(html.includes('style.css?v=60') && html.includes('app.js?v=68'), 'cache bust moves past the versions on main');
+assert(html.includes('style.css?v=61') && html.includes('app.js?v=69'), 'cache bust moves past the versions on main');
 assert(!html.includes('style.css?v=59') && !html.includes('app.js?v=67') && !html.includes('style.css?v=58') && !html.includes('app.js?v=66'), 'live cache versions are not reused');
 assert(appSrc.includes('const PD_V = 6'), 'pendant image cache key bumped');
 assert(cssSrc.includes('iceSweep') && cssSrc.includes('pdSheen') && cssSrc.includes('pdPalSway') && cssSrc.includes('prefers-reduced-motion') && cssSrc.includes('pd-ice') && cssSrc.includes('.pd-pal'), 'frame motion and charms honor reduced motion');

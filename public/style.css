@@ -805,6 +805,7 @@ img,canvas,svg,video{max-width:100%}
 .pe-tabs{margin:0 0 12px;flex-wrap:nowrap;max-width:100%}
 .pe-tabs button{flex:1 1 0;min-width:0;white-space:nowrap;padding:8px 1px;font-size:13px;letter-spacing:0;line-height:1.25;text-align:center}
 .pe-body{flex:1;overflow:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+.pe-h{margin:12px 2px 0;font-size:12px;font-weight:700;color:#8a90a2}
 .pe-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
 .pe-grid button{position:relative;border:1.5px solid #eceef4;background:#fff;border-radius:14px;padding:8px 4px 6px;cursor:pointer;color:#1d2333}
 .pe-grid button.sel{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.18)}

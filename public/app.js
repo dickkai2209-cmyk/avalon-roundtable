@@ -2544,13 +2544,16 @@ const TABS = [['overview', '概覽'], ['sides', '陣營'], ['knows', '誰知道�
 const DEMO_SEATS = [['亞瑟', '🦁', '#ffe08a'], ['桂妮薇', '🦢', '#f7c1c8'], ['高文', '🐻', '#bfe3c9'], ['凱', '🦊', '#ffcfa6'], ['貝德維爾', '🦉', '#bcd6ff'], ['崔斯坦', '🐺', '#d9c6ff'], ['加拉哈德', '🐰', '#c8eef0'], ['伊索德', '🐱', '#f3d9a4']]
   .map(([name, avatar, bg], i) => ({ id: 'd' + i, name, avatar, bg }));
 const WK_ROLES = ['merlin', 'percival', 'servant', 'servant', 'assassin', 'morgana', 'mordred', 'oberon'];
-function rulesHtml() { return `<div class="tabs">${TABS.map(([k, n]) => `<button data-a="rtab" data-v="${k}" class="${k === rulesTab ? 'sel' : ''}">${n}</button>`).join('')}</div><div id="rulesBody"></div>`; }
-function mountRules() { const b = $('#rulesBody'); if (b) b.innerHTML = rulesBody(); $$('.tabs button').forEach(x => x.classList.toggle('sel', x.dataset.v === rulesTab)); if (rulesTab === 'round') animateDemo(); }
-function rulesBody() {
+function rulesHtml() {
+  const tabs = TABS.map(([k, n]) => `<button type="button" data-a="rtab" data-v="${k}" class="${k === rulesTab ? 'sel' : ''}" aria-selected="${k === rulesTab ? 'true' : 'false'}">${n}</button>`).join('');
+  const pages = TABS.map(([k, n], i) => `<section class="rules-page" data-tab="${k}" data-page="${i + 1}" aria-label="${n}">${rulesSection(k)}</section>`).join('');
+  return `<div class="rules-shell"><div class="tabs" role="tablist">${tabs}</div><div class="rules-pager" id="rulesPager">${pages}</div></div>`;
+}
+function rulesSection(tab) {
   const P_ = (h) => `<div class="card parch rules">${h}</div>`;
-  switch (rulesTab) {
+  switch (tab) {
     case 'overview': return P_(`<h4>🏰 遊戲目標</h4><p>圓桌旁坐著<b>亞瑟的忠臣（好人）</b>與<b>莫德雷德的爪牙（壞人）</b>。好人要完成 3 個任務；壞人要令 3 個任務失敗，或在最後刺殺梅林。</p>
-      <h4>👥 人數配置</h4><table><tr><th>人數</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th></tr><tr><td>好人</td><td>3</td><td>4</td><td>4</td><td>5</td><td>6</td><td>6</td><td>7</td><td>8</td></tr><tr><td>壞人</td><td>2</td><td>2</td><td>3</td><td>3</td><td>3</td><td>4</td><td>4</td><td>5</td></tr></table>
+      <h4>👥 人數配置</h4><table><tr><th>人數</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th></tr><tr><td>好人</td><td>3</td><td>4</td><td>4</td><td>5</td><td>6</td><td>6</td><td>7</td><td>7</td></tr><tr><td>壞人</td><td>2</td><td>2</td><td>3</td><td>3</td><td>3</td><td>4</td><td>4</td><td>5</td></tr></table>
       <h4>📱 使用方法</h4><p>一人建立房間，其他人掃二維碼或輸入 4 位房間號入座。每人手機只顯示自己的身份。重新整理或斷線會自動回到原座位（同一部手機同一瀏覽器）。</p>`);
     case 'sides': return `<div class="rolegrid">${ROLE_ORDER.map(k => `<div class="rolecell ${ROLE[k].side}" style="background-image:url(${img(k)})" data-a="rolepeek" data-r="${k}"><div class="t"><b>${ROLE[k].n}</b><span class="tiny">${ROLE[k].side === 'good' ? '好人陣營' : '壞人陣營'}</span></div></div>`).join('')}</div><div class="small muted center" style="margin-top:8px">點擊角色查看能力</div>`;
     case 'knows': {
@@ -2594,6 +2597,170 @@ function rulesBody() {
       <p class="small">本版本已實作王者之劍、蘭斯洛特與 11–12 人局，可在開局前於房間設定開啟。</p>`);
   }
   return '';
+}
+let rulesSnapLock = 0;
+function rulesPagerEl() { return document.getElementById('rulesPager'); }
+function rulesMotion() { return matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'; }
+function layoutRulePages() {
+  const pager = rulesPagerEl();
+  if (!pager) return 0;
+  const h = pager.clientHeight;
+  pager.querySelectorAll('.rules-page').forEach(p => { p.style.height = h + 'px'; });
+  return h;
+}
+function currentRuleIndex() {
+  const pager = rulesPagerEl();
+  if (!pager) return 0;
+  const h = pager.clientHeight || 1;
+  return Math.max(0, Math.min(TABS.length - 1, Math.round(pager.scrollTop / h)));
+}
+function syncRuleTabs() {
+  $$('.rules-shell .tabs button').forEach(x => {
+    const on = x.dataset.v === rulesTab;
+    x.classList.toggle('sel', on);
+    x.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  const sel = document.querySelector('.rules-shell .tabs button.sel');
+  const row = sel && sel.parentElement;
+  if (!sel || !row) return;
+  const left = sel.offsetLeft - (row.clientWidth - sel.offsetWidth) / 2;
+  row.scrollTo({ left: Math.max(0, left), behavior: rulesMotion() });
+}
+function scrollRulesTo(i, behavior) {
+  const pager = rulesPagerEl();
+  if (!pager) return;
+  i = Math.max(0, Math.min(TABS.length - 1, i | 0));
+  const prev = rulesTab;
+  rulesTab = TABS[i][0];
+  syncRuleTabs();
+  const h = layoutRulePages() || pager.clientHeight || 1;
+  const top = i * h;
+  const behaviorUsed = behavior || rulesMotion();
+  if (Math.abs(pager.scrollTop - top) > 2) {
+    rulesSnapLock = Date.now() + (behaviorUsed === 'auto' ? 0 : 650);
+    pager.scrollTo({ top, behavior: behaviorUsed });
+  }
+  if (rulesTab === 'round' && prev !== rulesTab) animateDemo();
+}
+function pageRules(dir) {
+  if (Date.now() < rulesSnapLock) return;
+  scrollRulesTo(currentRuleIndex() + dir);
+}
+function refreshRulePage(key) {
+  const page = document.querySelector(`.rules-page[data-tab="${key}"]`);
+  if (!page) return;
+  const top = page.scrollTop;
+  page.innerHTML = rulesSection(key);
+  page.scrollTop = top;
+}
+function rulesModalOpen() {
+  const m = document.getElementById('modal');
+  return !!(m && !m.classList.contains('hidden'));
+}
+function rulePageCanScroll(page, dy) {
+  if (!page || !dy) return false;
+  const max = page.scrollHeight - page.clientHeight;
+  if (max <= 8) return false;
+  if (dy > 0) return page.scrollTop < max - 4;
+  return page.scrollTop > 4;
+}
+function mountRules() {
+  const shell = document.querySelector('.rules-shell');
+  const pager = rulesPagerEl();
+  if (!shell || !pager) return;
+  const place = () => {
+    const h = layoutRulePages();
+    if (!h) return;
+    const i = Math.max(0, TABS.findIndex(([k]) => k === rulesTab));
+    pager.scrollTop = i * h;
+  };
+  place();
+  requestAnimationFrame(place);
+  syncRuleTabs();
+  if (rulesTab === 'round') animateDemo();
+  if (shell.dataset.bound) return;
+  shell.dataset.bound = '1';
+  let wheelAcc = 0, wheelAccAt = 0;
+  shell.addEventListener('wheel', (e) => {
+    if (rulesModalOpen()) return;
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    const page = e.target.closest && e.target.closest('.rules-page');
+    let dy = e.deltaY;
+    if (e.deltaMode === 1) dy *= 16;
+    else if (e.deltaMode === 2) dy *= pager.clientHeight || 400;
+    if (rulePageCanScroll(page, dy)) return;
+    e.preventDefault();
+    const now = Date.now();
+    if (now < rulesSnapLock) return;
+    wheelAcc = now - wheelAccAt > 180 ? dy : wheelAcc + dy;
+    wheelAccAt = now;
+    if (Math.abs(wheelAcc) < 28) return;
+    const dir = wheelAcc > 0 ? 1 : -1;
+    wheelAcc = 0;
+    pageRules(dir);
+  }, { passive: false });
+  let drag = null;
+  const suppressClick = () => {
+    shell.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); }, { capture: true, once: true });
+  };
+  shell.addEventListener('touchstart', (e) => {
+    if (rulesModalOpen() || e.touches.length !== 1) { drag = null; return; }
+    const t = e.touches[0];
+    const page = e.target.closest && e.target.closest('.rules-page');
+    drag = { x: t.clientX, y: t.clientY, pagerTop: pager.scrollTop, page, pageTop: page ? page.scrollTop : 0, axis: null };
+  }, { passive: true });
+  shell.addEventListener('touchmove', (e) => {
+    if (!drag || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - drag.x, dy = t.clientY - drag.y;
+    if (!drag.axis) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+  }, { passive: true });
+  shell.addEventListener('touchend', (e) => {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    if (d.axis === 'x') return;
+    const y = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : d.y;
+    const delta = d.y - y;
+    if (d.page && Math.abs(d.page.scrollTop - d.pageTop) > 4) return;
+    if (rulePageCanScroll(d.page, delta)) return;
+    if (Math.abs(delta) < 42) return;
+    const h = pager.clientHeight || 1;
+    const start = Math.round(d.pagerTop / h);
+    const dest = start + (delta > 0 ? 1 : -1);
+    suppressClick();
+    scrollRulesTo(dest);
+    requestAnimationFrame(() => scrollRulesTo(dest));
+  });
+  shell.addEventListener('touchcancel', () => { drag = null; });
+  shell.addEventListener('keydown', (e) => {
+    if (rulesModalOpen()) return;
+    if (e.target && e.target.closest && e.target.closest('input, textarea')) return;
+    if (e.key === 'ArrowDown' || e.key === 'PageDown') { e.preventDefault(); pageRules(1); }
+    else if (e.key === 'ArrowUp' || e.key === 'PageUp') { e.preventDefault(); pageRules(-1); }
+  });
+  pager.addEventListener('scroll', () => {
+    const key = TABS[currentRuleIndex()][0];
+    if (key === rulesTab) return;
+    const prev = rulesTab;
+    rulesTab = key;
+    syncRuleTabs();
+    if (key === 'round' && prev !== 'round') animateDemo();
+  }, { passive: true });
+  pager.addEventListener('scrollend', () => { rulesSnapLock = 0; });
+  const onResize = () => {
+    if (view !== 'rules' || !document.body.contains(pager)) {
+      window.removeEventListener('resize', onResize);
+      return;
+    }
+    const i = Math.max(0, TABS.findIndex(([k]) => k === rulesTab));
+    const h = layoutRulePages();
+    if (h) pager.scrollTop = i * h;
+  };
+  window.addEventListener('resize', onResize);
 }
 const DEMO = [
   { t: '① 隊長產生', d: '隊長按座位次序輪流擔任，皇冠在誰頭上誰就組隊。', leader: 'd0', team: [], rejects: 0, quests: [], round: 0, center: '<b>第 1 輪</b>需要 2 人' },
@@ -3070,10 +3237,16 @@ document.addEventListener('click', async (e) => {
     case 'story': return storySheet(window.__lastRecord);
     case 'storystats': return storySheet(null);
     case 'skin': return openSkinPreview(el.dataset.r, el.dataset.s);
-    case 'rtab': rulesTab = el.dataset.v; if (rulesTab === 'round') demoStep = 0; return mountRules();
-    case 'wk': wkRole = el.dataset.r; return mountRules();
-    case 'wkrev': wkReveal = !wkReveal; return mountRules();
-    case 'demo': demoStep = demoStep === DEMO.length - 1 && el.dataset.v === '1' ? 0 : Math.max(0, demoStep + Number(el.dataset.v)); return mountRules();
+    case 'rtab': {
+      const key = el.dataset.v;
+      const i = TABS.findIndex(([k]) => k === key);
+      if (key === 'round') { demoStep = 0; refreshRulePage('round'); }
+      scrollRulesTo(i < 0 ? 0 : i, 'auto');
+      return;
+    }
+    case 'wk': wkRole = el.dataset.r; return refreshRulePage('knows');
+    case 'wkrev': wkReveal = !wkReveal; return refreshRulePage('knows');
+    case 'demo': demoStep = demoStep === DEMO.length - 1 && el.dataset.v === '1' ? 0 : Math.max(0, demoStep + Number(el.dataset.v)); refreshRulePage('round'); animateDemo(); return;
     case 'rolepeek': { const k = el.dataset.r; return openModal(`<div class="flip on" style="cursor:default"><div class="in"><div class="face back"></div><div class="face front">${roleFace(k)}</div></div></div><p class="center" style="margin-top:14px">${ROLE[k].d}</p><button class="btn" id="ok">關閉</button>`, (m) => $('#ok', m).onclick = closeModal); }
   }
 });

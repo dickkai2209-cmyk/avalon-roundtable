@@ -19,6 +19,63 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); console.log(
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
+function pngRGB(buf) {
+  let off = 8;
+  const idats = [];
+  let w = 0, h = 0, color = 0, depth = 0;
+  while (off < buf.length) {
+    const len = buf.readUInt32BE(off);
+    const type = buf.toString('ascii', off + 4, off + 8);
+    const data = buf.subarray(off + 8, off + 8 + len);
+    if (type === 'IHDR') { w = data.readUInt32BE(0); h = data.readUInt32BE(4); depth = data[8]; color = data[9]; }
+    else if (type === 'IDAT') idats.push(data);
+    else if (type === 'IEND') break;
+    off += 12 + len;
+  }
+  const bpp = color === 2 ? 3 : 0;
+  if (buf.readUInt32BE(0) !== 0x89504e47 || depth !== 8 || bpp !== 3) throw new Error('expected an 8-bit RGB PNG');
+  const raw = require('zlib').inflateSync(Buffer.concat(idats));
+  const stride = w * bpp;
+  const out = Buffer.alloc(h * stride);
+  let s = 0;
+  for (let y = 0; y < h; y++) {
+    const filter = raw[s++];
+    const row = y * stride;
+    const prev = y ? row - stride : -1;
+    for (let i = 0; i < stride; i++) {
+      const x = raw[s++];
+      const a = i >= bpp ? out[row + i - bpp] : 0;
+      const b = prev < 0 ? 0 : out[prev + i];
+      const c = prev < 0 || i < bpp ? 0 : out[prev + i - bpp];
+      let v = x;
+      if (filter === 1) v = (x + a) & 255;
+      else if (filter === 2) v = (x + b) & 255;
+      else if (filter === 3) v = (x + ((a + b) >> 1)) & 255;
+      else if (filter === 4) {
+        const p = a + b - c;
+        const pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+        v = (x + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255;
+      } else if (filter !== 0) throw new Error('png filter ' + filter);
+      out[row + i] = v;
+    }
+  }
+  return { w, h, data: out };
+}
+
+function merlinIconStats(buf) {
+  const img = pngRGB(buf);
+  let navy = 0, skin = 0, white = 0, eye = 0;
+  const n = img.w * img.h;
+  for (let i = 0; i < n; i++) {
+    const r = img.data[i * 3], g = img.data[i * 3 + 1], b = img.data[i * 3 + 2];
+    if (r > 245 && g > 245 && b > 245) white++;
+    if (b > 70 && b > r + 25 && b > g && r < 90 && g < 120) navy++;
+    if (r > 190 && g > 150 && b > 140 && r > b + 8 && g + 5 > b) skin++;
+    if (b > 140 && b > r + 30 && b > g + 10 && r > 40) eye++;
+  }
+  return { w: img.w, h: img.h, navy: navy / n, skin: skin / n, white: white / n, eye: eye / n, corner: img.data[0] };
+}
+
 function post(pathname, body, headers, raw, method) {
   const data = Buffer.from(raw != null ? raw : JSON.stringify(body || {}));
   return new Promise((resolve, reject) => {
@@ -92,10 +149,22 @@ async function hook(objType, object, id) {
   assert(!html.includes('tlogo" src="/img/amigos.webp"') && !html.includes('class="tlogo" src="/img/amigos.webp"'), 'Amigos is not the header mark');
   assert(app.includes('class="amigos-mark"') && app.includes('Amigosparty') && app.includes('Teddy Design Limited'), 'Amigos stays a sponsor credit');
   assert(app.includes('旺角霓虹'), 'card-back name 旺角霓虹 is left as venue flavour');
-  assert(html.includes('style.css?v=61') && html.includes('app.js?v=69') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'cache bust past live main');
+  assert(html.includes('style.css?v=64') && html.includes('app.js?v=72') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'cache bust past live main');
+  assert(!html.includes('style.css?v=61') && !html.includes('app.js?v=69') && !html.includes('style.css?v=63') && !html.includes('app.js?v=71'), 'open cache versions are not reused');
   assert(fs.existsSync(path.join(root, 'public/img/logo-merlin.webp')) && fs.existsSync(path.join(root, 'public/img/logo-merlin.png')), 'logo asset is webp and png');
   const logo = fs.readFileSync(path.join(root, 'public/img/logo-merlin.webp'));
   assert(logo.slice(0, 4).toString() === 'RIFF' && logo.slice(8, 12).toString() === 'WEBP', 'merlin logo is webp');
+  assert(html.includes('rel="icon" href="/img/icon-192.png?v=64"'), 'favicon is the Merlin icon');
+  assert(html.includes('rel="apple-touch-icon" href="/img/icon-192.png?v=64"'), 'apple touch icon is the Merlin icon');
+  assert(html.includes('property="og:image" content="https://avalon-roundtable-10t9.onrender.com/img/icon-512.png?v=64"'), 'share image is the absolute Merlin icon');
+  assert(manifest.includes('/img/icon-192.png?v=64') && manifest.includes('/img/icon-512.png?v=64') && manifest.includes('/img/icon.svg?v=64'), 'manifest icons point at Merlin');
+  const svg = read('public/img/icon.svg');
+  const embedded = Buffer.from((svg.match(/base64,([A-Za-z0-9+/=]+)/) || ['', ''])[1], 'base64');
+  assert(svg.includes('<title>HK阿瓦隆</title>') && !svg.includes('M32 8l18') && embedded.equals(logo), 'icon.svg embeds the header Merlin artwork');
+  for (const [file, size] of [['public/img/icon-192.png', 192], ['public/img/icon-512.png', 512]]) {
+    const stats = merlinIconStats(fs.readFileSync(path.join(root, file)));
+    assert(stats.w === size && stats.h === size && stats.navy > 0.04 && stats.skin > 0.1 && stats.eye > 0.004 && stats.white < 0.4 && stats.corner > 250, file + ' is the Merlin portrait on a light square');
+  }
 
   const ui = app.slice(app.indexOf('function supportHtml'), app.indexOf('const ACHS'));
   for (const s of ['請開發者喝杯咖啡', '熬夜改 bug 的時候，這杯咖啡很管用。謝謝你！', '一杯咖啡', '頭像掛件', '支持者', '名字旁邊的徽章，點開名片時大家都看得到', '銀白追光', '準備階段入座時，一束追光打在你的頭像上', '支持者表情', '房間裡點一下，頭像上冒出來的專屬表情', '可以重複支持：第一次送下面這些，之後每次只補上你還沒有的，已經有的不會再送一次。', 'HK$15 支持', '支持我哋']) {

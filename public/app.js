@@ -65,7 +65,7 @@ const ANIMALS = [
 ];
 const EMOJI_MAP = {'🦊':'fox','🐼':'panda','🦆':'duck','🐿️':'squirrel','🦔':'hedgehog','🐰':'bunny','🐻':'bear','🦝':'redpanda','🦦':'otter','🐹':'hamster','🐕':'shiba','🐶':'shiba','🦫':'capybara','🐧':'penguin','🐨':'koala','🐱':'cat','🐺':'wolf','🦁':'lion','🐷':'piglet','🐖':'piglet','🐡':'puffer','👽':'alien','🐸':'frog','🐯':'tiger','🐉':'dragonet'};
 const BGS = ['#ffffff', '#f3d9a4', '#f7c1c8', '#bfe3c9', '#bcd6ff', '#d9c6ff', '#ffe08a', '#c8eef0', '#ffcfa6', '#2b3a6e', '#3a2a1c'];
-const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['snow','聖誕飄雪',0],['spark','星火',1],['petals','花瓣',3],['howl','狼人咆哮',4],['fire','火焰圈',6],['lightning','閃電',10],['silver','銀白追光',0]];
+const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['snow','聖誕飄雪',0],['spark','星火',1],['petals','花瓣',3],['howl','狼人咆哮',4],['fire','火焰圈',6],['lightning','閃電',10],['signs','旺角燈牌',0],['ding','叮叮電車',2],['harbour','維港煙花',5],['ferry','渡海小輪',8],['hop','兔兔跳跳',0],['waddle','小鴨巡遊',3],['ham','倉鼠滾滾',7],['silver','銀白追光',0]];
 // [key, name, unlock type ('free'|'games'|'wins'), need, special?]
 const PENDANTS = [
   ['wolf', '滿月狼人', 'free', 0], ['pumpkin', '南瓜燈先知', 'free', 0], ['devil', '搗蛋小惡魔', 'free', 0],
@@ -215,7 +215,7 @@ function saveHeld() {
 function clearHeld() { heldRoom = null; waitingRoom = null; saveHeld(); }
 const browsingView = (v) => v === 'skins' || v === 'rules' || v === 'ach' || v === 'board' || v === 'history' || v === 'stats' || v === 'detail';
 let selected = new Set(), lastSeatIds = [];
-const FX_EVERY = 30000;
+const FX_EVERY = 60000;
 const FX_HOLD = 2800;
 const fxBurst = new Map();
 const fxClocks = new Map();
@@ -271,7 +271,7 @@ function applyEntrance(el, fx) {
   el.classList.remove('enter');
   FXS.forEach(([k]) => el.classList.remove('fx-' + k));
   void el.offsetWidth;
-  el.classList.add('enter', 'fx-' + fx);
+  el.classList.add('fx-' + fx);
 }
 function playSeat(id, fx) {
   if (!fx || fx === 'none' || reducedFx()) return stopSeat(id);
@@ -839,7 +839,7 @@ function pdPickerHtml(d) {
     ${lack.length ? `<div class="pdh">還未拿到</div><div class="pdgrid">${lack.map(x => pdCell(x[0], x[1], false, true, x[4], pdNeed(x))).join('')}</div>` : ''}`;
 }
 function previewHtml(d) {
-  return `<div class="preview-stage ${d.fx && d.fx !== 'none' ? 'enter fx-' + d.fx : ''}">${av(d, 56)}<div class="nm gold" style="position:absolute;bottom:10px">${esc(d.name || '騎士')}</div></div>`;
+  return `<div class="preview-stage ${d.fx && d.fx !== 'none' ? 'fx-' + d.fx : ''}">${av(d, 56)}<div class="nm gold" style="position:absolute;bottom:10px">${esc(d.name || '騎士')}</div></div>`;
 }
 
 // Circular photo crop (before upload). Gestures stay on the crop stage only.
@@ -1092,7 +1092,7 @@ function openPhotoCrop(bitmap, opts) {
 
 function editProfile(after, startTab) {
   const d = { ...profile, bg: profile.bg || '#ffffff' }; let tab = (startTab === 'pendant' || startTab === 'fx') ? startTab : 'avatar';
-  const FX_IC = { none:'—', spot:'💡', gold:'✨', snow:'❄️', spark:'🌟', petals:'🌸', howl:'🐺', fire:'🔥', lightning:'⚡', silver:'✦' };
+  const FX_IC = { none:'—', spot:'💡', gold:'✨', snow:'❄️', spark:'🌟', petals:'🌸', howl:'🐺', fire:'🔥', lightning:'⚡', signs:'🌃', ding:'🚋', harbour:'🎆', ferry:'⛴️', hop:'🐰', waddle:'🐤', ham:'🐹', silver:'✦' };
   const peek = (el) => {
     const avHost = el.querySelector('.pe-av');
     if (!avHost) return;

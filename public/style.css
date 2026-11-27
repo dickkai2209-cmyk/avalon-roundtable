@@ -123,7 +123,14 @@ input.code-inp{text-transform:uppercase;letter-spacing:10px;text-align:center;fo
   .rt .st.fx-petals::before,.rt .st.fx-petals::after,
   .rt .st.fx-fire .av,.rt .st.fx-lightning::before,
   .rt .st.fx-howl,.rt .st.fx-howl::before,.rt .st.fx-howl::after,
-  .rt .st.fx-snow::before,.rt .st.fx-snow::after,.rt .st.fx-silver::before{animation:none}
+  .rt .st.fx-snow::before,.rt .st.fx-snow::after,.rt .st.fx-silver::before,
+  .rt .st.fx-signs::before,.rt .st.fx-signs::after,
+  .rt .st.fx-ding::before,.rt .st.fx-ding::after,
+  .rt .st.fx-harbour::before,.rt .st.fx-harbour::after,
+  .rt .st.fx-ferry::before,.rt .st.fx-ferry::after,
+  .rt .st.fx-hop::before,.rt .st.fx-hop::after,
+  .rt .st.fx-waddle::before,.rt .st.fx-waddle::after,
+  .rt .st.fx-ham::before,.rt .st.fx-ham::after{animation:none}
 }
 .fx-spot::before,.fx-gold::before,.fx-spark::before{content:"";position:absolute;left:50%;top:-30px;width:90px;height:110px;margin-left:-45px;pointer-events:none;animation:fx 2.4s ease forwards;z-index:0}
 .fx-spot::before{background:radial-gradient(ellipse at 50% 0,rgba(255,250,220,.75),transparent 70%);clip-path:polygon(40% 0,60% 0,100% 100%,0 100%)}
@@ -1608,6 +1615,121 @@ body:has(.end-next) .release-row{display:none}
   animation:fx 2.4s ease forwards}
 @media (prefers-reduced-motion: reduce){
   .fx-silver::before{animation:none;opacity:.55}
+}
+
+/* Entrance art sits above the avatar. The seat itself does not move. */
+.fx-signs::before,.fx-signs::after,
+.fx-ding::before,.fx-ding::after,
+.fx-harbour::before,.fx-harbour::after,
+.fx-ferry::before,.fx-ferry::after,
+.fx-hop::before,.fx-hop::after,
+.fx-waddle::before,.fx-waddle::after,
+.fx-ham::before,.fx-ham::after{
+  content:"";position:absolute;pointer-events:none;z-index:5;
+  background-repeat:no-repeat;background-position:center;background-size:contain;
+}
+.fx-signs::before{
+  left:6px;top:-30px;width:16px;height:26px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 36'><path d='M10 2 L16.5 8.5 L10 15 L3.5 8.5 Z' fill='%23101820' stroke='%2322f0ff' stroke-width='2'/><rect x='7' y='14' width='6' height='18' rx='3' fill='%23101820' stroke='%2322f0ff' stroke-width='2'/><circle cx='10' cy='8.5' r='1.4' fill='%23e8fdff'/></svg>");
+  filter:drop-shadow(0 0 4px #22f0ff);
+  animation:signflick 1.7s ease forwards;
+}
+.fx-signs::after{
+  right:6px;top:-32px;width:16px;height:28px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 36'><circle cx='10' cy='8' r='6' fill='%23201018' stroke='%23ff3ec8' stroke-width='2'/><circle cx='10' cy='8' r='1.7' fill='%23ffe6f6'/><rect x='7' y='14' width='6' height='18' rx='3' fill='%23201018' stroke='%23ff3ec8' stroke-width='2'/></svg>");
+  filter:drop-shadow(0 0 4px #ff3ec8);
+  animation:signflick 1.7s ease .12s forwards;
+}
+@keyframes signflick{0%{opacity:0;transform:translateY(4px)}14%{opacity:1;transform:none}28%{opacity:.25}42%{opacity:1}62%{opacity:.45}76%{opacity:1}100%{opacity:0}}
+.fx-ding::before{
+  left:50%;top:-24px;width:52px;height:20px;margin-left:-26px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 68 26'><path d='M34 1.2 v5' stroke='%233a3a3a' stroke-width='1.7' stroke-linecap='round'/><circle cx='34' cy='1.3' r='1.4' fill='%23ffe08a'/><rect x='3' y='6.2' width='62' height='14.2' rx='3' fill='%231f7a4d' stroke='%230e3d28' stroke-width='1.4'/><rect x='6' y='8.2' width='56' height='4.6' rx='1' fill='%23fff4d2'/><path d='M14 8.2 v4.6 M22 8.2 v4.6 M30 8.2 v4.6 M38 8.2 v4.6 M46 8.2 v4.6 M54 8.2 v4.6' stroke='%231f7a4d' stroke-width='1.1'/><rect x='6' y='14.4' width='56' height='3' rx='.6' fill='%23fff4d2'/><rect x='3' y='17.6' width='62' height='1.5' fill='%23f0d48a'/><circle cx='16' cy='22.6' r='2.2' fill='%23222'/><circle cx='52' cy='22.6' r='2.2' fill='%23222'/></svg>");
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));
+  animation:dingrun 1.8s ease forwards;
+}
+.fx-ding::after{
+  left:50%;top:-28px;width:8px;height:8px;margin-left:-4px;border-radius:50%;
+  background:radial-gradient(circle,#fff 0 35%,#ffe08a 36% 60%,transparent 62%);
+  animation:signflick 1.8s ease .05s forwards;
+}
+@keyframes dingrun{0%{opacity:0;transform:translateX(-12px)}16%{opacity:1}78%{opacity:1;transform:translateX(10px)}100%{opacity:0;transform:translateX(14px)}}
+.fx-harbour::before,.fx-harbour::after{border-radius:50%;filter:drop-shadow(0 0 3px rgba(255,210,120,.85))}
+.fx-harbour::before{
+  left:4px;top:-26px;width:20px;height:20px;
+  background:radial-gradient(circle,#fff 0 1.4px,transparent 2.2px),repeating-conic-gradient(from 8deg,#ffd76a 0 8deg,transparent 8deg 24deg);
+  -webkit-mask:radial-gradient(circle,transparent 0 20%,#000 26% 72%,transparent 78%);
+  mask:radial-gradient(circle,transparent 0 20%,#000 26% 72%,transparent 78%);
+  animation:hkburst 1.5s ease-out forwards;
+}
+.fx-harbour::after{
+  right:2px;top:-30px;width:18px;height:18px;
+  background:radial-gradient(circle,#fff 0 1.3px,transparent 2px),repeating-conic-gradient(from -4deg,#ff4fa3 0 7deg,transparent 7deg 22deg);
+  -webkit-mask:radial-gradient(circle,transparent 0 18%,#000 24% 74%,transparent 80%);
+  mask:radial-gradient(circle,transparent 0 18%,#000 24% 74%,transparent 80%);
+  animation:hkburst 1.5s ease-out .18s forwards;
+}
+@keyframes hkburst{0%{opacity:0;transform:scale(.3)}28%{opacity:1;transform:scale(1.05)}100%{opacity:0;transform:scale(1.18)}}
+.fx-ferry::before{
+  left:50%;top:-26px;width:54px;height:16px;margin-left:-27px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 70 22'><path d='M8 12 H62 L57 19 H13 Z' fill='%23f4f7fb' stroke='%231a3348' stroke-width='1.4'/><path d='M13 15.5 H57' stroke='%232a7fbf' stroke-width='2.1'/><rect x='24' y='6' width='24' height='6.5' rx='1.2' fill='%23fff' stroke='%231a3348' stroke-width='1.1'/><rect x='27' y='7.6' width='4' height='3' fill='%239fd4f2'/><rect x='34' y='7.6' width='4' height='3' fill='%239fd4f2'/><rect x='41' y='7.6' width='4' height='3' fill='%239fd4f2'/><rect x='33' y='1.4' width='5' height='5.2' rx='.8' fill='%23d23b3b' stroke='%231a3348' stroke-width='1'/></svg>");
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.4));
+  animation:ferryglide 1.9s ease forwards;
+}
+.fx-ferry::after{
+  left:50%;top:-12px;width:46px;height:8px;margin-left:-23px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 10'><path d='M2 6 Q10 1 18 6 T34 6 T50 6 T62 6' fill='none' stroke='%237ec8e8' stroke-width='2.2' stroke-linecap='round'/></svg>");
+  animation:ferryglide 1.9s ease .05s forwards;
+}
+@keyframes ferryglide{0%{opacity:0;transform:translateX(-10px)}18%{opacity:1}46%{transform:translateX(2px)}74%{opacity:1;transform:translateX(8px)}100%{opacity:0;transform:translateX(12px)}}
+.fx-hop::before{
+  left:0;top:-30px;width:32px;height:28px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 32'><ellipse cx='11' cy='11' rx='4.2' ry='9' fill='%23fff' stroke='%235c4636' stroke-width='1.8'/><ellipse cx='24' cy='11' rx='4.2' ry='9' fill='%23fff' stroke='%235c4636' stroke-width='1.8'/><ellipse cx='11' cy='12' rx='1.7' ry='5' fill='%23ffb3c7'/><ellipse cx='24' cy='12' rx='1.7' ry='5' fill='%23ffb3c7'/><circle cx='18' cy='22' r='9' fill='%23fff' stroke='%235c4636' stroke-width='1.8'/><circle cx='14.6' cy='21' r='1.35' fill='%232b2118'/><circle cx='21.4' cy='21' r='1.35' fill='%232b2118'/><ellipse cx='18' cy='24.4' rx='1.6' ry='1.1' fill='%23ff8fab'/></svg>");
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));
+  animation:hopbun 1.7s ease forwards;
+}
+.fx-hop::after{
+  left:30px;top:-22px;width:6px;height:6px;border-radius:50% 50% 50% 0;background:#ff8fab;transform:rotate(-35deg);
+  animation:hopbun 1.7s ease .08s forwards;
+}
+@keyframes hopbun{0%{opacity:0;transform:translateY(0)}16%{opacity:1;transform:translateY(-7px)}32%{transform:translateY(0)}48%{opacity:1;transform:translateY(-6px)}64%{transform:translateY(0)}80%{transform:translateY(-4px)}100%{opacity:0;transform:translateY(0)}}
+.fx-waddle::before{
+  right:0;top:-30px;width:34px;height:28px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 32'><ellipse cx='16' cy='20' rx='12' ry='8' fill='%23ffd23a' stroke='%23c47a12' stroke-width='1.6'/><circle cx='27' cy='15' r='8' fill='%23ffe566' stroke='%23c47a12' stroke-width='1.6'/><ellipse cx='35' cy='16' rx='5.5' ry='2.4' fill='%23ff8a1e'/><circle cx='29' cy='13.2' r='1.45' fill='%232b2118'/><ellipse cx='11' cy='28' rx='3.4' ry='1.6' fill='%23ff8a1e'/><ellipse cx='19' cy='28' rx='3.4' ry='1.6' fill='%23ff8a1e'/></svg>");
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));
+  animation:duckwalk 1.7s ease forwards;
+}
+.fx-waddle::after{
+  right:2px;top:-8px;width:8px;height:4px;border-radius:50%;background:transparent;
+  box-shadow:-8px 0 0 0 #9fd4f2,-16px 1px 0 0 #d7f3ff;
+  animation:duckwalk 1.7s ease .06s forwards;
+}
+@keyframes duckwalk{0%{opacity:0;transform:translateX(0)}18%{opacity:1;transform:translateX(3px)}40%{transform:translateX(0)}62%{opacity:1;transform:translateX(4px)}82%{transform:translateX(1px)}100%{opacity:0;transform:translateX(5px)}}
+.fx-ham::before{
+  left:50%;top:-32px;width:32px;height:28px;margin-left:-16px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 32'><circle cx='11' cy='9' r='4.2' fill='%23e8a56a' stroke='%237a4e2c' stroke-width='1.4'/><circle cx='23' cy='9' r='4.2' fill='%23e8a56a' stroke='%237a4e2c' stroke-width='1.4'/><circle cx='18' cy='19' r='11' fill='%23f2b98a' stroke='%237a4e2c' stroke-width='1.6'/><ellipse cx='27' cy='21' rx='5' ry='4' fill='%23ffd8b8' stroke='%237a4e2c' stroke-width='1.2'/><circle cx='14.5' cy='17.5' r='1.4' fill='%232b2118'/><circle cx='21.5' cy='17.5' r='1.4' fill='%232b2118'/><ellipse cx='18' cy='21' rx='1.7' ry='1.15' fill='%23e07a8a'/></svg>");
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));
+  animation:hamroll 1.7s ease forwards;
+}
+.fx-ham::after{
+  left:50%;top:-14px;width:6px;height:4px;margin-left:8px;border-radius:50%;background:#e7c08a;
+  animation:hamroll 1.7s ease .1s forwards;
+}
+@keyframes hamroll{0%{opacity:0;transform:rotate(-12deg)}18%{opacity:1;transform:rotate(8deg)}40%{transform:rotate(-8deg)}62%{opacity:1;transform:rotate(10deg)}100%{opacity:0;transform:rotate(0deg)}}
+.pe-av .av-wrap.fx-signs::before,.pe-av .av-wrap.fx-signs::after,
+.pe-av .av-wrap.fx-ding::before,.pe-av .av-wrap.fx-ding::after,
+.pe-av .av-wrap.fx-harbour::before,.pe-av .av-wrap.fx-harbour::after,
+.pe-av .av-wrap.fx-ferry::before,.pe-av .av-wrap.fx-ferry::after,
+.pe-av .av-wrap.fx-hop::before,.pe-av .av-wrap.fx-hop::after,
+.pe-av .av-wrap.fx-waddle::before,.pe-av .av-wrap.fx-waddle::after,
+.pe-av .av-wrap.fx-ham::before,.pe-av .av-wrap.fx-ham::after{z-index:4}
+@media (prefers-reduced-motion: reduce){
+  .fx-signs::before,.fx-signs::after,
+  .fx-ding::before,.fx-ding::after,
+  .fx-harbour::before,.fx-harbour::after,
+  .fx-ferry::before,.fx-ferry::after,
+  .fx-hop::before,.fx-hop::after,
+  .fx-waddle::before,.fx-waddle::after,
+  .fx-ham::before,.fx-ham::after{animation:none;opacity:.92;transform:none}
 }
 
 .support{padding:6px 0 calc(8px + env(safe-area-inset-bottom))}

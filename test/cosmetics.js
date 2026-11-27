@@ -70,8 +70,8 @@ const serverSrc = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const cssSrc = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 
-assert(html.includes('style.css?v=85') && html.includes('app.js?v=85'), 'cache bust moves past the versions on main');
-assert(!html.includes('style.css?v=67') && !html.includes('app.js?v=75') && !html.includes('style.css?v=66') && !html.includes('app.js?v=74') && !html.includes('style.css?v=65') && !html.includes('app.js?v=73') && !html.includes('style.css?v=64') && !html.includes('app.js?v=72') && !html.includes('style.css?v=63') && !html.includes('app.js?v=71') && !html.includes('style.css?v=62') && !html.includes('app.js?v=70') && !html.includes('style.css?v=61') && !html.includes('app.js?v=69'), 'live cache versions are not reused');
+assert(html.includes('style.css?v=85') && html.includes('app.js?v=86'), 'cache bust moves past the versions on main');
+assert(!html.includes('app.js?v=85') && !html.includes('style.css?v=67') && !html.includes('app.js?v=75') && !html.includes('style.css?v=66') && !html.includes('app.js?v=74') && !html.includes('style.css?v=65') && !html.includes('app.js?v=73') && !html.includes('style.css?v=64') && !html.includes('app.js?v=72') && !html.includes('style.css?v=63') && !html.includes('app.js?v=71') && !html.includes('style.css?v=62') && !html.includes('app.js?v=70') && !html.includes('style.css?v=61') && !html.includes('app.js?v=69'), 'live cache versions are not reused');
 assert(appSrc.includes('const PD_V = 8'), 'pendant image cache key bumped');
 assert(cssSrc.includes('iceSweep') && cssSrc.includes('pdSheen') && cssSrc.includes('pdPalSway') && cssSrc.includes('prefers-reduced-motion') && cssSrc.includes('pd-ice') && cssSrc.includes('.pd-pal'), 'frame motion and charms honor reduced motion');
 assert(cssSrc.includes('transparent 0 42%, #000 44%, #000 49%, transparent 52%'), 'sheen mask sits on the slimmer ring');

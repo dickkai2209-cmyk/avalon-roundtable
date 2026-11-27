@@ -107,7 +107,7 @@ class Dev {
       const mine = [...document.querySelectorAll('.rt .st')].find(n => n.querySelector('.mepill'));
       const pend = document.querySelector('.rt .st.pend, .rt .st.sit-preview');
       const head = (document.querySelector('.rhead')||{}).textContent || '';
-      if (!pend && mine && (head.includes('4號座') || head.includes('6號座') || head.includes('7號座'))) return res({ seat: mine.dataset.seat, head });
+      if (!window.__av.sitPend && mine && (head.includes('4號座') || head.includes('6號座') || head.includes('7號座'))) return res({ seat: mine.dataset.seat, head });
       if (Date.now() - t0 > 4000) return res({ timeout: 1, seat: mine && mine.dataset.seat, head });
       setTimeout(step, 20);
     };
@@ -124,7 +124,7 @@ class Dev {
     const step = () => {
       const mine = [...document.querySelectorAll('.rt .st')].find(n => n.querySelector('.mepill'));
       const head = (document.querySelector('.rhead')||{}).textContent || '';
-      if (mine && mine.dataset.seat === '7' && head.includes('7號座') && !document.querySelector('.rt .st.pend')) return res(1);
+      if (mine && mine.dataset.seat === '7' && head.includes('7號座') && !window.__av.sitPend) return res(1);
       if (Date.now() - t0 > 4000) return res(0);
       setTimeout(step, 30);
     };

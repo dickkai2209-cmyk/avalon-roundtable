@@ -318,6 +318,7 @@ function beginSeat(id) {
 function paintUnshown() {
   if (reducedFx()) return;
   for (const [id, fx] of fxBurst) {
+    if (sitMovedIds.has(id)) continue;
     if (fxPainted.get(id) === fxEpoch.get(id)) continue;
     const el = seatNode(id);
     if (!el) continue;
@@ -335,6 +336,18 @@ function syncEntranceFx(prevIds) {
   for (const p of occ) {
     const fx = playedFx(p);
     if (!fx) { stopSeat(p.id); continue; }
+    // A seat change is the same player, not a new arrival. Do not restart the burst.
+    if (sitMovedIds.has(p.id)) {
+      const moved = fxClocks.get(p.id);
+      if (!moved) {
+        fxClocks.set(p.id, { fx, timer: 0, hold: 0 });
+        armSeat(p.id, FX_EVERY);
+      } else if (moved.fx !== fx) {
+        moved.fx = fx;
+        armSeat(p.id, FX_EVERY);
+      }
+      continue;
+    }
     const clock = fxClocks.get(p.id);
     if (!clock) {
       fxClocks.set(p.id, { fx, timer: 0, hold: 0 });
@@ -476,13 +489,24 @@ socket.on('emote', ({ id, e } = {}) => {
   el.style.left = (a.left + a.width / 2 - 26) + 'px'; el.style.top = (a.top - 50) + 'px';
   document.body.appendChild(el); setTimeout(() => el.remove(), 2600);
 });
-socket.on('state', (st) => {
-  if (st && st.__d) { // merge a diff into the current state
-    if (!S || S.code !== st.code) return socket.emit('resync');
-    const m = { ...S }; for (const k in st) if (k !== '__d' && k !== '__r' && k !== '__g') m[k] = st[k];
-    (st.__r || []).forEach(k => delete m[k]);
-    if (st.__g) { const g = { ...(m.game || {}) }; for (const k in st.__g) if (k !== '__r') g[k] = st.__g[k]; (st.__g.__r || []).forEach(k => delete g[k]); m.game = g; }
-    st = m;
+socket.on('state', (incoming) => {
+  let st = incoming;
+  // Diffs merge onto the last server snapshot. Merging onto the optimistic
+  // seats would treat our own pending move as already confirmed.
+  const base = sitPend && sitServer ? sitServer : S;
+  if (st && st.__d) {
+    if (!base || base.code !== st.code) return socket.emit('resync');
+    st = mergeStateDiff(base, st);
+  }
+  if (sitPend && st && base && st.code && base.code && st.code !== base.code) cancelSitHold();
+  if (sitPend) {
+    if (serverSeatConfirmed(st, sitPend)) {
+      sitPend = 0;
+      sitServer = null;
+    } else {
+      sitServer = st;
+      st = applyOptimisticSit(st, sitPend);
+    }
   }
   const prev = S;
   const sameRoom = !!(prev && st && prev.code && prev.code === st.code);
@@ -519,11 +543,12 @@ socket.on('state', (st) => {
   }
   if (abortAsk && !abortAsk.busy && (!st.game || st.game.phase === 'end' || !st.isHost)) closeModal();
   if (view === 'room' || view === 'home') render();
+  if (!sitPend) sitMovedIds.clear();
   if (cfgOpen && !st.game && !$('#modal').classList.contains('hidden')) $('#sheet').innerHTML = cfgSheetHtml();
   syncVoteRemind();
 });
-socket.on('kicked', () => { stopAllEntrance(); S = null; clearHeld(); toast('你已被房主移出房間'); go('home'); });
-socket.on('dissolved', () => { stopAllEntrance(); S = null; clearHeld(); toast('房間已解散'); go('home'); });
+socket.on('kicked', () => { stopAllEntrance(); cancelSitHold(); S = null; clearHeld(); toast('你已被房主移出房間'); go('home'); });
+socket.on('dissolved', () => { stopAllEntrance(); cancelSitHold(); S = null; clearHeld(); toast('房間已解散'); go('home'); });
 const emit = (ev, data) => new Promise((res) => socket.emit(ev, data, (r) => {
   if (r && r.stillSeated && r.room) { heldRoom = { code: r.room, seated: true }; saveHeld(); }
   if (r && r.abandoned) clearHeld();
@@ -1293,29 +1318,131 @@ async function joinRoom(code) {
   else if (r.stillSeated) { closeModal(); go('home'); }
   else if (r.error && heldRoom && heldRoom.code === String(code || '').toUpperCase() && /找不到/.test(r.error)) { clearHeld(); render(); }
 }
-let discoverOn = false, sitPend = 0, sitGen = 0;
-function clearSitPreview() {
-  document.querySelectorAll('.rt .st.sit-preview').forEach(el => {
-    el.classList.remove('sit-preview');
-    el.style.transition = '';
-    el.style.transform = '';
-    el.style.zIndex = '';
-  });
+let discoverOn = false, sitPend = 0, sitGen = 0, sitServer = null, sitNoFlip = false;
+const sitMovedIds = new Set();
+function cloneState(st) {
+  return st ? JSON.parse(JSON.stringify(st)) : null;
 }
-function previewSit(emptyEl) {
-  clearSitPreview();
-  if (!S || !S.meId || !emptyEl || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const me = document.querySelector('.rt .st[data-id="' + (window.CSS && CSS.escape ? CSS.escape(S.meId) : S.meId) + '"]');
-  if (!me || me === emptyEl) return;
-  const a = me.getBoundingClientRect();
-  const b = emptyEl.getBoundingClientRect();
-  const dx = (b.left + b.width / 2) - (a.left + a.width / 2);
-  const dy = (b.top + b.height / 2) - (a.top + a.height / 2);
-  if (Math.abs(dx) + Math.abs(dy) < 2) return;
-  me.classList.add('sit-preview');
-  me.style.transition = 'none';
-  me.style.transform = `translate(${dx}px, ${dy}px)`;
-  me.style.zIndex = '6';
+function mergeStateDiff(base, diff) {
+  const m = { ...base };
+  for (const k in diff) if (k !== '__d' && k !== '__r' && k !== '__g') m[k] = diff[k];
+  (diff.__r || []).forEach(k => delete m[k]);
+  if (diff.__g) {
+    const g = { ...(m.game || {}) };
+    for (const k in diff.__g) if (k !== '__r') g[k] = diff.__g[k];
+    (diff.__g.__r || []).forEach(k => delete g[k]);
+    m.game = g;
+  }
+  return m;
+}
+function liveGame(st) {
+  return !!(st && st.game && st.game.phase && st.game.phase !== 'end');
+}
+function seatFromProfile(st, seatNo) {
+  const avatar = migrateAvatar(profile.avatar);
+  const body = {
+    id: st.meId,
+    name: profile.name || '騎士',
+    avatar,
+    bg: profile.bg || '#ffffff',
+    fx: profile.fx || 'none',
+    pendant: profile.pendant || 'none',
+    photoUrl: avatar === 'photo' ? (profile.photoUrl || '') : `/img/av/${avatar}.webp`,
+    ready: false,
+    seat: seatNo,
+    online: true,
+    isHost: !!st.isHost,
+  };
+  if (hasBenefit('badge')) body.badge = true;
+  if (hasBenefit('silver')) body.spotlight = true;
+  return body;
+}
+function seatedCount(seats) {
+  return (seats || []).filter(s => s && !s.empty && !s.claimable && s.id).length;
+}
+function readyCountOf(seats, hostId) {
+  return (seats || []).filter(s => s && !s.empty && !s.claimable && s.id && (s.ready || s.isHost || (hostId && s.id === hostId))).length;
+}
+function serverSeatConfirmed(st, seat) {
+  if (!st || st.spectating || st.mySeat !== seat) return false;
+  const row = (st.seats || [])[seat - 1];
+  return !!(row && !row.empty && !row.claimable && row.id);
+}
+function sitKnownFail(seat) {
+  if (!S || !seat) return true;
+  if (liveGame(S)) {
+    if (S.mySeat || (S.game && S.game.me)) return true;
+    const gs = (S.game.seats || [])[seat - 1];
+    return !(gs && gs.claimable);
+  }
+  const dest = (S.seats || [])[seat - 1];
+  if (!dest) return true;
+  if (!dest.empty && !dest.claimable && dest.id && dest.id !== S.meId) return true;
+  return false;
+}
+function applyOptimisticSit(st, seatNo) {
+  const next = cloneState(st);
+  if (!next || !seatNo) return next;
+  const i = seatNo - 1;
+  const seats = (next.seats || []).map(s => (s && typeof s === 'object' ? { ...s } : s));
+  if (i < 0 || i >= seats.length) return next;
+  if (liveGame(next)) {
+    const gs0 = (next.game.seats || [])[i];
+    if (next.mySeat || (next.game && next.game.me) || !gs0 || !gs0.claimable) return next;
+  }
+  const oldId = next.meId;
+  let me = null;
+  for (let n = 0; n < seats.length; n++) {
+    const s = seats[n];
+    if (s && !s.empty && !s.claimable && s.id && s.id === oldId) {
+      me = { ...s };
+      seats[n] = { empty: true, seat: n + 1 };
+    }
+  }
+  const player = me || seatFromProfile(next, seatNo);
+  player.seat = seatNo;
+  player.ready = false;
+  player.online = true;
+  if (next.isHost) player.isHost = true;
+  if (liveGame(next)) {
+    const gseats = (next.game.seats || []).map(s => (s && typeof s === 'object' ? { ...s } : s));
+    const gs = gseats[i];
+    const claimed = {
+      ...gs,
+      name: player.name || gs.name,
+      avatar: player.avatar || gs.avatar,
+      bg: player.bg || gs.bg,
+      fx: player.fx || gs.fx,
+      pendant: player.pendant || gs.pendant || 'none',
+      photoUrl: player.photoUrl || gs.photoUrl,
+      online: true,
+      seat: seatNo,
+    };
+    delete claimed.claimable;
+    if (player.badge) claimed.badge = true;
+    if (player.spotlight) claimed.spotlight = true;
+    gseats[i] = claimed;
+    next.game = { ...next.game, seats: gseats };
+    player.id = gs.id;
+    next.meId = gs.id;
+  }
+  seats[i] = player;
+  next.seats = seats;
+  next.mySeat = seatNo;
+  next.seated = seatedCount(seats);
+  next.readyCount = readyCountOf(seats, next.hostId);
+  next.spectating = false;
+  if (Array.isArray(next.spectators)) next.spectators = next.spectators.filter(p => p && p.id !== oldId && p.id !== next.meId);
+  return next;
+}
+function dropSitHold() {
+  sitPend = 0;
+  sitServer = null;
+  sitMovedIds.clear();
+}
+function cancelSitHold() {
+  dropSitHold();
+  sitGen++;
 }
 function requestPosition() {
   return new Promise((resolve) => {
@@ -2033,6 +2160,10 @@ function render() {
     if (mainEl) mainEl.scrollTop = keepScroll.m;
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!S.game && !reduceMotion) $$('.rt .st[data-id]').forEach(e => {
+      // Pending sit already occupies the destination. A FLIP transform would
+      // paint the avatar back on the old seat, and the .2s CSS transition
+      // would slide it again after the next morph.
+      if ((sitPend || sitNoFlip) && S.meId && e.dataset.id === S.meId) return;
       const b = before[e.dataset.id]; if (!b) return; const r = e.getBoundingClientRect(); const dx = b[0] - r.left, dy = b[1] - r.top;
       if (Math.abs(dx) + Math.abs(dy) < 24) return;
       e.style.transition = 'none'; e.style.transform = `translate(${dx}px, ${dy}px)`; e.style.zIndex = 5;
@@ -2043,6 +2174,7 @@ function render() {
       else AvalonVoice.afterRender();
     }
     paintUnshown();
+    sitMovedIds.forEach(id => { const node = seatNode(id); if (node) node.classList.remove('enter'); });
   }
   else if (view === 'rules') { app.innerHTML = rulesHtml(); mountRules(); }
   else if (view === 'history') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadHistory(); }
@@ -3601,12 +3733,38 @@ document.addEventListener('click', async (e) => {
     case 'logout': return doLogout();
     case 'cap': return act('capacity', { n: Number(el.dataset.n) });
     case 'sit': {
-      const seat = Number(el.dataset.seat); const gen = ++sitGen; sitPend = seat;
-      el.classList.add('pend');
-      previewSit(el);
+      const seat = Number(el.dataset.seat);
+      if (!seat) return;
+      if (sitKnownFail(seat)) { await act('sit', { seat }); return; }
+      const gen = ++sitGen;
+      sitPend = seat;
+      if (!sitServer) sitServer = cloneState(S);
+      const already = !!(sitServer && sitServer.mySeat);
+      S = applyOptimisticSit(sitServer, seat);
+      if (already && S && S.meId) sitMovedIds.add(S.meId);
+      render();
       const r = await act('sit', { seat });
       if (gen !== sitGen) return;
-      if (!r || !r.ok) { sitPend = 0; el.classList.remove('pend'); clearSitPreview(); }
+      if (!r || !r.ok) {
+        const revert = sitServer;
+        sitPend = 0;
+        sitServer = null;
+        if (revert) S = revert;
+        sitNoFlip = true;
+        render();
+        sitNoFlip = false;
+        sitMovedIds.clear();
+        return;
+      }
+      if (sitPend === seat && serverSeatConfirmed(sitServer, seat)) {
+        S = sitServer;
+        sitPend = 0;
+        sitServer = null;
+        sitNoFlip = true;
+        render();
+        sitNoFlip = false;
+        sitMovedIds.clear();
+      }
       return;
     }
     case 'mic': e.stopPropagation(); if (window.AvalonVoice) AvalonVoice.toggle(); return;
@@ -3648,6 +3806,7 @@ document.addEventListener('click', async (e) => {
     }
     case 'menu': return openRoomMenu();
     case 'leave': {
+      cancelSitHold();
       const r = await emit('leave');
       waitingRoom = null;
       if (r.stillSeated && r.room) {
@@ -3700,5 +3859,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
-window.__av = { av, roundTable, canvasDrawAv, makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
+window.__av = { av, roundTable, canvasDrawAv, makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, socket, get sitPend() { return sitPend; }, get sitGen() { return sitGen; }, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

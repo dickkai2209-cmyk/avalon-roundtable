@@ -133,9 +133,10 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
       const roles = roleGrid ? [...roleGrid.querySelectorAll('[data-e]')].map(b => ({ k: b.dataset.e, n: (b.querySelector('.lb') || {}).textContent || '', src: (b.querySelector('img') || {}).getAttribute('src') || '' })) : [];
       const animal = [...document.querySelectorAll('.pe-grid')].find(g => !g.classList.contains('pe-roles'));
       const beasts = animal ? [...animal.querySelectorAll('[data-e]')].map(b => b.dataset.e) : [];
-      return { heads, roles, beasts, upload: !!(animal && animal.querySelector('[data-upload]')) };
+      const roleAfter = !!(animal && roleGrid && (animal.compareDocumentPosition(roleGrid) & Node.DOCUMENT_POSITION_FOLLOWING));
+      return { heads, roles, beasts, upload: !!(animal && animal.querySelector('[data-upload]')), roleAfter };
     })()`);
-    assert(rolePick.heads[0] === '角色' && rolePick.heads.includes('動物'), 'avatar picker groups 角色 ahead of 動物 ' + JSON.stringify(rolePick.heads));
+    assert(rolePick.heads.join() === '動物,角色' && rolePick.roleAfter, 'avatar picker puts 角色 at the bottom, after 動物 ' + JSON.stringify(rolePick.heads));
     assert(rolePick.roles.map(r => r.k + ':' + r.n + ':' + r.src).join('|') === 'merlin:梅林:/img/av/merlin.webp|percival:派西維爾:/img/av/percival.webp|servant:忠臣:/img/av/servant.webp|assassin:刺客:/img/av/assassin.webp|mordred:莫德雷特:/img/av/mordred.webp|oberon:奧柏倫:/img/av/oberon.webp|morgana:莫甘娜:/img/av/morgana.webp', 'seven role faces are in the 角色 group');
     assert(rolePick.upload && rolePick.beasts.includes('fox') && rolePick.roles.every(r => !rolePick.beasts.includes(r.k)), 'photo upload and animal faces stay, roles are not mixed in');
     // entrance preview anchored on own avatar; locked items do not equip

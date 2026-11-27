@@ -297,9 +297,10 @@ class Page {
       const roles = roleGrid ? [...roleGrid.querySelectorAll('[data-e]')].map(b => ({ k: b.dataset.e, n: (b.querySelector('.lb') || {}).textContent || '', src: (b.querySelector('img') || {}).src || '', off: b.classList.contains('off') })) : [];
       const animal = [...document.querySelectorAll('.pe-grid')].find(g => !g.classList.contains('pe-roles'));
       const beasts = animal ? [...animal.querySelectorAll('[data-e]')].map(b => b.dataset.e) : [];
-      return { heads, roles, beasts, upload: !!(animal && animal.querySelector('[data-upload]')) };
+      const roleAfter = !!(animal && roleGrid && (animal.compareDocumentPosition(roleGrid) & Node.DOCUMENT_POSITION_FOLLOWING));
+      return { heads, roles, beasts, upload: !!(animal && animal.querySelector('[data-upload]')), roleAfter };
     })()`);
-    assert(roleGroup.heads[0] === '角色' && roleGroup.heads.includes('動物'), 'picker labels the role group ' + JSON.stringify(roleGroup.heads));
+    assert(roleGroup.heads.join() === '動物,角色' && roleGroup.roleAfter, '角色 group sits at the bottom, after the animals ' + JSON.stringify(roleGroup.heads));
     assert(roleGroup.roles.map(r => r.k).join() === ROLES.map(r => r[0]).join(), '角色 group order');
     for (const [k, n] of ROLES) {
       const hit = roleGroup.roles.find(b => b.k === k);

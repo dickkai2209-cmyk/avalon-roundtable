@@ -1149,7 +1149,7 @@ function editProfile(after, startTab) {
     const roleKeys = new Set(ROLE_AV.map(([k]) => k));
     const beasts = ANIMALS.filter(([k]) => !roleKeys.has(k));
     const sw = `<div class="swatches">${BGS.map(c => `<button type="button" data-c="${c}" class="${c===d.bg?'sel':''}" style="background:${c}"></button>`).join('')}</div>`;
-    return `${sw}<div class="pe-h">角色</div><div class="pe-grid pe-roles">${ROLE_AV.map(avTile).join('')}</div><div class="pe-h">動物</div><div class="pe-grid">${photoBtn}${beasts.map(avTile).join('')}</div>`;
+    return `${sw}<div class="pe-h">動物</div><div class="pe-grid">${photoBtn}${beasts.map(avTile).join('')}</div><div class="pe-h">角色</div><div class="pe-grid pe-roles">${ROLE_AV.map(avTile).join('')}</div>`;
   };
   const draw = (el) => {
     const n = d.name || '';

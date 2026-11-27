@@ -1,11 +1,11 @@
 {
   "name": "yuanzhuo-avalon",
   "version": "1.0.0",
-  "description": "旺角阿瓦隆 (by Amigosparty) — 網頁版阿瓦隆多人遊戲",
+  "description": "HK阿瓦隆 (by Amigosparty) — 網頁版阿瓦隆多人遊戲",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/recap.js && URL=http://127.0.0.1:3000 node test/sim.js && DIFF=1 URL=http://127.0.0.1:3000 node test/sim.js && URL=http://127.0.0.1:3000 node test/twofail.js && URL=http://127.0.0.1:3000 node test/lobby.js && node test/resume.js && node test/ui-layout.js && node test/skin-names.js && node test/avoid.js && node test/shiny-preview.js && node test/cosmetics.js && node test/leaderboard.js && node test/vote-remind.js && node test/team-history.js && node test/role-view.js && node test/status-marks.js && node test/lady-color.js && node test/lady-privacy.js && node test/recap-visual.js && node test/act-confirm.js && node test/game-layout.js && node test/pick-glow.js && node test/card-draw.js && node test/settle.js && node test/next-game.js && node test/room-menu.js && node test/seat-feedback.js && node test/seat-avatars.js && node test/voice.js && node test/nearby.js && node test/spectate.js && node test/floor.js && node test/rejoin.js && node test/seat-resume.js && node test/seize-host.js"
+    "test": "node test/support.js && node test/recap.js && URL=http://127.0.0.1:3000 node test/sim.js && DIFF=1 URL=http://127.0.0.1:3000 node test/sim.js && URL=http://127.0.0.1:3000 node test/twofail.js && URL=http://127.0.0.1:3000 node test/lobby.js && node test/resume.js && node test/ui-layout.js && node test/skin-names.js && node test/avoid.js && node test/shiny-preview.js && node test/cosmetics.js && node test/leaderboard.js && node test/vote-remind.js && node test/team-history.js && node test/role-view.js && node test/status-marks.js && node test/lady-color.js && node test/lady-privacy.js && node test/recap-visual.js && node test/act-confirm.js && node test/game-layout.js && node test/pick-glow.js && node test/card-draw.js && node test/settle.js && node test/next-game.js && node test/room-menu.js && node test/seat-feedback.js && node test/seat-avatars.js && node test/voice.js && node test/nearby.js && node test/spectate.js && node test/floor.js && node test/rejoin.js && node test/seat-resume.js && node test/seize-host.js"
   },
   "author": "Amigosparty",
   "license": "MIT",
@@ -17,7 +17,8 @@
     "pg": "^8.23.1",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.4",
-    "socket.io-client": "^4.8.4"
+    "socket.io-client": "^4.8.4",
+    "stripe": "^23.2.0"
   },
   "engines": {
     "node": ">=18"

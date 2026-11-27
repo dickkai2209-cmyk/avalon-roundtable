@@ -65,7 +65,7 @@ const ANIMALS = [
 ];
 const EMOJI_MAP = {'🦊':'fox','🐼':'panda','🦆':'duck','🐿️':'squirrel','🦔':'hedgehog','🐰':'bunny','🐻':'bear','🦝':'redpanda','🦦':'otter','🐹':'hamster','🐕':'shiba','🐶':'shiba','🦫':'capybara','🐧':'penguin','🐨':'koala','🐱':'cat','🐺':'wolf','🦁':'lion','🐷':'piglet','🐖':'piglet','🐡':'puffer','👽':'alien','🐸':'frog','🐯':'tiger','🐉':'dragonet'};
 const BGS = ['#ffffff', '#f3d9a4', '#f7c1c8', '#bfe3c9', '#bcd6ff', '#d9c6ff', '#ffe08a', '#c8eef0', '#ffcfa6', '#2b3a6e', '#3a2a1c'];
-const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['snow','聖誕飄雪',0],['spark','星火',1],['petals','花瓣',3],['howl','狼人咆哮',4],['fire','火焰圈',6],['lightning','閃電',10]];
+const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['snow','聖誕飄雪',0],['spark','星火',1],['petals','花瓣',3],['howl','狼人咆哮',4],['fire','火焰圈',6],['lightning','閃電',10],['silver','銀白追光',0]];
 // [key, name, unlock type ('free'|'games'|'wins'), need, special?]
 const PENDANTS = [
   ['wolf', '滿月狼人', 'free', 0], ['pumpkin', '南瓜燈先知', 'free', 0], ['devil', '搗蛋小惡魔', 'free', 0],
@@ -83,6 +83,7 @@ const PENDANTS = [
   ['skydragon', '龍吟九霄', 'games', 18], ['foxdance', '狐舞月華', 'wins', 9],
   ['frostmirror', '朔雪之映', 'free', 0, 1], ['icesword', '逆光之劍', 'free', 0, 1],
   ['fairylake', '妖精之湖', 'wins', 12], ['odineye', '奧丁之眼', 'wins', 14],
+  ['coffee', '一杯咖啡', 'support', 1],
 ];
 const PD_V = 6;
 const pdSrc = (k, back) => `/img/pd/${k}${back ? '_b' : ''}.webp?v=${PD_V}`;
@@ -102,37 +103,42 @@ const PD_FX = {
   whiteling: 'white', darkling: 'dark', skydragon: 'dragon', foxdance: 'dance',
   frostmirror: 'ice', icesword: 'ice', fairylake: 'lake', odineye: 'eye',
 };
-// A companion only when the frame name names a creature. Stars, snow, sword and the eye stay plain.
-const PD_PAL = { foxqiu: 'fox', foxheart: 'fox', foxdance: 'fox', skydragon: 'dragon', whiteling: 'white', darkling: 'dark', fairylake: 'fairy' };
+// One original charm per round frame, tied to the distinctive word in the name.
+const PD_PAL = {
+  foxqiu: 'fox', foxheart: 'heart', starmoon: 'moon', starplain: 'stars',
+  whiteling: 'white', darkling: 'dark', skydragon: 'dragon', foxdance: 'dance',
+  frostmirror: 'snow', icesword: 'sword', fairylake: 'fairy', odineye: 'eye',
+};
 function pdFxCls(k) {
   const fx = PD_FX[k];
   if (!fx) return '';
   return fx === 'ice' ? ' pd-round pd-ice' : ' pd-round pd-sheen pd-sheen-' + fx;
 }
 const PD_PAL_SVG = {
-  fox: `<svg viewBox="0 0 64 64" aria-hidden="true"><path class="tail" d="M12 42c-8 2-10 14-2 16 8 1 14-6 14-12" fill="#f0a04c" stroke="#7a4012" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><ellipse class="fur" cx="30" cy="46" rx="15" ry="11" fill="#f6b25a" stroke="#7a4012" stroke-width="4"/><circle class="fur" cx="44" cy="30" r="12" fill="#f6b25a" stroke="#7a4012" stroke-width="4"/><path class="fur" d="M34 24l2-12 8 10z" fill="#f6b25a" stroke="#7a4012" stroke-width="4" stroke-linejoin="round"/><path class="fur" d="M44 20l6-10 4 12z" fill="#f6b25a" stroke="#7a4012" stroke-width="4" stroke-linejoin="round"/><path class="ear" d="M37 20l1-6 5 6z" fill="#ffd8c4"/><path class="ear" d="M46 16l4-6 3 8z" fill="#ffd8c4"/><circle cx="41" cy="30" r="1.8" fill="#2a2118"/><circle cx="48" cy="30" r="1.8" fill="#2a2118"/><ellipse cx="50" cy="34" rx="3" ry="2.1" fill="#fff6ee"/><circle cx="51" cy="34.2" r="1.2" fill="#e07a86"/></svg>`,
-  dragon: `<svg viewBox="0 0 64 64" aria-hidden="true"><path class="body" d="M14 46c2 10 14 12 22 6 6-4 4-12-2-14 8-2 16-10 14-18-3-9-16-10-22-2" fill="#f2c84a" stroke="#8a5c10" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><circle cx="44" cy="24" r="11" fill="#f6d56a" stroke="#8a5c10" stroke-width="4"/><path d="M38 16l-2-9 9 7z" fill="#e8a028" stroke="#8a5c10" stroke-width="3.5" stroke-linejoin="round"/><path d="M52 26c6 0 9 3 11 2" fill="none" stroke="#8a5c10" stroke-width="3" stroke-linecap="round"/><circle cx="47" cy="23" r="1.7" fill="#2a2118"/><path d="M24 44c3 4 10 4 12 0" fill="none" stroke="#fff6d8" stroke-width="3" stroke-linecap="round"/></svg>`,
-  fairy: `<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="20" cy="30" rx="11" ry="7" fill="#dffaf4" stroke="#1d7a72" stroke-width="3.5"/><ellipse cx="48" cy="30" rx="11" ry="7" fill="#dffaf4" stroke="#1d7a72" stroke-width="3.5"/><path d="M26 40c1 12 16 14 18 2 1-8-6-12-9-12s-10 4-9 10z" fill="#7fd0c8" stroke="#1d7a72" stroke-width="4" stroke-linejoin="round"/><circle cx="35" cy="24" r="11" fill="#ffe3d2" stroke="#1d7a72" stroke-width="4"/><path d="M30 16c2-6 8-6 10 0" fill="#ffe3d2" stroke="#1d7a72" stroke-width="3" stroke-linecap="round"/><circle cx="32" cy="24" r="1.6" fill="#1d3a36"/><circle cx="39" cy="24" r="1.6" fill="#1d3a36"/><path d="M33 28c1.2 1.2 3.2 1.2 4.2 0" fill="none" stroke="#c46a78" stroke-width="2" stroke-linecap="round"/></svg>`,
+  fox: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 46c-8 6-2 16 8 12 4-2 6-8 4-12" fill="#e8943a" stroke="#5c320c" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><ellipse cx="28" cy="44" rx="16" ry="13" fill="#f6b14a" stroke="#5c320c" stroke-width="4"/><circle cx="46" cy="30" r="14" fill="#f6b14a" stroke="#5c320c" stroke-width="4"/><path d="M34 22 32 4 46 20z" fill="#f6b14a" stroke="#5c320c" stroke-width="4" stroke-linejoin="round"/><path d="M46 18 54 2 58 22z" fill="#f6b14a" stroke="#5c320c" stroke-width="4" stroke-linejoin="round"/><path d="M36 16l1-7 6 7z" fill="#ffd2be"/><path d="M48 12l5-7 4 9z" fill="#ffd2be"/><ellipse cx="56" cy="33" rx="6" ry="4" fill="#fff6ee" stroke="#5c320c" stroke-width="3"/><circle cx="42" cy="29" r="2.3" fill="#2a1c12"/><circle cx="50" cy="29" r="2.3" fill="#2a1c12"/><circle cx="26" cy="50" r="4.6" fill="#ffe08a" stroke="#8a5a10" stroke-width="2.6"/><path d="M26 46v8" stroke="#8a5a10" stroke-width="1.8"/></svg>`,
+  heart: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 58C12 44 4 32 8 18 12 8 24 8 32 20 40 8 52 8 56 18 60 32 52 44 32 58z" fill="#e4255c" stroke="#7a1236" stroke-width="4.5" stroke-linejoin="round"/><path d="M22 24c3-7 10-7 12 0" fill="none" stroke="#ffe0ea" stroke-width="3.5" stroke-linecap="round"/><circle cx="32" cy="36" r="4.5" fill="#ffe08a" stroke="#a86b12" stroke-width="2.4"/></svg>`,
+  moon: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M48 4a26 26 0 1 0 .2 52A17 17 0 1 1 48 4z" fill="#f7fbff" stroke="#243656" stroke-width="4"/><path d="M4 28h24L16 12z" fill="#f0d060" stroke="#7a5810" stroke-width="3.5" stroke-linejoin="round"/><path d="M6 42h20L16 30z" fill="#e7c24a" stroke="#7a5810" stroke-width="3.5" stroke-linejoin="round"/><rect x="13" y="42" width="6" height="14" rx="1.2" fill="#9bb4cc" stroke="#243656" stroke-width="3"/><path d="M10 58h12" stroke="#243656" stroke-width="3.5" stroke-linecap="round"/></svg>`,
+  stars: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 56 30 18" stroke="#fff6d0" stroke-width="9" stroke-linecap="round"/><path d="M8 56 30 18" stroke="#e2b028" stroke-width="4.5" stroke-linecap="round"/><path d="M36 4l5 16 18 2-13 11 4 17-14-9-14 9 4-17L16 22l16-2z" fill="#ffe36a" stroke="#6a4a08" stroke-width="3.6" stroke-linejoin="round"/><circle cx="54" cy="8" r="4.2" fill="#fff" stroke="#6a4a08" stroke-width="2.6"/><circle cx="56" cy="40" r="3.3" fill="#ffe36a" stroke="#6a4a08" stroke-width="2.6"/></svg>`,
+  white: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 40c-2 12 10 16 16 8" fill="#fff" stroke="#6e5424" stroke-width="4" stroke-linecap="round"/><ellipse cx="30" cy="44" rx="16" ry="12" fill="#fffaf2" stroke="#6e5424" stroke-width="4"/><circle cx="48" cy="30" r="13" fill="#fffaf2" stroke="#6e5424" stroke-width="4"/><path d="M44 18 49 2 55 18z" fill="#f0c84a" stroke="#6e5424" stroke-width="3.6" stroke-linejoin="round"/><path d="M22 52v8M30 54v8M38 52v8" stroke="#6e5424" stroke-width="4" stroke-linecap="round"/><circle cx="52" cy="29" r="2.2" fill="#3a2a14"/><ellipse cx="57" cy="34" rx="4.2" ry="2.8" fill="#f6d0d4" stroke="#6e5424" stroke-width="2.4"/></svg>`,
+  dark: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M58 42c6 8-2 16-12 10" fill="#14302c" stroke="#d8ffee" stroke-width="4" stroke-linecap="round"/><ellipse cx="36" cy="44" rx="18" ry="11" fill="#173430" stroke="#e7fff4" stroke-width="4.2"/><circle cx="16" cy="32" r="13" fill="#173430" stroke="#e7fff4" stroke-width="4.2"/><path d="M12 22 7 4 20 20z" fill="#5ee0b8" stroke="#e7fff4" stroke-width="3.4" stroke-linejoin="round"/><path d="M20 20 26 2 30 22z" fill="#5ee0b8" stroke="#e7fff4" stroke-width="3.4" stroke-linejoin="round"/><circle cx="12" cy="31" r="2.4" fill="#f3fff9"/><path d="M8 37c2.4 2.4 6.4 2.4 8.4 0" fill="none" stroke="#8cf0cc" stroke-width="2.4" stroke-linecap="round"/><path d="M46 50c8 6 12 1 8-4" fill="#5ee0b8" stroke="#e7fff4" stroke-width="3.2" stroke-linejoin="round"/></svg>`,
+  dragon: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M2 52c6 14 28 16 38 2 6-8 1-16-8-16 16 2 30-10 30-24C62 2 46-2 36 8" fill="#f6c431" stroke="#6a3c04" stroke-width="4.4" stroke-linejoin="round" stroke-linecap="round"/><ellipse cx="44" cy="24" rx="16" ry="13" fill="#ffe27a" stroke="#6a3c04" stroke-width="4.4"/><ellipse cx="58" cy="28" rx="7" ry="5" fill="#ffe27a" stroke="#6a3c04" stroke-width="3.6"/><path d="M30 16 22 2 42 16z" fill="#e23a22" stroke="#6a3c04" stroke-width="3.4" stroke-linejoin="round"/><path d="M46 12 56 0 62 16z" fill="#e23a22" stroke="#6a3c04" stroke-width="3.4" stroke-linejoin="round"/><path d="M60 20c7-2 10 2 8 6" fill="none" stroke="#6a3c04" stroke-width="2.8" stroke-linecap="round"/><circle cx="48" cy="22" r="2.6" fill="#2a1604"/><path d="M12 50c8 7 18 5 22-3" fill="none" stroke="#fff6d0" stroke-width="3.6" stroke-linecap="round"/></svg>`,
+  dance: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M16 8a22 22 0 1 0 .2 44A14 14 0 1 1 16 8z" fill="#f4f0ff" stroke="#3d3568" stroke-width="3.6"/><path d="M34 60c1-14 6-20 8-28 5 8 8 16 5 24" fill="#f3b48a" stroke="#7a3c20" stroke-width="4" stroke-linejoin="round"/><circle cx="44" cy="22" r="11" fill="#f8c6a2" stroke="#7a3c20" stroke-width="4"/><path d="M36 16 32 2 44 15z" fill="#f8c6a2" stroke="#7a3c20" stroke-width="3.5" stroke-linejoin="round"/><path d="M46 14 54 2 56 16z" fill="#f8c6a2" stroke="#7a3c20" stroke-width="3.5" stroke-linejoin="round"/><path d="M52 32c6-4 10-12 10-12" fill="none" stroke="#7a3c20" stroke-width="5" stroke-linecap="round"/><circle cx="60" cy="16" r="4.2" fill="#f8c6a2" stroke="#7a3c20" stroke-width="3"/><circle cx="41" cy="22" r="1.9" fill="#3a2418"/><circle cx="48" cy="22" r="1.9" fill="#3a2418"/></svg>`,
+  snow: `<svg viewBox="0 0 64 64" aria-hidden="true"><g fill="#e7f7ff" stroke="#0f4e78" stroke-width="4" stroke-linejoin="round"><path d="M32 2 37 22 32 26 27 22z"/><path d="M32 62 27 42 32 38 37 42z"/><path d="M2 32 22 27 26 32 22 37z"/><path d="M62 32 42 37 38 32 42 27z"/><path d="M10 10 26 24 24 28 16 20z"/><path d="M54 54 38 40 40 36 48 44z"/><path d="M54 10 40 24 36 22 46 14z"/><path d="M10 54 24 40 28 42 18 50z"/></g><circle cx="32" cy="32" r="8" fill="#fff" stroke="#0f4e78" stroke-width="3.6"/><circle cx="32" cy="32" r="3.6" fill="#7ec8ee"/></svg>`,
+  sword: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 1 43 18 38 40 32 47 26 40 21 18z" fill="#f5fcff" stroke="#14385a" stroke-width="4.2" stroke-linejoin="round"/><path d="M32 16v22" stroke="#6ebcea" stroke-width="3.4" stroke-linecap="round"/><path d="M8 45h48" stroke="#e7f4fc" stroke-width="8" stroke-linecap="round"/><path d="M10 45h44" stroke="#14385a" stroke-width="3.2" stroke-linecap="round"/><rect x="27" y="47" width="10" height="10" rx="2" fill="#2a6ea2" stroke="#14385a" stroke-width="3"/><circle cx="32" cy="60" r="4.2" fill="#eaf6ff" stroke="#14385a" stroke-width="3"/></svg>`,
+  fairy: `<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="14" cy="34" rx="13" ry="9" fill="#d9fff4" stroke="#0c5c54" stroke-width="3.6"/><ellipse cx="50" cy="34" rx="13" ry="9" fill="#d9fff4" stroke="#0c5c54" stroke-width="3.6"/><path d="M22 40c1 16 19 16 20 0 0-7-5-10-10-10s-10 3-10 10z" fill="#1fb8ae" stroke="#0c5c54" stroke-width="4" stroke-linejoin="round"/><circle cx="32" cy="24" r="11" fill="#ffe0d0" stroke="#0c5c54" stroke-width="4"/><path d="M24 16c2-8 12-8 14 0" fill="#fff" stroke="#0c5c54" stroke-width="3.2" stroke-linecap="round"/><circle cx="28" cy="24" r="2" fill="#14322e"/><circle cx="36" cy="24" r="2" fill="#14322e"/><path d="M29 28c1.5 1.8 4.5 1.8 6 0" fill="none" stroke="#d06078" stroke-width="2.2" stroke-linecap="round"/></svg>`,
+  eye: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M2 32C14 14 24 8 32 8s18 6 30 24c-12 18-22 24-30 24S14 50 2 32z" fill="#f6f7fc" stroke="#221c40" stroke-width="4.2" stroke-linejoin="round"/><circle cx="32" cy="32" r="13" fill="#6848d0" stroke="#221848" stroke-width="3.6"/><circle cx="32" cy="32" r="6.5" fill="#140c28"/><circle cx="37" cy="27" r="3.2" fill="#fff"/></svg>`,
 };
-function beastSvg(tone) {
-  const dark = tone === 'dark';
-  const fill = dark ? '#314840' : '#f7f4ee';
-  const stroke = dark ? '#101c18' : '#8a7040';
-  const horn = dark ? '#8fd8b4' : '#e2b33a';
-  const mane = dark ? '#1b2e28' : '#fff';
-  const eye = dark ? '#e7fff4' : '#2a2118';
-  return `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M12 38c-6 8 0 16 8 12" fill="${mane}" stroke="${stroke}" stroke-width="4" stroke-linecap="round"/><ellipse cx="32" cy="44" rx="16" ry="11" fill="${fill}" stroke="${stroke}" stroke-width="4"/><circle cx="46" cy="31" r="11" fill="${fill}" stroke="${stroke}" stroke-width="4"/><path d="M42 22l2-11 7 9z" fill="${horn}" stroke="${stroke}" stroke-width="3.5" stroke-linejoin="round"/><path d="M18 48v8M26 50v8M36 50v8M44 47v7" fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round"/><circle cx="49" cy="30" r="1.6" fill="${eye}"/><ellipse cx="52" cy="34" rx="2.5" ry="1.7" fill="${dark ? '#d7a0b4' : '#f3c1c8'}"/></svg>`;
-}
-function pdPalHtml(k) {
+function pdPalHtml(k, side) {
   const kind = PD_PAL[k];
   if (!kind) return '';
-  const svg = kind === 'white' || kind === 'dark' ? beastSvg(kind) : PD_PAL_SVG[kind];
-  return `<span class="pd-pal pd-pal-${kind}" data-pal="${kind}">${svg}</span>`;
+  const flip = side === 'right' ? ' pd-pal-right' : '';
+  return `<span class="pd-pal pd-pal-${kind}${flip}" data-pal="${kind}">${PD_PAL_SVG[kind]}</span>`;
 }
 const PD_IMG = Object.fromEntries(PENDANTS.map(x => [x[0], 1]));
 const PHASE = { team: '組隊', vote: '投票', sword: '授予王者之劍', quest: '任務', swordflip: '王者之劍', lady: '湖中仙女', assassin: '刺殺梅林', end: '遊戲結束' };
 const TEAM_SIZES = { 5: [2, 3, 2, 3, 3], 6: [2, 3, 4, 3, 4], 7: [2, 3, 3, 4, 4], 8: [3, 4, 4, 5, 5], 9: [3, 4, 4, 5, 5], 10: [3, 4, 4, 5, 5], 11: [3, 4, 4, 5, 5], 12: [3, 4, 5, 5, 5] };
-const LOGO = `<img class="logo amigos" src="/img/amigos.webp" alt="Amigos' Party" width="120" height="96" decoding="async">`;
+const LOGO = `<img class="logo merlin" src="/img/logo-merlin.webp" alt="" width="88" height="88" decoding="async">`;
+const AMIGOS = `<img class="amigos-mark" src="/img/amigos.webp" alt="Amigos' Party" width="22" height="18" decoding="async">`;
 const ROLE_ART = {};
 const RN = { merlin:'梅林', percival:'派西維爾', servant:'忠臣', lancelot_good:'蘭斯洛特（正）', assassin:'刺客', morgana:'莫甘娜', mordred:'莫德雷德', oberon:'奧伯倫', minion:'爪牙', lancelot_evil:'蘭斯洛特（邪）' };
 
@@ -150,6 +156,8 @@ let profile = JSON.parse(LS.getItem('cc.profile') || 'null') || { name: LS.getIt
 profile.avatar = migrateAvatar(profile.avatar);
 profile.pendant = (profile.pendant && profile.pendant !== 'lion') ? profile.pendant : 'none';
 if (profile.pendant && profile.pendant !== 'none' && !PENDANTS.some(x => x[0] === profile.pendant)) profile.pendant = 'none';
+if (profile.pendant === 'coffee') profile.pendant = 'none';
+if (profile.fx === 'silver') profile.fx = 'spot';
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const saveProfile = () => LS.setItem('cc.profile', JSON.stringify(profile));
 let skinSel = JSON.parse(LS.getItem('cc.skins') || '{}');
@@ -216,11 +224,35 @@ let seenEvent = 0;
 })();
 let pendingGame = (location.pathname.match(/^\/g\/([\w-]{8,})/) || [])[1] || new URLSearchParams(location.search).get('game');
 if (pendingGame) history.replaceState(null, '', '/');
-let pendingJoin = new URLSearchParams(location.search).get('room');
+const bootQ = new URLSearchParams(location.search);
+let pendingJoin = bootQ.get('room');
+let pendingSupport = bootQ.get('support') === 'pending' || bootQ.get('support') === 'cancel' ? bootQ.get('support') : null;
+if (pendingJoin || pendingSupport) history.replaceState(null, '', pendingJoin ? '/?room=' + encodeURIComponent(pendingJoin) : '/');
 if (pendingJoin) history.replaceState(null, '', '/');
 let autoRoom = true;
 
-ensureSession().then(() => { if (view === 'home') render(); }).catch(() => {}); // start auth in parallel with the socket handshake
+ensureSession().then(() => {
+  if (pendingSupport) {
+    supportNote = pendingSupport === 'cancel' ? '已取消付款，未有解鎖。' : '付款確認緊。解鎖只會喺伺服器核對到 Stripe 通知之後先出現。';
+    const watch = pendingSupport === 'pending';
+    pendingSupport = null;
+    view = 'support';
+    if (watch) {
+      let n = 0;
+      const t = setInterval(async () => {
+        n += 1;
+        try {
+          const r = await api('/api/me');
+          applyUser(r.user, r.stats);
+          if ((r.user.benefits || []).length) supportNote = '';
+          if (view === 'support') render();
+          if ((r.user.benefits || []).length || n > 8) clearInterval(t);
+        } catch (e) { if (n > 8) clearInterval(t); }
+      }, 1500);
+    }
+  }
+  if (view === 'home' || view === 'support') render();
+}).catch(() => {}); // start auth in parallel with the socket handshake
 // polling-first then upgrade: measured faster first connect through Render/Cloudflare (≈2 RTT vs ≈4 RTT for a direct WS handshake)
 const socket = io({ transports: ['polling', 'websocket'], query: { diff: '1' } });
 const helloProfile = () => ({ name: profile.name, avatar: profile.avatar, bg: profile.bg, fx: profile.fx, pendant: profile.pendant });
@@ -264,6 +296,10 @@ function refreshRoom() {
 }
 // ---- emotes ----
 const EMOTES = ['1f602','1f62d','1f631','1f914','1f60e','1f621','1f64f','1f44d','1f44f','1f525','2764_fe0f','1f608','1f92b','1f440','1f389'];
+const SUPPORT_EMOTE = 'sup_coffee';
+function supportEmoSvg(sz) {
+  return `<svg class="sup-emo" width="${sz}" height="${sz}" viewBox="0 0 64 64" aria-label="支持者表情"><circle cx="32" cy="32" r="30" fill="#fff6ea" stroke="#e2b56a" stroke-width="3"/><circle cx="24" cy="28" r="3" fill="#3a2a1c"/><circle cx="40" cy="28" r="3" fill="#3a2a1c"/><path d="M22 38c3 6 17 6 20 0" fill="none" stroke="#e07a3a" stroke-width="3" stroke-linecap="round"/><path d="M44 44h8c2 4 1 8-3 8h-6" fill="none" stroke="#6a4324" stroke-width="2.4" stroke-linecap="round"/><path d="M46 42h7v6c0 2-2 3-3.5 3H46z" fill="#fff" stroke="#6a4324" stroke-width="2"/></svg>`;
+}
 const emoChar = (c) => String.fromCodePoint(...c.split('_').map(h => parseInt(h, 16)));
 const emoImg = (c, sz) => `<img src="https://fonts.gstatic.com/s/e/notoemoji/latest/${c}/512.webp" alt="${emoChar(c)}" width="${sz}" height="${sz}" loading="lazy" decoding="async" onerror="this.replaceWith(document.createTextNode(this.alt))">`;
 let emoLast = 0;
@@ -272,7 +308,8 @@ function emoOutside(e) { const p = document.getElementById('emopop'); if (p && !
 function toggleEmotes(btn) {
   if (document.getElementById('emopop')) return closeEmotes();
   const r = btn.getBoundingClientRect(); const pop = document.createElement('div'); pop.id = 'emopop'; pop.className = 'emopop';
-  pop.innerHTML = EMOTES.map(c => `<button data-e="${c}">${emoImg(c, 34)}</button>`).join('');
+  const list = hasBenefit('emote') ? EMOTES.concat(SUPPORT_EMOTE) : EMOTES;
+  pop.innerHTML = list.map(c => `<button data-e="${c}">${c === SUPPORT_EMOTE ? supportEmoSvg(34) : emoImg(c, 34)}</button>`).join('');
   pop.style.top = (r.bottom + 8) + 'px'; pop.style.right = Math.max(8, innerWidth - r.right) + 'px';
   document.body.appendChild(pop);
   pop.onclick = (e) => { const b = e.target.closest('[data-e]'); if (!b) return; const now = Date.now();
@@ -280,10 +317,10 @@ function toggleEmotes(btn) {
   setTimeout(() => document.addEventListener('pointerdown', emoOutside, true), 0);
 }
 socket.on('emote', ({ id, e } = {}) => {
-  if (!EMOTES.includes(e)) return;
+  if (e !== SUPPORT_EMOTE && !EMOTES.includes(e)) return;
   const st = Array.from(document.querySelectorAll('.rt .st[data-sid]')).find(x => x.dataset.sid === id && x.offsetParent); if (!st) return;
   const a = (st.querySelector('.av') || st).getBoundingClientRect();
-  const el = document.createElement('div'); el.className = 'emofly'; el.innerHTML = emoImg(e, 52);
+  const el = document.createElement('div'); el.className = 'emofly'; el.innerHTML = e === SUPPORT_EMOTE ? supportEmoSvg(52) : emoImg(e, 52);
   el.style.left = (a.left + a.width / 2 - 26) + 'px'; el.style.top = (a.top - 50) + 'px';
   document.body.appendChild(el); setTimeout(() => el.remove(), 2600);
 });
@@ -594,8 +631,10 @@ function photoSrc(p) {
   const key = migrateAvatar(p.avatar);
   return key === 'photo' ? (p.photoUrl || '') : `/img/av/${key}.webp`;
 }
+const COFFEE_SVG = `<svg class="pov coffee" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="56" rx="14" ry="3.5" fill="#edd9b8"/><path d="M16 28h24c1 9-.5 16-5 20-6 5-14 5-19 0-4-4-5-11-5-20z" fill="#fffdf8" stroke="#6a4324" stroke-width="3" stroke-linejoin="round"/><path d="M20 28c1-7 5-10 8-10 2 0 3 2 3 2" fill="#7a4a28"/><path d="M40 32h5c4 0 7 3 7 6.5S49 45 45 45h-5" fill="none" stroke="#6a4324" stroke-width="3" stroke-linecap="round"/><path d="M24 18c1-5 0-7 3-9" fill="none" stroke="#d5dee8" stroke-width="2.2" stroke-linecap="round"/><path d="M33 16c1-4 0-6 3-8" fill="none" stroke="#d5dee8" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 function pendantHtml(p) {
   const k = (p && p.pendant) || 'none'; if (!PD_IMG[k]) return '';
+  if (k === 'coffee') return COFFEE_SVG;
   // All pendant art is a sibling overlay IN FRONT of the clipped photo (never inside .av).
   return `<img class="pov${PD_ICE[k] ? ' ice' : ''}" src="${pdSrc(k)}" alt="" loading="lazy" decoding="async">`;
 }
@@ -603,12 +642,12 @@ const pendantBack = (p) => { const k = (p && p.pendant) || 'none'; return PD_BAC
 function faceCirc(p) {
   return `<span class="pdcirc"><img src="${esc(photoSrc(p))}" alt=""></span>`;
 }
-function av(p, size = 36) {
+function av(p, size = 36, palSide = '') {
   const src = esc(photoSrc(p));
   const bg = esc((p && p.bg) || '#ffffff');
   const k = (p && p.pendant) || 'none';
-  // Photo/circle is clipped inside .av only. Pendant overlays and the companion sit higher in an unclipped wrapper.
-  return `<span class="av-wrap${pdFxCls(k)}">${pendantBack(p)}<span class="av s${size}" style="width:${size}px;height:${size}px;background:${bg}"><img src="${src}" alt="" width="${size}" height="${size}" decoding="async"></span>${pendantHtml(p)}${pdPalHtml(k)}</span>`;
+  // Photo/circle is clipped inside .av only. Pendant overlays and the charm sit higher in an unclipped wrapper.
+  return `<span class="av-wrap${pdFxCls(k)}">${pendantBack(p)}<span class="av s${size}" style="width:${size}px;height:${size}px;background:${bg}"><img src="${src}" alt="" width="${size}" height="${size}" decoding="async"></span>${pendantHtml(p)}${pdPalHtml(k, palSide)}</span>`;
 }
 const chip = (id, list) => { const p = P(id, list); return `<span class="chip">${av(p, 22)}${esc(p.name)}</span>`; };
 function voteTeamHtml(ids) {
@@ -624,18 +663,22 @@ fetch('/api/config').then(r => r.json()).then(c => { if (c.publicUrl && PUBLIC_O
 const inviteUrl = (code) => `${PUBLIC_ORIGIN}/r/${code}`;
 const pct = (w, p) => p ? Math.round(w * 100 / p) : 0;
 const isGM = () => !!(account && account.gm);
+const hasBenefit = (id) => !!(account && Array.isArray(account.benefits) && account.benefits.includes(id));
 const playedTotal = () => isGM() ? 1e9 : (myStats.played || 0);
 const winsTotal = () => isGM() ? 1e9 : (myStats.won || 0);
 const mvpTotal = () => (myStats.mvp || 0); // even GM must earn 10 real MVPs for 桂冠 / 閃光特效
 const vetoAmt = (n) => (isGM() || n >= 999) ? '∞' : (n == null ? '–' : String(n));
 
 // ================= profile =================
-function fxUnlocked(k) { const item = FXS.find(x => x[0] === k); return playedTotal() >= (item ? item[2] : 0); }
-function pdUnlocked(k) { if (k === 'none') return true; const it = PENDANTS.find(x => x[0] === k); if (!it) return false; return unlockOk(it[2], it[3]); }
-const pdNeed = (it) => it[2] === 'wins' ? `勝 ${it[3]} 場解鎖` : it[2] === 'mvp' ? `MVP ${Math.min(mvpTotal(), it[3])}/${it[3]} 解鎖` : `玩 ${it[3]} 場解鎖`;
+function fxUnlocked(k) {
+  if (k === 'silver') return hasBenefit('silver');
+  const item = FXS.find(x => x[0] === k); return playedTotal() >= (item ? item[2] : 0);
+}
+function pdUnlocked(k) { if (k === 'none') return true; const it = PENDANTS.find(x => x[0] === k); if (!it) return false; if (it[2] === 'support') return hasBenefit('coffee'); return unlockOk(it[2], it[3]); }
+const pdNeed = (it) => it[2] === 'support' ? '支持解鎖' : it[2] === 'wins' ? `勝 ${it[3]} 場解鎖` : it[2] === 'mvp' ? `MVP ${Math.min(mvpTotal(), it[3])}/${it[3]} 解鎖` : `玩 ${it[3]} 場解鎖`;
 function pdCell(k, n, sel, locked, sp, sub) {
   const fx = pdFxCls(k);
-  return `<button class="pdc ${sel ? 'sel' : ''} ${locked ? 'off' : ''}" data-pd="${k}">${sp ? '<span class="sp">✨</span>' : ''}${sel ? '<span class="ck">✓</span>' : ''}${locked ? '<span class="lk">🔒</span>' : ''}<div class="pdv${fx}">${k === 'none' ? '<span class="pdx">不佩戴</span>' : `${PD_BACK[k] ? `<img class="pov back" src="${pdSrc(k, 1)}" alt="">` : ''}${faceCirc(profile)}<img class="pov${PD_ICE[k] ? ' ice' : ''}" src="${pdSrc(k)}" alt="">${pdPalHtml(k)}`}</div><b>${n}</b>${sub ? `<i>${sub}</i>` : ''}</button>`;
+  return `<button class="pdc ${sel ? 'sel' : ''} ${locked ? 'off' : ''}" data-pd="${k}">${sp ? '<span class="sp">✨</span>' : ''}${sel ? '<span class="ck">✓</span>' : ''}${locked ? '<span class="lk">🔒</span>' : ''}<div class="pdv${fx}">${k === 'none' ? '<span class="pdx">不佩戴</span>' : `${PD_BACK[k] ? `<img class="pov back" src="${pdSrc(k, 1)}" alt="">` : ''}${faceCirc(profile)}${k === 'coffee' ? COFFEE_SVG : `<img class="pov${PD_ICE[k] ? ' ice' : ''}" src="${pdSrc(k)}" alt="">`}${pdPalHtml(k)}`}</div><b>${n}</b>${sub ? `<i>${sub}</i>` : ''}</button>`;
 }
 function pdPickerHtml(d) {
   const have = PENDANTS.filter(x => pdUnlocked(x[0])), lack = PENDANTS.filter(x => !pdUnlocked(x[0]));
@@ -895,7 +938,7 @@ function openPhotoCrop(bitmap, opts) {
 
 function editProfile(after, startTab) {
   const d = { ...profile, bg: profile.bg || '#ffffff' }; let tab = startTab === 'fx' ? 'avatar' : (startTab || 'avatar');
-  const FX_IC = { none:'—', spot:'💡', gold:'✨', snow:'❄️', spark:'🌟', petals:'🌸', howl:'🐺', fire:'🔥', lightning:'⚡' };
+  const FX_IC = { none:'—', spot:'💡', gold:'✨', snow:'❄️', spark:'🌟', petals:'🌸', howl:'🐺', fire:'🔥', lightning:'⚡', silver:'✦' };
   const peek = (el) => {
     const avHost = el.querySelector('.pe-av');
     if (!avHost) return;
@@ -934,7 +977,8 @@ function editProfile(after, startTab) {
           const locked = !pdUnlocked(x[0]);
           const sel = d.pendant === x[0];
           const fx = pdFxCls(x[0]);
-          return `<button type="button" class="pdc ${sel?'sel':''} ${locked?'off':''}" data-pd="${x[0]}">${sel?'<span class="ck">✓</span>':''}${x[4]?'<span class="sp">✨</span>':''}${locked?'<span class="lk">🔒</span>':''}<div class="pdv${fx}">${PD_BACK[x[0]]?`<img class="pov back" src="${pdSrc(x[0],1)}" alt="">`:''}${faceCirc(d)}<img class="pov${PD_ICE[x[0]] ? ' ice' : ''}" src="${pdSrc(x[0])}" alt="">${pdPalHtml(x[0])}</div><b>${x[1]}</b>${locked?`<i>${pdNeed(x)}</i>`:''}</button>`;
+          const art = x[0] === 'coffee' ? COFFEE_SVG : `<img class="pov${PD_ICE[x[0]] ? ' ice' : ''}" src="${pdSrc(x[0])}" alt="">`;
+          return `<button type="button" class="pdc ${sel?'sel':''} ${locked?'off':''}" data-pd="${x[0]}">${sel?'<span class="ck">✓</span>':''}${x[4]?'<span class="sp">✨</span>':''}${locked?'<span class="lk">🔒</span>':''}<div class="pdv${fx}">${PD_BACK[x[0]]?`<img class="pov back" src="${pdSrc(x[0],1)}" alt="">`:''}${faceCirc(d)}${art}${pdPalHtml(x[0])}</div><b>${x[1]}</b>${locked?`<i>${pdNeed(x)}</i>`:''}</button>`;
         }));
       return `<div class="pe-grid">${cells.join('')}</div>`;
     }
@@ -942,7 +986,7 @@ function editProfile(after, startTab) {
     const tiles = [`<button type="button" class="${photoOn?'sel':''}" data-upload="1"><div class="cell pe-camcell">📷</div><div class="lb">上載相片</div>${photoOn?'<span class="ck">✓</span>':''}</button>`]
       .concat(ANIMALS.map(([k,n]) => `<button type="button" data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div>${k===d.avatar?'<span class="ck">✓</span>':''}</button>`));
     const sw = `<div class="swatches">${BGS.map(c => `<button type="button" data-c="${c}" class="${c===d.bg?'sel':''}" style="background:${c}"></button>`).join('')}</div>`;
-    const fxs = `<div class="pe-fxlab">入場特效</div><div class="pe-fx">${FXS.map(([k,n,need]) => `<button type="button" data-fx="${k}" class="${d.fx===k?'sel':''} ${fxUnlocked(k)?'':'off'}">${FX_IC[k]||''} ${n}${fxUnlocked(k)?'':` 🔒${need}場`}</button>`).join('')}</div>`;
+    const fxs = `<div class="pe-fxlab">入場特效</div><div class="pe-fx">${FXS.map(([k,n,need]) => `<button type="button" data-fx="${k}" class="${d.fx===k?'sel':''} ${fxUnlocked(k)?'':'off'}">${FX_IC[k]||''} ${n}${fxUnlocked(k)?'':` 🔒${k==='silver'?'支持':need+'場'}`}</button>`).join('')}</div>`;
     return `${sw}<div class="pe-grid">${tiles.join('')}</div>${fxs}`;
   };
   const draw = (el) => {
@@ -1159,7 +1203,7 @@ function inviteDialog() {
     <div class="center"><div class="tiny muted">房間號</div><div class="code">${S.code}</div></div>
     <div class="btns"><button class="btn ghost" id="cp">複製連結</button>${navigator.share ? '<button class="btn" id="sh">分享</button>' : ''}</div>`, (el) => {
     $('#cp', el).onclick = async () => { try { await navigator.clipboard.writeText(url); toast('已複製：' + url); } catch { prompt('複製此連結', url); } };
-    const sh = $('#sh', el); if (sh) sh.onclick = () => navigator.share({ title: '旺角阿瓦隆', text: `入房玩旺角阿瓦隆！房間號 ${S.code}`, url }).catch(() => {});
+    const sh = $('#sh', el); if (sh) sh.onclick = () => navigator.share({ title: 'HK阿瓦隆', text: `入房玩HK阿瓦隆！房間號 ${S.code}`, url }).catch(() => {});
   });
 }
 function authDialog(mode) {
@@ -1331,13 +1375,15 @@ function roundTable(seats, o = {}) {
     // is what the move animation translates, so the numeral must not live inside it.
     nums.push(`<span class="no" data-seat="${seatNo}" style="left:${nx}%;top:${ny}%">${seatNo}</span>`);
     const pos = `left:${x}%;top:${y}%;--av:${avSize}px`;
+    const palSide = x < 40 ? 'right' : '';
     if (!s || s.empty) {
       return `<div class="st empty click" style="${pos}" data-a="sit" data-seat="${seatNo}"><div class="av-empty">+</div><div class="nm">空位</div></div>`;
     }
     if (s.claimable) {
       return `<div class="st claim click" style="${pos}" data-sid="${s.id}" data-id="${s.id}" data-seat="${seatNo}" data-a="sit"><div class="av-empty">+</div><div class="nm">${esc(s.name || '可接手')}</div><div class="st-pills"><span class="claimpill">可接手</span></div></div>`;
     }
-    const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '') + (enterIds.has(s.id) ? ` enter fx-${s.fx || 'spot'}` : '');
+    const enterFx = s.spotlight ? 'silver' : (s.fx || 'spot');
+    const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '') + (enterIds.has(s.id) ? ` enter fx-${enterFx}` : '');
     const action = o.action || 'sel';
     const actAttr = o.click && o.click(s, i) ? `data-a="${action}"` : (o.seatClick ? `data-a="${o.seatClick}"` : '');
     const mic = (window.AvalonVoice && AvalonVoice.glyph(s.id)) || '';
@@ -1345,7 +1391,7 @@ function roundTable(seats, o = {}) {
     const speakCls = (S && S.settings && S.settings.mic === true && S.floor && S.floor.speaker === s.id) ? ' is-speak' : '';
     const sparks = String(cls).includes('gold-pick') ? '<i class="gspark a" aria-hidden="true"></i><i class="gspark b" aria-hidden="true"></i><i class="gspark c" aria-hidden="true"></i>' : '';
     return `<div class="st ${cls}${speakCls}" style="${pos}" data-sid="${s.id}" data-id="${s.id}" data-seat="${seatNo}" ${actAttr}>
-      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${o.marks ? o.marks(s, i) : ''}${av(s, avSize)}${sparks}${mic}${pres}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
+      <div class="mk">${o.marker ? o.marker(s, i) : ''}</div>${o.marks ? o.marks(s, i) : ''}${av(s, avSize, palSide)}${sparks}${mic}${pres}${o.badge ? o.badge(s, i) : ''}${o.label ? o.label(s, i) : ''}<div class="st-meta"><div class="nm">${esc(s.name)}</div>${o.sub ? `<div class="st-pills">${o.sub(s, i)}</div>` : ''}</div></div>`;
   }).join('');
   return `<div class="rt">${o.emote ? '<button class="emote-btn" data-a="emote" aria-label="表情"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.2" cy="10.3" r="1.2" fill="currentColor"/><circle cx="13.8" cy="10.3" r="1.2" fill="currentColor"/><path d="M7.6 14q3.4 3.2 6.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 2.5v5M17 5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>' : ''}<div class="table"><div class="ctr">${o.center || ''}</div></div>${nums.join('')}${st}</div>`;
 }
@@ -1753,7 +1799,7 @@ function render() {
   if (view !== 'skins') app.dataset.v = view || '';
   if (view === 'room' && !inRoom && !waitingRoom) view = 'home';
   $('#backBtn').classList.toggle('hidden', view === 'home');
-  const titles = { home: '旺角阿瓦隆', room: inRoom ? null : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就', board: '排行榜' };
+  const titles = { home: 'HK阿瓦隆', support: '支持我哋', room: inRoom ? null : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就', board: '排行榜' };
   const acts = $('#topRoomActs');
   if (acts) {
     const show = !!(view === 'room' && inRoom);
@@ -1765,7 +1811,7 @@ function render() {
   if (view === 'room' && inRoom) {
     titleEl.innerHTML = `圓桌 <button type="button" class="top-code" data-a="copycode" title="複製房間號">${esc(S.code)}</button>`;
   } else {
-    titleEl.textContent = titles[view] || '旺角阿瓦隆';
+    titleEl.textContent = titles[view] || 'HK阿瓦隆';
   }
   if (view !== 'home' && view !== 'room') app._html = null;
   if (view === 'home') setHTML(app, homeHtml());
@@ -1821,6 +1867,7 @@ function render() {
     refreshStats().then(() => { if (view === 'skins') { app.dataset.v = 'skins'; app.innerHTML = skinsHtml(); } });
   }
   else if (view === 'detail') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadDetail(viewArg.gid); }
+  else if (view === 'support') { app.innerHTML = supportHtml(); }
 }
 function resumeCard() {
   const liveS = S && S.code ? S : null;
@@ -1843,7 +1890,7 @@ function homeHtml() {
   return `  <div class="card prof-head">
     <div class="prof-row">
     <div class="row" data-a="profile" style="cursor:pointer;flex:1;min-width:0">${av(profile, 60)}
-      <div class="grow"><div class="name">${profile.name ? esc(profile.name) : '未設定暱稱'}${isGM() ? '<span class="gmb" title="Game Master">GM</span>' : ''}</div>${account ? `<div class="muted small">${myStats.played || 0} 場 · 勝率 ${pct(myStats.won, myStats.played)}%</div>` : '<div class="skel" style="width:110px"></div><div class="skel" style="width:80px;margin-top:6px"></div>'}${vc != null ? `<div class="vchip" data-a="vetoinfo"><img src="/img/veto_t.webp" alt="" width="18" height="24">回避卡 <b>${vetoAmt(vc)}</b>${isGM()?'':'/10'}</div>` : ''}</div></div>
+      <div class="grow"><div class="name">${profile.name ? esc(profile.name) : '未設定暱稱'}${isGM() ? '<span class="gmb" title="Game Master">GM</span>' : ''}${hasBenefit('badge') ? '<span class="supb">支持者</span>' : ''}</div>${account ? `<div class="muted small">${myStats.played || 0} 場 · 勝率 ${pct(myStats.won, myStats.played)}%</div>` : '<div class="skel" style="width:110px"></div><div class="skel" style="width:80px;margin-top:6px"></div>'}${vc != null ? `<div class="vchip" data-a="vetoinfo"><img src="/img/veto_t.webp" alt="" width="18" height="24">回避卡 <b>${vetoAmt(vc)}</b>${isGM()?'':'/10'}</div>` : ''}</div></div>
     <div class="prof-actions"><button type="button" class="btn sm ghost pa" data-a="profile">✎ 編輯檔案</button><button type="button" class="btn sm ghost pa" data-a="ptab" data-t="pendant">🎀 頭像掛件</button></div>
     </div>
     <div class="acct">${account && (account.username || account.google) ? `<div class="row between acct-row"><div class="acct-status">已登入${account.google ? '<span class="badge">Google</span>' : ''}</div><button type="button" class="btn sm dark acct-out" data-a="logout">登出</button></div>` : `<div class="tiny muted">目前是訪客。註冊或用 Google 登入後，資料永久保存、換機也能找回。</div><div class="btns"><button class="btn sm" data-a="register">註冊帳號</button><button class="btn sm ghost" data-a="login">登入</button></div>`}</div>
@@ -1853,7 +1900,9 @@ function homeHtml() {
     <div class="bigcard create" data-a="create"><div class="ic">⚔️</div><b>建立房間</b><span>我做房主</span></div>
     <div class="bigcard join" data-a="join"><div class="ic">🛡️</div><b>加入房間</b><span>輸入 4 位房間號</span></div>
   </div>`}
+  <button type="button" class="support-entry" data-a="go" data-v="support">支持我哋</button>
   <div class="card menu" style="margin-top:14px">
+    <div class="item" data-a="go" data-v="support"><span class="ic">☕</span><span class="grow">支持我哋</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="history"><span class="ic">📜</span><span class="grow">歷史記錄</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="stats"><span class="ic">📊</span><span class="grow">數據統計</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="skins"><span class="ic">🎴</span><span class="grow">角色皮膚</span><span class="chev">›</span></div>
@@ -1861,7 +1910,38 @@ function homeHtml() {
     <div class="item" data-a="go" data-v="rules"><span class="ic">📖</span><span class="grow">規則介紹</span><span class="chev">›</span></div>
     <div class="item" data-a="about"><span class="ic">ℹ️</span><span class="grow">版本</span><span class="muted small">v3.1</span><span class="chev">›</span></div>
   </div>
-  <div class="footer"><span class="credit">旺角阿瓦隆 · by Amigosparty · v3.1</span><br><span class="credit2">Design by Teddy Design Limited</span><br><span class="credit2"><a href="/privacy" target="_blank" rel="noopener">私隱政策</a> · <a href="/terms" target="_blank" rel="noopener">使用條款</a></span></div>`;
+  <div class="footer"><span class="credit">HK阿瓦隆 · by Amigosparty · v3.1</span><br><span class="credit2 sponsor">${AMIGOS} Amigosparty · Teddy Design Limited</span><br><span class="credit2"><a href="/privacy" target="_blank" rel="noopener">私隱政策</a> · <a href="/terms" target="_blank" rel="noopener">使用條款</a></span></div>`;
+}
+function supportIcon(kind) {
+  if (kind === 'coffee') return `<span class="support-ic cup">${COFFEE_SVG}</span>`;
+  if (kind === 'heart') return `<span class="support-ic heart"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 38s-12-7.2-12-16a7 7 0 0 1 12-4 7 7 0 0 1 12 4c0 8.8-12 16-12 16z" fill="#1aa58a"/></svg></span>`;
+  if (kind === 'spark') return `<span class="support-ic spark"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6l3.2 10.2L38 18l-8.2 6.2L32 36 24 29.2 16 36l2.2-11.8L10 18l10.8-1.8z" fill="#f0a04a"/></svg></span>`;
+  return `<span class="support-ic emo">${supportEmoSvg(40)}</span>`;
+}
+function supportHtml() {
+  const rows = [
+    ['coffee', 'coffee', '一杯咖啡', '頭像掛件'],
+    ['badge', 'heart', '支持者', '名字旁邊的徽章，點開名片時大家都看得到'],
+    ['silver', 'spark', '銀白追光', '準備階段入座時，一束追光打在你的頭像上'],
+    ['emote', 'emo', '支持者表情', '房間裡點一下，頭像上冒出來的專屬表情'],
+  ];
+  const owned = (id) => hasBenefit(id);
+  return `<section class="support">
+    <h1>請開發者喝杯咖啡</h1>
+    <p class="support-intro">熬夜改 bug 的時候，這杯咖啡很管用。謝謝你！</p>
+    ${supportNote ? `<p class="support-status">${esc(supportNote)}</p>` : ''}
+    <div class="support-list">${rows.map(([id, icon, name, desc]) => `<div class="support-row" data-benefit="${id}" data-owned="${owned(id) ? '1' : '0'}">${supportIcon(icon)}<div><b>${name}</b><span>${desc}</span></div>${owned(id) ? '<em>已有</em>' : ''}</div>`).join('')}</div>
+    <p class="support-note">可以重複支持：第一次送下面這些，之後每次只補上你還沒有的，已經有的不會再送一次。</p>
+    <button type="button" class="btn support-pay" data-a="supportpay">HK$15 支持</button>
+  </section>`;
+}
+let supportNote = '';
+async function startSupport() {
+  try {
+    const r = await api('/api/support/checkout', { method: 'POST', body: '{}' });
+    if (r && r.url) { location.href = r.url; return; }
+    toast('暫時未能開始付款');
+  } catch (e) { toast(e.message || '暫時未能開始付款'); }
 }
 const ACHS = [
   ['first', '初入圓桌', '完成第 1 場遊戲', s => s.played >= 1],
@@ -2385,13 +2465,13 @@ async function makePoster(r, personal = true) {
   x.save(); rr(pad, 28, W - pad * 2, 270, 22); x.clip();
   let g = x.createLinearGradient(pad, 28, W - pad, 28); g.addColorStop(0, early ? '#eef0f4' : good ? '#e8f0ff' : '#ffecef'); g.addColorStop(1, '#ffffff'); x.fillStyle = g; x.fillRect(pad, 28, W - pad * 2, 270);
   x.fillStyle = accent; x.fillRect(pad, 28, W - pad * 2, 8); x.restore();
-  const logo = await load('/img/amigos.webp');
+  const [logo, amigos] = await Promise.all([load('/img/logo-merlin.webp'), load('/img/amigos.webp')]);
   const hero = early ? null : (ps.find(p => p.id === r.mvp && sideOf(p) === r.winner) || ps.find(p => sideOf(p) === r.winner));
   const drawAv = async (p, cx, cy, rad, ring) => canvasDrawAv(x, load, p, cx, cy, rad);
 
   if (hero) await drawAv(hero, pad + 92, 150, 58, accent);
   else { x.fillStyle = '#eef0f4'; x.beginPath(); x.arc(pad + 92, 150, 58, 0, Math.PI * 2); x.fill(); x.font = '56px sans-serif'; x.textAlign = 'center'; x.fillText('🏳️', pad + 92, 170); }
-  if (logo) x.drawImage(logo, W - pad - 108, 46, 90, 72);
+  if (logo) { x.save(); x.beginPath(); x.arc(W - pad - 62, 82, 36, 0, Math.PI * 2); x.clip(); x.drawImage(logo, W - pad - 98, 46, 72, 72); x.restore(); }
   x.textAlign = 'left'; x.fillStyle = accent; x.font = 'bold 54px sans-serif'; x.fillText(early ? '提前結束' : good ? '藍方勝利' : '紅方勝利', pad + 176, 150);
   x.font = '20px sans-serif'; x.fillStyle = C.sub;
   const merlin = ps.find(p => p.role === 'merlin'); const at = r.assassinTarget && ps.find(p => p.id === r.assassinTarget);
@@ -2455,12 +2535,13 @@ async function makePoster(r, personal = true) {
   card(y, 210);
   const qr = await load('/api/qr?text=' + encodeURIComponent(replayUrl(r)));
   x.strokeStyle = C.line; x.lineWidth = 2; rr(pad + 20, y + 20, 170, 170, 14); x.stroke(); if (qr) x.drawImage(qr, pad + 30, y + 30, 150, 150);
-  x.textAlign = 'left'; x.fillStyle = C.ink; x.font = 'bold 32px sans-serif'; x.fillText('旺角阿瓦隆', pad + 214, y + 66);
-  x.fillStyle = C.mute; x.font = 'bold 15px sans-serif'; x.fillText('MONGKOK AVALON', pad + 214, y + 92);
+  x.textAlign = 'left'; x.fillStyle = C.ink; x.font = 'bold 32px sans-serif'; x.fillText('HK阿瓦隆', pad + 214, y + 66);
+  x.fillStyle = C.mute; x.font = 'bold 15px sans-serif'; x.fillText('HK AVALON', pad + 214, y + 92);
   x.fillStyle = C.sub; x.font = '18px sans-serif'; x.fillText('掃碼查看對局回放', pad + 214, y + 132);
   x.fillStyle = C.mute; x.font = '14px sans-serif'; x.fillText(replayUrl(r).replace(/^https?:\/\//, ''), pad + 214, y + 158);
-  x.fillText('by Amigosparty · Design by Teddy Design Limited', pad + 214, y + 182);
-  if (logo) x.drawImage(logo, W - pad - 130, y + 60, 110, 88);
+  if (amigos) x.drawImage(amigos, pad + 214, y + 166, 26, 20);
+  x.fillText('Amigosparty · Teddy Design Limited', pad + 246, y + 182);
+  if (logo) { x.save(); x.beginPath(); x.arc(W - pad - 78, y + 104, 36, 0, Math.PI * 2); x.clip(); x.drawImage(logo, W - pad - 114, y + 68, 72, 72); x.restore(); }
   return c;
 }
 async function cardBlob(r) { const c = await makePoster(r, true); return new Promise(res => c.toBlob(b => res(b), 'image/png')); }
@@ -2469,7 +2550,7 @@ async function saveCard(r, show) {
   openModal('<h2>戰報海報</h2><div class="center muted">生成中…</div>');
   const c = await makePoster(r, true); const blob = await new Promise(res => c.toBlob(res, 'image/png')); c.width = c.height = 0;
   if (window.__posterUrl) URL.revokeObjectURL(window.__posterUrl); const url = window.__posterUrl = URL.createObjectURL(blob);
-  const fname = `mongkok-avalon-${(r.gid || 'game').slice(0, 8)}.png`;
+  const fname = `hk-avalon-${(r.gid || 'game').slice(0, 8)}.png`;
   openModal(`<h2>戰報海報</h2><img src="${url}" style="width:100%;border-radius:12px;border:1px solid var(--line)"><p class="center small muted">長按圖片可儲存，或按下方儲存</p>
     <div class="btns"><button type="button" class="btn" id="dl">💾 儲存圖片</button><button type="button" class="btn ghost" id="sh">📤 分享</button></div>`, el => {
     $('#sh', el).onclick = () => shareSheet(r);
@@ -2481,7 +2562,7 @@ async function saveCard(r, show) {
 }
 function shareSheet(r) {
   if (!r) return;
-  const url = replayUrl(r); const text = `旺角阿瓦隆｜${r.winner === 'none' ? '提前結束' : r.winner === 'good' ? '藍方勝利' : '紅方勝利'}！${r.n} 人局戰報`;
+  const url = replayUrl(r); const text = `HK阿瓦隆｜${r.winner === 'none' ? '提前結束' : r.winner === 'good' ? '藍方勝利' : '紅方勝利'}！${r.n} 人局戰報`;
   const e = encodeURIComponent;
   const links = [
     ['WhatsApp', '#25D366', `https://wa.me/?text=${e(text + ' ' + url)}`],
@@ -2502,17 +2583,17 @@ function shareSheet(r) {
     $('#cp', el).onclick = async () => { try { await navigator.clipboard.writeText(url); toast('已複製連結'); } catch { prompt('複製連結', url); } };
     $('#pp', el).onclick = () => saveCard(r, true);
     $('#ig', el).onclick = async () => {
-      const b = await cardBlob(r); const f = new File([b], 'mongkok-avalon.png', { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: '旺角阿瓦隆', text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+      const b = await cardBlob(r); const f = new File([b], 'hk-avalon.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: 'HK阿瓦隆', text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
       if (IS_IOS) { closeModal(); return saveCard(r, true); }
-      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'mongkok-avalon.png'; document.body.appendChild(a); a.click(); a.remove();
+      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'hk-avalon.png'; document.body.appendChild(a); a.click(); a.remove();
       toast('海報已儲存，請打開 Instagram 發佈（限時動態或貼文）');
     };
     $('#sys', el).onclick = async () => {
       try {
-        const b = await cardBlob(r); const f = new File([b], 'mongkok-avalon.png', { type: 'image/png' });
-        if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: '旺角阿瓦隆', text, url });
-        else if (navigator.share) await navigator.share({ title: '旺角阿瓦隆', text, url });
+        const b = await cardBlob(r); const f = new File([b], 'hk-avalon.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: 'HK阿瓦隆', text, url });
+        else if (navigator.share) await navigator.share({ title: 'HK阿瓦隆', text, url });
         else { await navigator.clipboard.writeText(url); toast('此瀏覽器不支援系統分享，已複製連結'); }
       } catch (e) { if (e.name !== 'AbortError') toast('分享未完成'); }
     };
@@ -2534,10 +2615,10 @@ async function makeStory(r) {
   x.fillStyle = g; x.fillRect(0, 0, W, H);
   x.save(); x.globalAlpha = .55; for (let i = 0; i < 70; i++) { const sx = (i * 397) % W, sy = (i * 761) % H, s = 3 + (i % 5) * 2; x.fillStyle = i % 3 ? '#ffd76a' : '#c9b8ff'; x.beginPath(); x.moveTo(sx, sy - s * 2); x.lineTo(sx + s / 2, sy - s / 2); x.lineTo(sx + s * 2, sy); x.lineTo(sx + s / 2, sy + s / 2); x.lineTo(sx, sy + s * 2); x.lineTo(sx - s / 2, sy + s / 2); x.lineTo(sx - s * 2, sy); x.lineTo(sx - s / 2, sy - s / 2); x.fill(); } x.restore();
   // header
-  const [logo, qr] = await Promise.all([load('/img/amigos.webp'), load('/api/qr?text=' + encodeURIComponent(r ? replayUrl(r) : (PUBLIC_ORIGIN || location.origin)))]);
-  if (logo) x.drawImage(logo, W / 2 - 230, 80, 120, 96);
-  x.textAlign = 'left'; x.font = '900 72px sans-serif'; x.fillStyle = '#1f2633'; x.fillText('旺角阿瓦隆', W / 2 - 92, 150);
-  x.font = '600 26px sans-serif'; x.fillStyle = '#8a909c'; x.fillText('M O N G K O K   A V A L O N', W / 2 - 88, 190);
+  const [logo, amigos, qr] = await Promise.all([load('/img/logo-merlin.webp'), load('/img/amigos.webp'), load('/api/qr?text=' + encodeURIComponent(r ? replayUrl(r) : (PUBLIC_ORIGIN || location.origin)))]);
+  if (logo) { x.save(); x.beginPath(); x.arc(W / 2 - 180, 128, 48, 0, Math.PI * 2); x.clip(); x.drawImage(logo, W / 2 - 228, 80, 96, 96); x.restore(); }
+  x.textAlign = 'left'; x.font = '900 72px sans-serif'; x.fillStyle = '#1f2633'; x.fillText('HK阿瓦隆', W / 2 - 92, 150);
+  x.font = '600 26px sans-serif'; x.fillStyle = '#8a909c'; x.fillText('HK AVALON', W / 2 - 88, 190);
   // result banner
   let y = 260;
   x.save(); x.shadowColor = 'rgba(30,40,80,.12)'; x.shadowBlur = 40; x.shadowOffsetY = 10; x.fillStyle = '#fff'; rr(70, y, W - 140, r ? 1000 : 820, 48); x.fill(); x.restore();
@@ -2575,16 +2656,17 @@ async function makeStory(r) {
   const fy = H - 300; if (qr) { x.fillStyle = '#fff'; rr(110, fy, 210, 210, 24); x.fill(); x.drawImage(qr, 125, fy + 15, 180, 180); }
   x.textAlign = 'left'; x.font = '800 40px sans-serif'; x.fillStyle = '#1f2633'; x.fillText(r ? '掃碼睇完整覆盤' : '一齊嚟玩阿瓦隆！', 360, fy + 80);
   x.font = '600 28px sans-serif'; x.fillStyle = '#5d6472'; x.fillText((PUBLIC_ORIGIN || location.origin).replace(/^https?:\/\//, ''), 360, fy + 130);
-  x.font = '600 26px sans-serif'; x.fillStyle = '#a0a6b2'; x.fillText('by Amigosparty', 360, fy + 180);
+  if (amigos) x.drawImage(amigos, 360, fy + 158, 28, 22);
+  x.font = '600 26px sans-serif'; x.fillStyle = '#a0a6b2'; x.fillText('Amigosparty · Teddy Design Limited', 396, fy + 176);
   return c;
 }
 async function storySheet(r) {
   openModal('<h2>分享到 IG / Threads</h2><div class="center muted">生成圖片中…</div>');
   const c = await makeStory(r); const blob = await new Promise(res => c.toBlob(res, 'image/png')); c.width = c.height = 0;
   if (window.__storyUrl) URL.revokeObjectURL(window.__storyUrl); const url = window.__storyUrl = URL.createObjectURL(blob);
-  const file = new File([blob], 'mongkok-avalon-story.png', { type: 'image/png' });
+  const file = new File([blob], 'hk-avalon-story.png', { type: 'image/png' });
   const link = r ? replayUrl(r) : (PUBLIC_ORIGIN || location.origin);
-  const text = r ? `旺角阿瓦隆｜${r.winner === 'none' ? '提前結束' : r.winner === 'good' ? '藍方勝利' : '紅方勝利'}！${r.n} 人局戰報` : `我喺旺角阿瓦隆玩咗 ${myStats.played || 0} 場，勝率 ${pct(myStats.won, myStats.played)}%！`;
+  const text = r ? `HK阿瓦隆｜${r.winner === 'none' ? '提前結束' : r.winner === 'good' ? '藍方勝利' : '紅方勝利'}！${r.n} 人局戰報` : `我喺HK阿瓦隆玩咗 ${myStats.played || 0} 場，勝率 ${pct(myStats.won, myStats.played)}%！`;
   const canFiles = !!(navigator.canShare && navigator.canShare({ files: [file] }));
   openModal(`<h2>分享到 IG / Threads</h2><img src="${url}" alt="" style="display:block;width:62%;margin:0 auto;border-radius:14px;box-shadow:0 6px 20px rgba(30,40,80,.15)">
     <div class="share-grid" style="margin-top:12px">
@@ -2596,7 +2678,7 @@ async function storySheet(r) {
     const save = () => { if (IS_IOS && canFiles) return navigator.share({ files: [file] }).catch(() => {}); if (IS_IOS) return toast('長按上面張圖 →「加入相片」'); const a = document.createElement('a'); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); toast('圖片已儲存'); };
     $('#cc', el).onclick = closeModal;
     $('#s_dl', el).onclick = save;
-    $('#s_sys', el).onclick = async () => { if (canFiles) { try { await navigator.share({ files: [file], title: '旺角阿瓦隆', text: text + ' ' + link }); } catch (e) {} } else if (navigator.share) navigator.share({ title: '旺角阿瓦隆', text, url: link }).catch(() => {}); else save(); };
+    $('#s_sys', el).onclick = async () => { if (canFiles) { try { await navigator.share({ files: [file], title: 'HK阿瓦隆', text: text + ' ' + link }); } catch (e) {} } else if (navigator.share) navigator.share({ title: 'HK阿瓦隆', text, url: link }).catch(() => {}); else save(); };
     $('#s_ig', el).onclick = async () => { // share sheet with the PNG → user picks Instagram (Story); else save + open the IG story camera
       if (canFiles) { try { await navigator.share({ files: [file] }); return; } catch (e) { if (e.name === 'AbortError') return; } }
       save(); toast('圖片已儲存，喺 Instagram 限時動態揀返呢張相'); setTimeout(() => { location.href = 'instagram-stories://share'; }, 600); };
@@ -2625,7 +2707,8 @@ document.addEventListener('click', async (e) => {
   switch (a) {
     case 'profile': return editProfile();
     case 'ptab': return editProfile(null, el.dataset.t);
-    case 'about': return openModal(`<h2>關於</h2><div class="center">${LOGO}<div class="name" style="margin-top:6px">旺角阿瓦隆</div><div class="small muted">版本 3.1 · 網頁版阿瓦隆多人遊戲</div><div class="small" style="margin-top:10px">by <b class="gold">Amigosparty</b></div><div class="tiny muted">Design by Teddy Design Limited</div><div class="tiny muted" style="margin-top:8px">原創美術 · 角色立繪、動物頭像、掛件皆為本作原創</div></div><button class="btn" id="ok">關閉</button>`, el2 => $('#ok', el2).onclick = closeModal);
+    case 'about': return openModal(`<h2>關於</h2><div class="center">${LOGO}<div class="name" style="margin-top:6px">HK阿瓦隆</div><div class="small muted">版本 3.1 · 網頁版阿瓦隆多人遊戲</div><div class="small" style="margin-top:10px">by <b class="gold">Amigosparty</b></div><div class="tiny muted sponsor">${AMIGOS} Design by Teddy Design Limited</div><div class="tiny muted" style="margin-top:8px">原創美術 · 角色立繪、動物頭像、掛件皆為本作原創</div></div><button class="btn" id="ok">關閉</button>`, el2 => $('#ok', el2).onclick = closeModal);
+    case 'supportpay': return startSupport();
     case 'cfg': cfgOpen = true; openModal(cfgSheetHtml()); cfgOpen = true; return;
     case 'cfgclose': return closeModal();
     case 'emote': return toggleEmotes(el);
@@ -2729,13 +2812,13 @@ document.addEventListener('click', async (e) => {
     case 'seat': {
       const id = el.dataset.id;
       if (id === S.meId) {
-        return openModal(`<h2>我的座位</h2><div class="center">${av(people().find(p=>p.id===id)||profile,56)}<div class="name">${esc(profile.name)}</div></div><button class="btn ghost" data-x="stand">離座</button><button class="btn" id="ok">關閉</button>`, el2 => {
+        return openModal(`<h2>我的座位</h2><div class="center namecard">${av(people().find(p=>p.id===id)||profile,56)}<div class="name">${esc(profile.name)}${hasBenefit('badge') ? '<span class="supb">支持者</span>' : ''}</div></div><button class="btn ghost" data-x="stand">離座</button><button class="btn" id="ok">關閉</button>`, el2 => {
           el2.querySelector('[data-x=stand]').onclick = () => { closeModal(); if (S && S.isHost) openReleaseConfirm(id); else act('stand', {}); };
           $('#ok', el2).onclick = closeModal;
         });
       }
       const p = (S.seats||[]).find(x => x && x.id === id); if (!p) return;
-      return openModal(`<h2>騎士名片</h2><div class="center namecard">${av(p,56)}<div class="name">${esc(p.name)}</div><div class="small muted">座位 ${p.seat}${p.isHost?' · 房主':''}${p.online?'':' · 離線'}</div></div>
+      return openModal(`<h2>騎士名片</h2><div class="center namecard">${av(p,56)}<div class="name">${esc(p.name)}${p.badge ? '<span class="supb">支持者</span>' : ''}</div><div class="small muted">座位 ${p.seat}${p.isHost?' · 房主':''}${p.online?'':' · 離線'}</div></div>
         ${S.isHost?`<div class="btns"><button class="btn ghost" data-x="stand">請他離座</button><button class="btn ghost" data-x="tr">轉讓房主</button></div><button class="btn dark" data-x="kick" style="color:#ff8b9c">移出房間</button>`:''}
         <button class="btn" id="ok">關閉</button>`, el2 => {
           const bind = (sel, fn) => { const b=el2.querySelector(sel); if (b) b.onclick = fn; };
@@ -2793,5 +2876,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
-window.__av = { av, makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
+window.__av = { av, roundTable, makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

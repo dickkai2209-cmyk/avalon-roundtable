@@ -42,7 +42,7 @@ const avatarBranch = bodyFn.slice(bodyFn.indexOf('photoOn'));
 assert(!avatarBranch.includes('data-fx') && !avatarBranch.includes('pe-fx') && !avatarBranch.includes('pe-fxlab'), 'avatar pane no longer embeds the fx list');
 assert(!bodyFn.includes('pe-fxlab'), 'the old embedded heading is gone');
 assert(cssSrc.includes('.fx-signs') && cssSrc.includes('.fx-ding') && cssSrc.includes('.fx-harbour') && cssSrc.includes('.fx-ferry') && cssSrc.includes('.fx-hop') && cssSrc.includes('.fx-waddle') && cssSrc.includes('.fx-ham'), 'seven new effect styles exist');
-assert(cssSrc.includes('width:58px;height:44px') && cssSrc.includes('howlwolf') && !cssSrc.includes('M4 40c6-2') && !/\.fx-howl\{[^}]*animation:howlwave/.test(cssSrc), '狼人咆哮 is a large werewolf on the effect layer, not the old silhouette');
+assert(cssSrc.includes('/img/fx/howl.webp') && cssSrc.includes('width:54px;height:50px') && cssSrc.includes('howlwolf') && !cssSrc.includes('M4 40c6-2') && !cssSrc.includes("fill='%236b5348'") && !/\.fx-howl\{[^}]*animation:howlwave/.test(cssSrc), '狼人咆哮 is a painted werewolf, not the sticker silhouette');
 const fxCss = cssSrc.slice(cssSrc.indexOf('/* Entrance art sits above the avatar'));
 assert(/prefers-reduced-motion[\s\S]{0,700}\.fx-signs/.test(fxCss) && fxCss.includes('.fx-hop') && fxCss.includes('.fx-harbour'), 'reduced motion stills the new effects');
 assert(appSrc.includes('prefers-reduced-motion') && cssSrc.includes('.rt .st.enter') && /prefers-reduced-motion[\s\S]{0,400}\.rt \.st\.enter/.test(cssSrc), 'reduced motion suppresses the seat entrance');

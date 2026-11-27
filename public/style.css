@@ -839,18 +839,14 @@ img,canvas,svg,video{max-width:100%}
 .spec-i{display:flex;flex-direction:column;align-items:center;gap:2px;max-width:52px}
 .spec-i i{font-style:normal;font-size:10px;color:#6b7286;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52px}
 
-/* ---- 狼人咆哮: a werewolf appears above the still seat, howls, then fades. No sound. ---- */
-.fx-howl::before{content:"";position:absolute;left:2px;top:-46px;width:58px;height:44px;pointer-events:none;z-index:5;
-  background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 90 58'><path d='M8 40c-6 2-8 8-4 10 5-2 8-1 10-5z' fill='%236b5348' stroke='%232a1c14' stroke-width='1.7' stroke-linejoin='round'/><ellipse cx='24' cy='42' rx='14' ry='11' fill='%236b5348' stroke='%232a1c14' stroke-width='1.8'/><path d='M22 34c8-2 18-2 26 4 2 8-2 16-12 16-10 0-16-8-14-20z' fill='%238d7264' stroke='%232a1c14' stroke-width='1.8'/><ellipse cx='36' cy='44' rx='7' ry='8' fill='%23f3e6d2'/><path d='M40 22 L34 6 L50 20 Z' fill='%238d7264' stroke='%232a1c14' stroke-width='1.7' stroke-linejoin='round'/><path d='M52 18 L58 4 L64 22 Z' fill='%23a89080' stroke='%232a1c14' stroke-width='1.7' stroke-linejoin='round'/><ellipse cx='52' cy='26' rx='13' ry='11' fill='%23a89080' stroke='%232a1c14' stroke-width='1.8'/><ellipse cx='66' cy='18' rx='10' ry='5' fill='%23f6ecdf' stroke='%232a1c14' stroke-width='1.6' transform='rotate(-26 66 18)'/><ellipse cx='74' cy='13' rx='2.2' ry='1.5' fill='%232a1c14'/><path d='M60 22c4 4 9 3 13-1-3 5-8 6-13 4z' fill='%238d3144'/><path d='M66 21 l1.3 4 l1.6-3.6z' fill='%23fff'/><ellipse cx='48' cy='26' rx='2.6' ry='3' fill='%23f3d24a' stroke='%232a1c14' stroke-width='1.1'/><circle cx='48.6' cy='26.6' r='1.15' fill='%231b130e'/><path d='M76 10c5-2 8-1 10 2' fill='none' stroke='%23f3d24a' stroke-width='1.6' stroke-linecap='round'/><path d='M78 5c6-2 10-1 13 3' fill='none' stroke='%23f3d24a' stroke-width='1.5' stroke-linecap='round'/></svg>") center / contain no-repeat;
-  filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));
-  transform-origin:30% 92%;
+/* ---- 狼人咆哮: painted werewolf fades in above the still seat, tips up, then fades. No sound. ---- */
+.fx-howl::before{content:"";position:absolute;left:6px;top:-52px;width:54px;height:50px;pointer-events:none;z-index:5;
+  background:url("/img/fx/howl.webp?v=1") center / contain no-repeat;
+  filter:drop-shadow(0 1px 2px rgba(40,24,16,.35));
+  transform-origin:42% 100%;
   animation:howlwolf 1.7s ease forwards;will-change:transform,opacity}
-.fx-howl::after{content:"";position:absolute;left:4px;top:-50px;width:12px;height:12px;border-radius:50%;pointer-events:none;z-index:4;
-  background:radial-gradient(circle at 35% 35%,#fffdf2,#ffe58a 58%,#e0b44a);
-  box-shadow:0 0 6px rgba(255,220,120,.85);
-  animation:howlmoon 1.7s ease forwards;will-change:transform,opacity}
-@keyframes howlmoon{0%{opacity:0;transform:scale(.4)}22%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.9)}}
-@keyframes howlwolf{0%{opacity:0;transform:rotate(8deg)}18%{opacity:1;transform:rotate(0deg)}46%{opacity:1;transform:rotate(-16deg)}68%{opacity:1;transform:rotate(-8deg)}100%{opacity:0;transform:rotate(-12deg)}}
+.fx-howl::after{content:none}
+@keyframes howlwolf{0%{opacity:0;transform:rotate(6deg)}18%{opacity:1;transform:rotate(0deg)}46%{opacity:1;transform:rotate(-12deg)}68%{opacity:1;transform:rotate(-6deg)}100%{opacity:0;transform:rotate(-8deg)}}
 @media (prefers-reduced-motion: reduce){
   .fx-howl,.fx-howl::before,.fx-howl::after{animation:none}
   .fx-howl::before{opacity:.92;transform:none}

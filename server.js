@@ -27,22 +27,26 @@ const PD_RULE = { wolf: ['free', 0], pumpkin: ['free', 0], devil: ['free', 0], c
 const CB_RULE = { cardback: ['free', 0], cardback_xmas: ['free', 0], cardback_sakura: ['games', 2], cardback_halloween: ['games', 3], cardback_lny: ['games', 6], cardback_starry: ['wins', 3], cardback_neon: ['wins', 5], cardback_amigos: ['wins', 10] };
 const FX_NEED = { none: 0, spot: 0, gold: 0, snow: 0, spark: 1, petals: 3, howl: 4, fire: 6, lightning: 10 };
 function unlockedBy(rule, st) { if (!rule) return false; const [k, n] = rule; return k === 'free' || (k === 'games' ? st.played : k === 'wins' ? st.won : st.mvp) >= n; }
-async function enforceUnlocks(user, f) {
-  const s = await db.getStats(user.id) || {}; const st = { played: s.played || 0, won: s.won || 0, mvp: s.mvp || 0 };
-  // MVP rewards (pendant + shiny card effect) require 10 real MVPs — even for GM
-  if (f.pendant === 'laurel' && st.mvp < 10) f.pendant = 'none';
-  if (f.skins && f.skins._shiny && st.mvp < 10) f.skins._shiny = false;
+function sanitizeProfile(user, f, st) {
   // Support cosmetics stay locked until a verified webhook, including for a GM.
   const owned = db.parseBenefits(user);
   if (f.pendant === 'coffee' && !owned.includes('coffee')) f.pendant = 'none';
   if (f.fx === 'silver' && !owned.includes('silver')) f.fx = 'spot';
   if (db.isGM(user)) return null;
-  if (f.pendant && f.pendant !== 'none' && f.pendant !== 'laurel' && f.pendant !== 'coffee' && !unlockedBy(PD_RULE[f.pendant], st)) f.pendant = 'none';
+  // Ladder unlocks stay. A persisted support frame is an additional path, not a replacement.
+  if (f.pendant && f.pendant !== 'none' && f.pendant !== 'laurel' && f.pendant !== 'coffee' && !unlockedBy(PD_RULE[f.pendant], st) && !support.hasSupportFrame(user && user.support_frames, f.pendant)) f.pendant = 'none';
   if (f.fx && st.played < (FX_NEED[f.fx] || 0)) f.fx = 'spot';
   if (f.skins) {
     if (f.skins._cardback && !unlockedBy(CB_RULE[f.skins._cardback], st)) f.skins._cardback = 'cardback';
   }
   return null;
+}
+async function enforceUnlocks(user, f) {
+  const s = await db.getStats(user.id) || {}; const st = { played: s.played || 0, won: s.won || 0, mvp: s.mvp || 0 };
+  // MVP rewards (pendant + shiny card effect) require 10 real MVPs — even for GM
+  if (f.pendant === 'laurel' && st.mvp < 10) f.pendant = 'none';
+  if (f.skins && f.skins._shiny && st.mvp < 10) f.skins._shiny = false;
+  return sanitizeProfile(user, f, st);
 }
 const PENDANTS = ['none','wolf','pumpkin','devil','crown','bow','santa','holly','newmoon','halo','egg','ghost','witch','bolo','tram','bat','vampire','plume','taxi','merlinhat','lotus','neon','excal','laurel','foxqiu','foxheart','starmoon','starplain','whiteling','darkling','skydragon','foxdance','frostmirror','icesword','fairylake','odineye','coffee'];
 const cleanAvatar = (s) => ANIMALS.includes(s) || s === 'photo' ? s : 'fox';
@@ -963,7 +967,7 @@ function bearer(req) {
 async function authUser(req, res, next) {
   const u = await db.getUserByToken(bearer(req)) || (req.query.pid && (await db.getUser(req.query.pid) || await db.getUserByGuestKey(String(req.query.pid))));
   if (!u) return res.status(401).json({ error: '請先登入' });
-  req.user = u; next();
+  req.user = await db.ensureSupportFrames(u); next();
 }
 
 app.get('/healthz', (req, res) => res.json({ ok: true, rooms: rooms.size, db: db.mode() }));
@@ -988,7 +992,8 @@ app.post('/api/auth/guest', async (req, res) => {
     });
     const token = await db.createSession(u.id);
     const stats = await db.getStats(u.id);
-    res.json({ token, user: db.pubUser(u), stats });
+    const ready = await db.ensureSupportFrames(u);
+    res.json({ token, user: db.pubUser(ready), stats });
   } catch (e) { console.error(e); res.status(500).json({ error: '伺服器錯誤' }); }
 });
 app.post('/api/auth/register', async (req, res) => {
@@ -1000,7 +1005,8 @@ app.post('/api/auth/register', async (req, res) => {
     }
     const upd = await db.registerOrUpgrade(u, req.body.username, req.body.password);
     const token = await db.createSession(upd.id);
-    res.json({ token, user: db.pubUser(upd), stats: await db.getStats(upd.id) });
+    const ready = await db.ensureSupportFrames(upd);
+    res.json({ token, user: db.pubUser(ready), stats: await db.getStats(ready.id) });
   } catch (e) { res.status(400).json({ error: e.message || '註冊失敗' }); }
 });
 app.post('/api/auth/login', async (req, res) => {
@@ -1008,7 +1014,8 @@ app.post('/api/auth/login', async (req, res) => {
     const u = await db.verifyLogin(req.body.username, req.body.password);
     if (!u) return res.status(401).json({ error: '帳號或密碼不正確' });
     const token = await db.createSession(u.id);
-    res.json({ token, user: db.pubUser(u), stats: await db.getStats(u.id) });
+    const ready = await db.ensureSupportFrames(u);
+    res.json({ token, user: db.pubUser(ready), stats: await db.getStats(ready.id) });
   } catch (e) { res.status(400).json({ error: e.message || '登入失敗' }); }
 });
 app.post('/api/auth/logout', async (req, res) => { await db.deleteSession(bearer(req)); res.json({ ok: true }); });
@@ -1024,6 +1031,7 @@ app.get('/api/support', authUser, (req, res) => {
     ready: support.checkoutAvailable(),
     benefits: support.CATALOG.map(b => ({ id: b.id, name: b.name, desc: b.desc, owned: owned.includes(b.id) })),
     owned,
+    frames: support.framesState(req.user.support_frames),
   });
 });
 app.post('/api/support/checkout', authUser, async (req, res) => {
@@ -1172,6 +1180,7 @@ async function bindSocketUser(socket, token, guestKey, profile, userId) {
   const key = String(guestKey || '').trim();
   if (!u && key.length >= 8 && key.length <= 80) u = await db.createGuest({ guestKey: key, name: cleanName(profile && profile.name), avatar: cleanAvatar(profile && profile.avatar), bg: cleanBg(profile && profile.bg), fx: cleanFx(profile && profile.fx), pendant: cleanPendant(profile && profile.pendant) });
   if (!u) return null;
+  u = await db.ensureSupportFrames(u);
   socket.data.pid = u.id;
   vetoCache.set(u.id, db.isGM(u) ? 999 : (u.veto_cards == null ? 1 : u.veto_cards));
   socket.data.name = u.name || cleanName(profile && profile.name);

@@ -22,6 +22,7 @@ by Amigosparty
 - `STRIPE_SECRET_KEY`：Stripe 限制金鑰（`rk_` 優先）。只從環境讀取，唔好寫入程式。
 - `STRIPE_WEBHOOK_SECRET`：`POST /api/stripe/webhook` 嘅簽署密鑰。解鎖只會喺核對過嘅 `checkout.session.completed`（`payment_status=paid`）、`checkout.session.async_payment_succeeded` 或 `payment_intent.succeeded` 之後發生。
 - 金額係 `hkd` `1500`（HK$15.00），`mode=payment`，唔係訂閱。
+- 第一次核對成功會送一杯咖啡掛件、支持者徽章、銀白追光、支持者表情，並由伺服器從十款未解鎖的圓框掛件裡隨機解鎖六款。朔雪之映、逆光之劍本來免費，不計入這六款。抽到的款式記在帳號上，之後再支持不會重抽。打開付款頁不會解鎖。
 - 唔好設定 `STRIPE_MOCK`。呢個只係自動測試用，而且只接受 `sk_test_` / `rk_test_`。
 
 ## 本地運行

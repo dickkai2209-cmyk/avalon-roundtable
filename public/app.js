@@ -1950,6 +1950,9 @@ function cfgSheetHtml() {
     ${s.advanced ? `<div class="small muted" style="margin-top:8px">進階模式會改寫上方預設陣容</div>${[['percival','派西維爾'],['morgana','莫甘娜'],['mordred','莫德雷德'],['oberon','奧伯倫']].map(([k, nm]) => `<div class="toggle"><div class="grow"><b>${nm}</b></div><button class="sw ${s[k] ? 'on' : ''}" data-a="tg" data-k="${k}" ${dis}></button></div>`).join('')}` : ''}
     <button class="btn" data-a="cfgclose" style="margin-top:12px">完成</button>`;
 }
+function releaseOpen() {
+  return '<div class="release-row"><button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button></div>';
+}
 function lobbyHtml() {
   const n = S.capacity, x = S.seated, s = S.settings, host = S.isHost;
   const me = (S.seats || []).find(p => p && p.id === S.meId);
@@ -1962,7 +1965,7 @@ function lobbyHtml() {
       cls: p => (p.isHost || p.id === S.hostId ? 'host' : ''),
       sub: p => (p.isHost || p.id === S.hostId ? '<span class="hostpill">房主</span>' : '') + (p.id === S.meId ? '<span class="mepill">我</span>' : ''),
       center: `<div class="seatcount"><b>${x}<small>/${n}</small></b><span>已就座</span></div>` })}
-    ${host ? '<button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button>' : ''}
+    ${host ? releaseOpen() : ''}
     </div>
   <div class="card cfgcard" data-a="cfg">
     <div class="row between"><h3 style="margin:0">${n} 人局</h3><span class="small gold">${host ? '調整 ›' : '查看 ›'}</span></div>
@@ -2059,7 +2062,7 @@ function gameHtml() {
     center,
   });
   return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : ''}${!me ? '<div class="specbar" data-spec="live">👁 觀戰中 · 唔會看到隱藏身分</div>' : ''}<div class="card">${trackHtml(g)}</div>
-  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:42px 10px 16px">${table}${ended ? '' : markLegend()}${S.isHost && !ended ? '<button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button>' : ''}</div>
+  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:42px 10px 16px">${table}${ended ? '' : markLegend()}${S.isHost && !ended ? releaseOpen() : ''}</div>
   <div class="card thist" id="teamhist">${teamHistoryHtml(g)}</div>
   ${ladyChainHtml(g.ladyLog, g.seats, ended) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats, ended)}</div>` : ''}
   ${panel ? `<div class="card${pickLive ? ' pick-ready' : ''}${g.phase === 'vote' ? ' vote-panel' : ''}">${panel}</div>` : ''}

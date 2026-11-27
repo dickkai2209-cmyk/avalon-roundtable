@@ -702,6 +702,7 @@ main{padding:8px 16px 96px}
 .rt .st .mark.sword{right:-1px;top:-2px;width:16px;height:34px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
 .rt .st .mark.cast{right:-3px;top:50%;width:22px;height:22px;margin:0;transform:translateY(-50%);border-radius:50%;background:rgba(8,14,28,.78);display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
 .markleg{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 14px;margin:18px 0 2px;padding:0 6px;font-size:12px;line-height:1;color:#5d6472}
+.card > .rt + .markleg{margin-top:44px}
 .markleg>span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .markleg .mark{position:static;transform:none;width:18px;height:18px;filter:none;background:none;box-shadow:none}
 .markleg .halo,.markleg .glint,.markleg .glow{display:none}
@@ -1403,7 +1404,17 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
 .modal:has(.actconf){z-index:80 !important;background:rgba(16,20,32,.62)}
 .sheet:has(.actconf){animation:none;opacity:1;background:#fff;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
-.release-open{margin-top:10px}
+/* Host opener only. Compact, bottom-right of the table card, so the bottom
+   seat's name and number keep a clear gap. Hidden once the next-game dock is up. */
+.release-row{display:flex;justify-content:flex-end;align-items:center;margin:40px 0 0;min-height:44px}
+.markleg + .release-row{margin-top:12px}
+.release-row .btn.ghost.release-open{
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+  width:auto;max-width:68%;min-height:44px;margin:0;padding:0 16px;border-radius:999px;
+  font-size:14px;font-weight:800;line-height:1;letter-spacing:0;box-shadow:none;
+}
+.release-row .release-open:focus-visible{outline:2px solid #1d2333;outline-offset:2px}
+body:has(.end-next) .release-row{display:none}
 .rt .st.claim .claimpill{display:inline-block;margin-top:2px;font-size:10px;line-height:14px;padding:0 6px;border-radius:7px;background:#eef3ff;color:#2f6be0;font-weight:800}
 .toast{z-index:90}
 .voicebar{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e3e6ef;border-radius:14px;padding:8px 10px;margin:8px 0}

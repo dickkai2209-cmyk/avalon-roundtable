@@ -449,11 +449,11 @@ function isRankFixture(u) {
   return false;
 }
 function cmpBoard(a, b) {
-  const cross = BigInt(b.won) * BigInt(a.played) - BigInt(a.won) * BigInt(b.played);
-  if (cross !== 0n) return cross > 0n ? 1 : -1;
   const am = Number(a.mvp) || 0;
   const bm = Number(b.mvp) || 0;
   if (am !== bm) return bm - am;
+  const cross = BigInt(b.won) * BigInt(a.played) - BigInt(a.won) * BigInt(b.played);
+  if (cross !== 0n) return cross > 0n ? 1 : -1;
   if (a.played !== b.played) return b.played - a.played;
   if (a.won !== b.won) return b.won - a.won;
   if (a.id < b.id) return -1;
@@ -656,6 +656,6 @@ module.exports = {
   getUser, getUserByUsername, getUserByGuestKey, getUserByPubId, getUserByToken,
   createGuest, updateUser, setPhoto, getPhoto,
   validUsername, validPassword, registerOrUpgrade, verifyLogin,
-  createSession, deleteSession, saveGame, listHistory, getGame, getStats, leaderboard, leaderboardView,
+  createSession, deleteSession, saveGame, listHistory, getGame, getStats, leaderboard, leaderboardView, cmpBoard,
   getVetoCards, consumeVeto, getUserByGoogle, linkGoogle,
 };

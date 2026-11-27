@@ -246,7 +246,8 @@ function scoreGame(g) {
     }
     if (correct) items.push([`正確投票 ×${correct}`, correct * 2]);
     let qs = 0; for (const q of g.quests) if (q && q.team.includes(s.id) && (q.success ? 'good' : 'evil') === my) qs++;
-    if (qs) items.push([`完成任務 ×${qs}`, qs]);
+    // Three points per quest for games scored from now on. A saved breakdown is not rewritten.
+    if (qs) items.push([`完成任務 ×${qs}`, qs * 3]);
     if (won && g.n > 5) items.push([`${g.n} 人局加成`, g.n - 5]);
     if (g.assassinTarget) {
       if (s.role === 'assassin' && g.seats.find(x => x.id === g.assassinTarget)?.role === 'merlin') items.push(['一擊刺中梅林', 5]);
@@ -1717,4 +1718,4 @@ db.init().then(async () => {
   if (self && process.env.KEEPALIVE !== '0') setInterval(() => fetch(self).catch(() => {}), 10 * 60 * 1000).unref();
 }).catch(e => { console.error('DB init failed', e); process.exit(1); });
 
-module.exports = { server, TEAM_SIZES, EVIL_COUNT };
+module.exports = { server, TEAM_SIZES, EVIL_COUNT, scoreGame };

@@ -2178,9 +2178,9 @@ function boardPin(me) {
   const rankText = ranked ? String(rank) : '未上榜';
   const rankCls = ranked ? (rankText.length >= 3 ? 'long' : '') : 'off';
   const label = ranked
-    ? `你的排名，第 ${rank} 名，${nick}，勝率 ${rate}%，${won} 勝 / ${played} 場，MVP ${mvp} 次`
-    : `你的排名，未上榜，${nick}，勝率 ${rate}%，${won} 勝 / ${played} 場，MVP ${mvp} 次`;
-  return `<section class="lb-me" data-state="${ranked ? 'ranked' : 'unranked'}" data-rank="${ranked ? rank : ''}" aria-label="${esc(label)}"><div class="lb-me-k">你的排名</div><div class="lb-me-row"><div class="lb-me-rank ${rankCls}">${esc(rankText)}</div>${av(me, 56)}<div class="lb-me-main"><div class="lb-me-top"><b class="nm">${esc(nick)}</b><strong class="lb-me-rate">${rate}<span>%</span></strong></div><div class="lb-me-sub">${won}勝/${played}場</div><div class="lb-me-sub">MVP 次數 ${mvp}</div></div></div></section>`;
+    ? `你的排名，第 ${rank} 名，${nick}，MVP ${mvp} 次，勝率 ${rate}%，${won} 勝 / ${played} 場`
+    : `你的排名，未上榜，${nick}，MVP ${mvp} 次，勝率 ${rate}%，${won} 勝 / ${played} 場`;
+  return `<section class="lb-me" data-state="${ranked ? 'ranked' : 'unranked'}" data-rank="${ranked ? rank : ''}" aria-label="${esc(label)}"><div class="lb-me-k">你的排名</div><div class="lb-me-row"><div class="lb-me-rank ${rankCls}">${esc(rankText)}</div>${av(me, 56)}<div class="lb-me-main"><div class="lb-me-top"><b class="nm">${esc(nick)}</b><strong class="lb-me-mvp">MVP 次數 <b>${mvp}</b></strong></div><div class="lb-me-sub">${won}勝/${played}場</div><div class="lb-me-sub lb-me-rate">勝率 ${rate}%</div></div></div></section>`;
 }
 function boardHtml(data) {
   const rows = (data && data.players) || [];

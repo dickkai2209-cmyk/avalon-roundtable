@@ -1262,7 +1262,7 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
   .acct-row .acct-out{padding-left:12px;padding-right:12px}
 }
 
-/* Global win-rate board: pinned personal rank, then the top 100 */
+/* Global board: pinned personal rank, then the top 100. MVP count leads; win rate stays visible. */
 .lb-me{background:#eef4ff;border-radius:16px;padding:12px 12px 14px;margin:2px 0 8px}
 .lb-me-k{margin:0;color:#2f6be0;font-size:15px;font-weight:800;line-height:1.2}
 .lb-me-out{margin:10px 0 2px;color:#5c6578;font-size:14px;line-height:1.45}
@@ -1273,8 +1273,9 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .lb-me-main{flex:1;min-width:0}
 .lb-me-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
 .lb-me-top .nm{flex:1;min-width:0;font-size:18px;font-weight:800;line-height:1.2;color:#1d2333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lb-me-rate{flex:none;font-size:22px;font-weight:800;line-height:1;color:#1d2333;font-variant-numeric:tabular-nums;white-space:nowrap}
-.lb-me-rate span{font-size:14px;font-weight:800;margin-left:1px}
+.lb-me-mvp{flex:none;display:inline-flex;align-items:baseline;gap:3px;color:#8a5f12;font-size:12px;font-weight:800;line-height:1;white-space:nowrap}
+.lb-me-mvp b{font-size:22px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.lb-me-rate{margin-top:2px;font-size:13px;font-weight:700;line-height:1.35;color:#5c6578;white-space:nowrap}
 .lb-me-sub{margin-top:2px;font-size:13px;line-height:1.35;color:#6b7286;white-space:nowrap}
 .lb{list-style:none;margin:0;padding:0}
 .lb li{display:flex;align-items:center;flex-wrap:nowrap;gap:10px;padding:12px 0;border-bottom:1px solid var(--line2)}
@@ -1284,9 +1285,9 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .lb-main{flex:1;min-width:0}
 .lb-main .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:8px}
 .lb-rec{flex:none;text-align:right;font-variant-numeric:tabular-nums}
-.lb-rate{display:flex;align-items:baseline;justify-content:flex-end;flex-wrap:nowrap;gap:6px;white-space:nowrap;line-height:1.2}
-.lb-mvp{flex:none;font-size:12px;font-weight:800;color:#8a5f12;letter-spacing:0}
-.lb-rec b{flex:none;font-size:16px;font-weight:800;line-height:1.2}
+.lb-rate{display:flex;align-items:center;justify-content:flex-end;flex-wrap:nowrap;gap:6px;white-space:nowrap;line-height:1}
+.lb-mvp{flex:none;font-size:18px;font-weight:800;color:#8a5f12;letter-spacing:0;line-height:1}
+.lb-rec b{flex:none;font-size:13px;font-weight:700;line-height:1;color:#5c6578}
 .lb-wl{display:block;margin-top:1px;font-size:12px;color:var(--muted);white-space:nowrap}
 .lb-empty{padding:18px 0 8px}
 @media (max-width:390px){
@@ -1297,7 +1298,7 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
   .lb-me-rank{width:60px;font-size:26px}
   .lb-me-rank.long{font-size:16px}
   .lb-me-top .nm{font-size:17px}
-  .lb-me-rate{font-size:20px}
+  .lb-me-mvp b{font-size:20px}
 }
 
 /* In-app confirm for lake inspection and assassination. No native browser dialog. */

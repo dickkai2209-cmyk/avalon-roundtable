@@ -706,6 +706,7 @@ main{padding:8px 16px 96px}
 .markleg i.sword .mark,.markleg i.sword svg{width:14px;height:22px}
 .markleg i.ring{border:2px solid #2f6fe8;border-radius:50%;box-sizing:border-box}
 .markleg i.cast{background:rgba(8,14,28,.72);border-radius:50%}
+.thist .markleg{margin:14px 0 0;padding:12px 0 0;border-top:1px solid var(--line2)}
 @media (prefers-reduced-motion: reduce){
   .rt .st .mark.crown .halo,.rt .st .mark.crown .glint,.rt .st .mark.wreath .glow{animation:none}
   .rt .st .mark.crown .halo{opacity:.9;transform:translate(-50%,-50%)}

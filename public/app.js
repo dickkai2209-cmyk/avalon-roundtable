@@ -97,6 +97,7 @@ function markLegend() {
 }
 const PD_BACK = { devil: 1, bat: 1, vampire: 1, foxqiu: 1, foxheart: 1, starmoon: 1, starplain: 1, whiteling: 1, darkling: 1, skydragon: 1, foxdance: 1, frostmirror: 1, icesword: 1, fairylake: 1, odineye: 1 };
 const PD_ICE = { frostmirror: 1, icesword: 1 };
+const SUPPORT_FRAMES = ['foxqiu', 'foxheart', 'starmoon', 'starplain', 'whiteling', 'darkling', 'skydragon', 'foxdance', 'frostmirror', 'icesword', 'fairylake', 'odineye'];
 // Sheen theme for every original round frame. Ice keeps its own sweep.
 const PD_FX = {
   foxqiu: 'qiu', foxheart: 'heart', starmoon: 'moon', starplain: 'plain',
@@ -664,6 +665,7 @@ const inviteUrl = (code) => `${PUBLIC_ORIGIN}/r/${code}`;
 const pct = (w, p) => p ? Math.round(w * 100 / p) : 0;
 const isGM = () => !!(account && account.gm);
 const hasBenefit = (id) => !!(account && Array.isArray(account.benefits) && account.benefits.includes(id));
+const supportFrameIds = () => (account && Array.isArray(account.supportFrames) ? account.supportFrames : []);
 const playedTotal = () => isGM() ? 1e9 : (myStats.played || 0);
 const winsTotal = () => isGM() ? 1e9 : (myStats.won || 0);
 const mvpTotal = () => (myStats.mvp || 0); // even GM must earn 10 real MVPs for 桂冠 / 閃光特效
@@ -674,7 +676,7 @@ function fxUnlocked(k) {
   if (k === 'silver') return hasBenefit('silver');
   const item = FXS.find(x => x[0] === k); return playedTotal() >= (item ? item[2] : 0);
 }
-function pdUnlocked(k) { if (k === 'none') return true; const it = PENDANTS.find(x => x[0] === k); if (!it) return false; if (it[2] === 'support') return hasBenefit('coffee'); return unlockOk(it[2], it[3]); }
+function pdUnlocked(k) { if (k === 'none') return true; const it = PENDANTS.find(x => x[0] === k); if (!it) return false; if (it[2] === 'support') return hasBenefit('coffee'); if (supportFrameIds().includes(k)) return true; return unlockOk(it[2], it[3]); }
 const pdNeed = (it) => it[2] === 'support' ? '支持解鎖' : it[2] === 'wins' ? `勝 ${it[3]} 場解鎖` : it[2] === 'mvp' ? `MVP ${Math.min(mvpTotal(), it[3])}/${it[3]} 解鎖` : `玩 ${it[3]} 場解鎖`;
 function pdCell(k, n, sel, locked, sp, sub) {
   const fx = pdFxCls(k);
@@ -1918,6 +1920,26 @@ function supportIcon(kind) {
   if (kind === 'spark') return `<span class="support-ic spark"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6l3.2 10.2L38 18l-8.2 6.2L32 36 24 29.2 16 36l2.2-11.8L10 18l10.8-1.8z" fill="#f0a04a"/></svg></span>`;
   return `<span class="support-ic emo">${supportEmoSvg(40)}</span>`;
 }
+function supportCharmTile(k) {
+  const it = PENDANTS.find(x => x[0] === k);
+  const name = it ? it[1] : k;
+  const known = account && Array.isArray(account.supportFrames);
+  const free = !!PD_ICE[k];
+  const got = known && supportFrameIds().includes(k);
+  const mark = free ? '免費' : (got ? '已有' : '');
+  const fx = pdFxCls(k);
+  return `<div class="support-charm${free ? ' free' : ''}${got ? ' got' : ''}" data-frame="${k}"><div class="pdv${fx}">${PD_BACK[k] ? `<img class="pov back" src="${pdSrc(k, 1)}" alt="">` : ''}<span class="pdcirc"><img src="/img/av/fox.webp" alt=""></span><img class="pov${free ? ' ice' : ''}" src="${pdSrc(k)}" alt="">${pdPalHtml(k)}</div><b>${name}</b>${mark ? `<em>${mark}</em>` : ''}</div>`;
+}
+function supportOffer() {
+  const known = account && Array.isArray(account.supportFrames);
+  const n = supportFrameIds().length;
+  if (!known) {
+    return `<div class="support-offer"><b>購買會隨機解鎖六款圓框掛件</b><span>付 HK$15，伺服器核對到付款之後，會從下面十款裡隨機送出六款。購買前不會公布是哪六款。朔雪之映、逆光之劍人人可用，不計入這六款。</span></div>`;
+  }
+  const title = n === 6 ? '你抽到的六款圓框掛件' : (n ? `你抽到的 ${n} 款圓框掛件` : '這十款你已靠對局解鎖');
+  const body = n ? '下面標了「已有」的就是這次抽到的。再次支持不會重新抽取。' : '沒有尚未解鎖的圓框可以再抽。再次支持也不會重抽。';
+  return `<div class="support-offer got"><b>${title}</b><span>${body}</span></div>`;
+}
 function supportHtml() {
   const rows = [
     ['coffee', 'coffee', '一杯咖啡', '頭像掛件'],
@@ -1930,8 +1952,10 @@ function supportHtml() {
     <h1>請開發者喝杯咖啡</h1>
     <p class="support-intro">熬夜改 bug 的時候，這杯咖啡很管用。謝謝你！</p>
     ${supportNote ? `<p class="support-status">${esc(supportNote)}</p>` : ''}
+    ${supportOffer()}
+    <div class="support-charms">${SUPPORT_FRAMES.map(supportCharmTile).join('')}</div>
     <div class="support-list">${rows.map(([id, icon, name, desc]) => `<div class="support-row" data-benefit="${id}" data-owned="${owned(id) ? '1' : '0'}">${supportIcon(icon)}<div><b>${name}</b><span>${desc}</span></div>${owned(id) ? '<em>已有</em>' : ''}</div>`).join('')}</div>
-    <p class="support-note">可以重複支持：第一次送下面這些，之後每次只補上你還沒有的，已經有的不會再送一次。</p>
+    <p class="support-note">可以重複支持：第一次送下面這些，並隨機解鎖六款圓框掛件。之後每次只補上你還沒有的，已經有的不會再送一次，抽過的圓框也不會再抽。</p>
     <button type="button" class="btn support-pay" data-a="supportpay">HK$15 支持</button>
   </section>`;
 }

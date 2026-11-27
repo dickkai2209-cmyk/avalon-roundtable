@@ -365,7 +365,10 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         const gapSpread = Math.max(...gaps) - Math.min(...gaps);
         const ratio = dists.reduce((a, b) => a + b, 0) / iconD.reduce((a, b) => a + b, 0);
         assert(gapSpread <= 2.5, tag + '/' + n + ' avatar-to-number distance is the same (spread ' + gapSpread.toFixed(2) + 'px)');
-        assert(ratio > 0.39 && ratio < 0.44, tag + '/' + n + ' number ring is ~0.41 of the avatar ring (' + ratio.toFixed(3) + ')');
+        const wantNum = n >= 12 ? 21.5 : n >= 10 ? 22 : 23.1;
+        const numPx = dists.reduce((a, b) => a + b, 0) / n;
+        const wantPx = wantNum / 100 * m.rt.w;
+        assert(Math.abs(numPx - wantPx) <= 2.5, tag + '/' + n + ' numerals stay on the original ring (' + numPx.toFixed(1) + 'px vs ' + wantPx.toFixed(1) + ')');
         const host = ordered.find(s => s.pill) || ordered[0];
         const nameGap = host.nm.t - (host.icon.t + host.icon.h);
         assert(nameGap >= 1 && nameGap <= 6, tag + '/' + n + ' name sits ' + nameGap.toFixed(1) + 'px under the avatar');

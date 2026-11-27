@@ -1412,7 +1412,7 @@ body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))
 .sheet:has(.actconf){animation:none;opacity:1;background:#fff;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
 /* Host opener only. Compact, bottom-right of the table card, so the bottom
    seat's name and number keep a clear gap. Hidden once the next-game dock is up. */
-.release-row{display:flex;justify-content:flex-end;align-items:center;margin:40px 0 0;min-height:44px}
+.release-row{display:flex;justify-content:flex-end;align-items:center;margin:52px 0 0;min-height:44px}
 .release-row .btn.ghost.release-open{
   display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
   width:auto;max-width:68%;min-height:44px;margin:0;padding:0 16px;border-radius:999px;

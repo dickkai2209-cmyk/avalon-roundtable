@@ -981,12 +981,11 @@ img,canvas,svg,video{max-width:100%}
 .topbar .conn{position:static;margin:0 2px 0 2px;flex-shrink:0}
 .topbar.in-room{display:flex;align-items:center;justify-content:flex-start;column-gap:0;padding-left:4px;padding-right:4px}
 .topbar:not(.in-room) #backBtn,.topbar:not(.in-room) .top-right{position:relative;z-index:2}
-.topbar.in-room .top-left{flex:1 1 auto;gap:10px;min-width:0;z-index:2}
+.topbar.in-room .top-left{flex:1 1 auto;gap:16px;min-width:0;z-index:2}
 .topbar.in-room .top-center{flex:0 0 auto;margin-right:4px}
 .topbar.in-room .top-right{flex:0 0 auto;gap:4px;z-index:2}
-.topbar.in-room .title{position:static;left:auto;top:auto;height:auto;transform:none;justify-content:flex-start;flex:0 1 auto;font-size:14px;gap:4px;letter-spacing:0}
+.topbar.in-room .title{position:static;left:auto;top:auto;height:auto;transform:none;justify-content:flex-start;flex:0 1 auto}
 .topbar.in-room .icon-btn{padding:6px 2px;font-size:28px}
-.topbar.in-room .top-code{letter-spacing:0;padding:0}
 .top-release{
   flex:none;height:32px;margin:0;padding:0 9px;border-radius:999px;
   font-size:13px;font-weight:800;line-height:1;letter-spacing:0;white-space:nowrap;
@@ -996,7 +995,6 @@ img,canvas,svg,video{max-width:100%}
   .topbar .title{font-size:15px;gap:5px;letter-spacing:0}
   .top-room-acts .rbtn{padding:4px 8px;font-size:12px}
   .topbar .tlogo{height:22px}
-  .topbar.in-room .title{font-size:13px;gap:3px}
   .topbar.in-room .icon-btn{padding:6px 1px;font-size:26px}
   .topbar.in-room .top-room-acts{gap:4px}
   .topbar.in-room .top-room-acts .rbtn{padding:3px 6px;font-size:12px}
@@ -1598,10 +1596,8 @@ body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))
 
 /* Merlin head is the primary mark. Amigos stays a small sponsor credit. */
 .topbar .tlogo.merlin{width:28px;height:28px;border-radius:50%;object-fit:cover;object-position:center;flex:none}
-.topbar.in-room .tlogo.merlin{width:24px;height:24px}
 @media (max-width:389px){
   .topbar .tlogo.merlin{width:26px;height:26px}
-  .topbar.in-room .tlogo.merlin{width:22px;height:22px}
 }
 .splash img.merlin,.logo.merlin{width:88px;height:88px;border-radius:50%;object-fit:cover;object-position:center;display:block}
 .logo.merlin{margin:0 auto}

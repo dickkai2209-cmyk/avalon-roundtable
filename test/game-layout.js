@@ -255,6 +255,8 @@ function bot(key, name) {
         headerBottom: header ? header.getBoundingClientRect().bottom : 0,
         clusterRight: Math.max(back ? box(back).r : 0, logo ? box(logo).r : 0, title ? box(title).r : 0, code ? box(code).r : 0),
         chevronGap: (back && logo) ? box(logo).l - box(back).r : 0,
+        logoSize: logo ? box(logo).w : 0,
+        logoTextGap: (logo && title) ? box(title).l - box(logo).r : 0,
         toolsLeft: Math.min(inv ? box(inv).l : 9999, more ? box(more).l : 9999),
         toolsRight: conn ? box(conn).r : (more ? box(more).r : 0),
         backLeft: back ? box(back).l : 99,
@@ -408,7 +410,10 @@ function bot(key, name) {
     assert(b.w >= 60 && b.w <= 130, tag + ' release label stays readable (' + b.w.toFixed(0) + ')');
     assert(g.relClip <= 1 && g.titleClip <= 1, tag + ' header text is not clipped');
     assert(/圓桌/.test(g.titleText) && g.orderOk, tag + ' back, logo, 圓桌 and the room code read left to right');
-    assert(g.chevronGap >= 8 && g.chevronGap <= 16, tag + ' 圓桌 sits a little clear of the back chevron (' + g.chevronGap.toFixed(1) + 'px)');
+    const wideBar = g.iw >= 388;
+    assert(g.logoSize >= (wideBar ? 27 : 25) && g.logoSize <= (wideBar ? 29 : 27), tag + ' room logo keeps the previous size (' + g.logoSize.toFixed(0) + ')');
+    assert(g.logoTextGap >= (wideBar ? 5 : 3) && g.logoTextGap <= (wideBar ? 10 : 8), tag + ' logo-to-圓桌 gap keeps the previous distance (' + g.logoTextGap.toFixed(1) + ')');
+    assert(g.chevronGap >= 14 && g.chevronGap <= 22, tag + ' the title group sits a little further from the back chevron (' + g.chevronGap.toFixed(1) + 'px)');
     assert(g.backLeft <= 8 && g.clusterRight <= b.l - 4, tag + ' left cluster clears 釋出座位 (' + (b.l - g.clusterRight).toFixed(1) + ')');
     assert(g.toolsRight <= g.iw + 1, tag + ' the right cluster stays on screen');
     assert(g.sw <= g.cw + 1, tag + ' header does not overflow the screen');

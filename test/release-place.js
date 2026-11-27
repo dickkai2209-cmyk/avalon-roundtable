@@ -91,6 +91,8 @@ function bot(key, name) {
     await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true });
     const safe = SAFE[w] || { top: 0, bottom: 0 };
     await send('Emulation.setSafeAreaInsetsOverride', { insets: { top: safe.top, left: 0, bottom: safe.bottom, right: 0 } });
+    await sleep(80);
+    await evalj(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`);
   }
   async function asUser(person) {
     const profile = JSON.stringify({ name: person.name, avatar: 'fox', bg: '#fff', fx: 'spot', pendant: person.pendant || 'none' });
@@ -224,6 +226,8 @@ function bot(key, name) {
         headerBottom: header ? header.getBoundingClientRect().bottom : 0,
         clusterRight: Math.max(back ? box(back).r : 0, logo ? box(logo).r : 0, title ? box(title).r : 0),
         chevronGap: (back && logo) ? box(logo).l - box(back).r : 0,
+        logoSize: logo ? box(logo).w : 0,
+        logoTextGap: (logo && title) ? box(title).l - box(logo).r : 0,
         toolsLeft: Math.min(inv ? box(inv).l : 9999, more ? box(more).l : 9999),
         toolsRight: conn ? box(conn).r : 0,
         backLeft: back ? box(back).l : 99,
@@ -253,7 +257,10 @@ function bot(key, name) {
     assert(b.t >= m.insetTop - 1 && b.b <= m.headerBottom + 1, tag + ' opener sits inside the top bar below the safe area');
     assert(m.relClip <= 1 && m.titleClip <= 1, tag + ' header text is not clipped');
     assert(/圓桌/.test(m.titleText) && m.codeText.length === 4 && m.titleText.includes(m.codeText) && m.orderOk, tag + ' back, logo, 圓桌 and the room code read left to right');
-    assert(m.chevronGap >= 8 && m.chevronGap <= 16, tag + ' 圓桌 sits a little clear of the back chevron (' + m.chevronGap.toFixed(1) + 'px)');
+    const wide = m.iw >= 388;
+    assert(m.logoSize >= (wide ? 27 : 25) && m.logoSize <= (wide ? 29 : 27), tag + ' room logo keeps the previous size (' + m.logoSize.toFixed(0) + ')');
+    assert(m.logoTextGap >= (wide ? 5 : 3) && m.logoTextGap <= (wide ? 10 : 8), tag + ' logo-to-圓桌 gap keeps the previous distance (' + m.logoTextGap.toFixed(1) + ')');
+    assert(m.chevronGap >= 14 && m.chevronGap <= 22, tag + ' the title group sits a little further from the back chevron (' + m.chevronGap.toFixed(1) + 'px)');
     assert(m.backLeft <= 8 && m.clusterRight <= b.l - 4, tag + ' left cluster clears 釋出座位 (' + (b.l - m.clusterRight).toFixed(1) + ')');
     assert(m.toolsRight <= m.iw + 1 && m.sw <= m.cw + 1, tag + ' the right cluster stays on screen');
     if (m.bar) assert(b.b <= m.bar.t - 4, tag + ' opener stays above the lobby bar (' + b.b.toFixed(0) + '/' + m.bar.t.toFixed(0) + ')');

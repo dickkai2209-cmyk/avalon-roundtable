@@ -39,7 +39,8 @@ assert(app.includes('<td>好人</td><td>3</td><td>4</td><td>4</td><td>5</td><td>
 assert(app.includes('<td>壞人</td><td>2</td><td>2</td><td>3</td><td>3</td><td>3</td><td>4</td><td>4</td><td>5</td>'), 'rules table keeps 5 evil at 12');
 assert(!app.includes('<td>7</td><td>8</td></tr><tr><td>壞人</td>'), 'the 8-good cell for 12 players is gone');
 assert(app.includes('const PD_V = 8'), 'slim frame cache key stays at 8');
-assert(html.includes('style.css?v=85') && html.includes('app.js?v=85'), 'one cache bump to css 85 and app 85');
+assert(html.includes('style.css?v=86') && html.includes('app.js?v=85'), 'style cache is 86 and app cache stays 85');
+assert(!html.includes('style.css?v=85'), 'previous style cache 85 is not reused');
 assert(!html.includes('style.css?v=69') && !html.includes('app.js?v=77') && !html.includes('style.css?v=70') && !html.includes('app.js?v=78'), 'reserved cache versions stay unused');
 
 function mk(i) {

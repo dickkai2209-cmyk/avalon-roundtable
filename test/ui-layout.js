@@ -528,14 +528,33 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
       const no = document.querySelector('.rt > .no[data-seat="6"]').getBoundingClientRect();
       const nm = st.querySelector('.nm').getBoundingClientRect();
       const overlap = (a, b) => a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
-      const cx = face.left + face.width / 2, cy = face.top + face.height / 2, rad = face.width / 2 - 1;
-      const qx = Math.max(pal.left, Math.min(cx, pal.right));
-      const qy = Math.max(pal.top, Math.min(cy, pal.bottom));
+      const cy = face.top + face.height / 2;
+      let onFace = 0;
+      const node = palEl.querySelector('image');
+      const href = node && node.getAttribute('href');
+      if (href) {
+        const im = new Image();
+        im.src = href;
+        await im.decode();
+        const sc = 2;
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(pal.width * sc));
+        c.height = Math.max(1, Math.round(pal.height * sc));
+        const g = c.getContext('2d');
+        g.drawImage(im, 0, 0, c.width, c.height);
+        const data = g.getImageData(0, 0, c.width, c.height).data;
+        const cx = face.left + face.width / 2, rad = face.width / 2 - 1;
+        for (let y = 0; y < c.height && !onFace; y += 2) for (let x = 0; x < c.width; x += 2) {
+          if (data[(y * c.width + x) * 4 + 3] < 28) continue;
+          const sx = pal.left + x / sc, sy = pal.top + y / sc;
+          if ((sx - cx) * (sx - cx) + (sy - cy) * (sy - cy) < rad * rad) onFace++;
+        }
+      }
       return {
         src: img.getAttribute('src'), pal: st.querySelector('.pd-pal').dataset.pal,
         no: document.querySelector('.rt > .no[data-seat="6"]').textContent,
         topLeft: pal.left < face.left + face.width * 0.45 && pal.top < cy,
-        onFace: (qx - cx) ** 2 + (qy - cy) ** 2 < rad * rad,
+        onFace,
         onNo: overlap(pal, no), onName: overlap(pal, nm),
       };
     })()`);

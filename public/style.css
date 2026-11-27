@@ -591,6 +591,7 @@ main{padding:8px 16px 96px}
 .pdc.sel{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.18)}
 .pdc .pdv,.pe-grid .pdv{position:relative;z-index:1;width:54px;height:54px;margin:14px 0 12px;overflow:visible}
 .pdc .pdcirc,.pe-grid .pdcirc{position:absolute;inset:0;border-radius:50%;overflow:hidden;background:#fff;border:1.5px solid #e3e6ef;z-index:1}
+.pdv.pd-round>.pdcirc{border:0}
 .pdc .pdcirc img,.pe-grid .pdcirc img{width:100%;height:100%;object-fit:cover;object-position:center;border-radius:50%;display:block;pointer-events:none}
 .pdc .pov,.pe-grid .pov,.pdc .pov.back,.pe-grid .pov.back{z-index:3;pointer-events:none}
 .pdc,.pe-grid button.pdc,.pe-grid .pdc{overflow:visible}
@@ -600,13 +601,13 @@ main{padding:8px 16px 96px}
 .pdc .sp{position:absolute;left:6px;top:5px;font-size:12px;z-index:5}
 .pdc .ck{position:absolute;right:6px;top:6px;width:18px;height:18px;border-radius:50%;background:#3b82f6;color:#fff;font-size:11px;line-height:18px;font-weight:800;z-index:5}
 .pdc.off .pov{filter:grayscale(1);opacity:.48}.pdc.off .pdcirc{opacity:1;filter:none}
-/* Slim round frames: a short sheen stays on the ring, off the face and the name. */
+/* Slimmer round frames sit flush on the avatar. Sheen stops are fractions of the farthest-corner radius: 42% is the inner rim, 52% ends at the outer rim, short of the name. */
 .av-wrap.pd-ice::after,.pdv.pd-ice::after,.crop-ring.pd-ice::after,
 .av-wrap.pd-sheen::after,.pdv.pd-sheen::after,.crop-ring.pd-sheen::after{
   content:"";position:absolute;left:-33.33%;top:-33.33%;width:166.67%;height:166.67%;border-radius:50%;
   pointer-events:none;z-index:4;
-  -webkit-mask:radial-gradient(circle, transparent 0 30%, #000 32%, #000 40%, transparent 43%);
-  mask:radial-gradient(circle, transparent 0 30%, #000 32%, #000 40%, transparent 43%);
+  -webkit-mask:radial-gradient(circle, transparent 0 42%, #000 44%, #000 49%, transparent 52%);
+  mask:radial-gradient(circle, transparent 0 42%, #000 44%, #000 49%, transparent 52%);
 }
 .av-wrap.pd-ice::after,.pdv.pd-ice::after,.crop-ring.pd-ice::after{
   background:conic-gradient(from 0deg, transparent 0 76%, rgba(255,255,255,.85) 84%, transparent 92%);
@@ -1757,6 +1758,7 @@ body:has(.end-next) .release-row{display:none}
 .support-charm.free{background:#eef6ff}
 .support-charm .pdv{position:relative;width:48px;height:48px;margin:6px auto 2px;overflow:visible}
 .support-charm .pdcirc{position:absolute;inset:0;border-radius:50%;overflow:hidden;background:#fff;border:1.5px solid #e3e6ef;z-index:1}
+.support-charm .pdv.pd-round>.pdcirc{border:0}
 .support-charm .pdcirc img{width:100%;height:100%;object-fit:cover;object-position:center;border-radius:50%;display:block;pointer-events:none}
 .support-charm .pov,.support-charm .pov.back{z-index:3;pointer-events:none}
 .support-charm b{display:block;font-size:11px;line-height:1.25;font-weight:800;color:#1d2333}

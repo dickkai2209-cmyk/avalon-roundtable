@@ -77,7 +77,7 @@ function readDb() { return JSON.parse(fs.readFileSync(path.join(DATA, 'db.json')
   process.on('exit', stopAll);
 
   const html = await fetch(URL + '/').then((r) => r.text());
-  assert(html.includes('/app.js?v=74') && html.includes('/style.css?v=66'), 'cache bumped past main (app 74, css 66)');
+  assert(html.includes('/app.js?v=75') && html.includes('/style.css?v=67'), 'cache bumped past main (app 75, css 67)');
 
   const key = 'rejoin-guest-key-01';
   const made = await guest(key, '回歸', { avatar: 'panda', pendant: 'bow' });

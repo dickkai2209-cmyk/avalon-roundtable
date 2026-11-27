@@ -66,10 +66,14 @@ const serverSrc = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const cssSrc = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 
-assert(html.includes('style.css?v=57') && html.includes('app.js?v=65'), 'cache bust moves past the versions on main');
-assert(!html.includes('style.css?v=56') && !html.includes('app.js?v=64') && !html.includes('style.css?v=55') && !html.includes('app.js?v=63'), 'live cache versions are not reused');
-assert(appSrc.includes('const PD_V = 5'), 'pendant image cache key bumped');
-assert(cssSrc.includes('iceSweep') && cssSrc.includes('prefers-reduced-motion') && cssSrc.includes('pd-ice'), 'ice motion honors reduced motion');
+assert(html.includes('style.css?v=58') && html.includes('app.js?v=66'), 'cache bust moves past the versions on main');
+assert(!html.includes('style.css?v=57') && !html.includes('app.js?v=65') && !html.includes('style.css?v=56') && !html.includes('app.js?v=64'), 'live cache versions are not reused');
+assert(appSrc.includes('const PD_V = 6'), 'pendant image cache key bumped');
+assert(cssSrc.includes('iceSweep') && cssSrc.includes('pdSheen') && cssSrc.includes('pdPalSway') && cssSrc.includes('prefers-reduced-motion') && cssSrc.includes('pd-ice') && cssSrc.includes('.pd-pal'), 'frame motion and companions honor reduced motion');
+const palBlock = appSrc.slice(appSrc.indexOf('const PD_PAL'), appSrc.indexOf('function pdFxCls'));
+const PALS = { foxqiu: 'fox', foxheart: 'fox', foxdance: 'fox', skydragon: 'dragon', whiteling: 'white', darkling: 'dark', fairylake: 'fairy' };
+for (const [k, v] of Object.entries(PALS)) assert(palBlock.includes(`${k}: '${v}'`), 'companion for ' + k);
+for (const k of ['starmoon', 'starplain', 'frostmirror', 'icesword', 'odineye']) assert(!palBlock.includes(k), k + ' stays without a companion');
 assert(appSrc.includes('mvpTotal() >= 10') && serverSrc.includes("f.pendant === 'laurel' && st.mvp < 10"), 'laurel still needs 10 earned MVP');
 assert(serverSrc.includes('if (db.isGM(user)) return null'), 'GM bypass stays after the laurel check');
 
@@ -130,8 +134,9 @@ class Page {
   const won = await db.createGuest({ guestKey: 'simcoswon' + stamp, name: '四勝' });
   const mvp = await db.createGuest({ guestKey: 'simcosmvp' + stamp, name: '十冠' });
   const gm = await db.createGuest({ guestKey: 'simcosgm' + stamp, name: '主持' });
+  const rich = await db.createGuest({ guestKey: 'simcosrich' + stamp, name: '龍友' });
   const tokens = {};
-  for (const u of [fresh, played, won, mvp, gm]) tokens[u.id] = await db.createSession(u.id);
+  for (const u of [fresh, played, won, mvp, gm, rich]) tokens[u.id] = await db.createSession(u.id);
   db.flush();
   const saved = JSON.parse(fs.readFileSync(path.join(DATA, 'db.json'), 'utf8'));
   saved.stats = saved.stats || {};
@@ -140,6 +145,7 @@ class Page {
   saved.stats[won.id] = { played: 9, won: 4, mvp: 0, roles: {} };
   saved.stats[mvp.id] = { played: 12, won: 10, mvp: 10, roles: {} };
   saved.stats[gm.id] = { played: 30, won: 20, mvp: 0, roles: {} };
+  saved.stats[rich.id] = { played: 40, won: 20, mvp: 0, roles: {} };
   fs.writeFileSync(path.join(DATA, 'db.json'), JSON.stringify(saved));
 
   const srv = spawn(process.execPath, ['server.js'], {
@@ -233,7 +239,7 @@ class Page {
       for (const k of keys) {
         for (const back of [false, true]) {
           const img = new Image();
-          img.src = '/img/pd/' + k + (back ? '_b' : '') + '.webp?v=5';
+          img.src = '/img/pd/' + k + (back ? '_b' : '') + '.webp?v=6';
           await img.decode();
           const c = document.createElement('canvas');
           c.width = img.naturalWidth; c.height = img.naturalHeight;
@@ -316,6 +322,12 @@ class Page {
       return { sweep: sweep.animationName, glow: glow.animationName, dur: sweep.animationDuration };
     })()`);
     assert(iceMotion.sweep === 'iceSweep' && iceMotion.glow === 'iceGlow', 'ice picker preview is moving (' + JSON.stringify(iceMotion) + ')');
+    const palPick = await cdp.eval(`(() => {
+      const pal = (k) => { const n = document.querySelector('[data-pd="' + k + '"] .pd-pal'); return n ? n.dataset.pal : ''; };
+      return { foxqiu: pal('foxqiu'), dragon: pal('skydragon'), white: pal('whiteling'), dark: pal('darkling'), fairy: pal('fairylake'), moon: pal('starmoon'), ice: pal('icesword'), eye: pal('odineye') };
+    })()`);
+    assert(palPick.foxqiu === 'fox' && palPick.dragon === 'dragon' && palPick.white === 'white' && palPick.dark === 'dark' && palPick.fairy === 'fairy', 'animal frames show a companion in the picker ' + JSON.stringify(palPick));
+    assert(!palPick.moon && !palPick.ice && !palPick.eye, 'star, ice and eye frames have no companion ' + JSON.stringify(palPick));
 
     await cdp.eval(`const m = document.querySelector('.modal'); if (m) { m.classList.add('hidden'); const sheet = document.querySelector('#sheet'); if (sheet) sheet.innerHTML = ''; }`);
     await size(375, 812);
@@ -393,6 +405,167 @@ class Page {
     await size(390, 844);
     await sleep(80);
     await cdp.shot('seat-foxqiu-tiger-390');
+
+    await size(375, 812);
+    const clearFrames = await cdp.eval(`(async () => {
+      const keys = ${JSON.stringify(FRAMES.map(x => x[0]))};
+      const pals = ${JSON.stringify(PALS)};
+      const names = ['Dickson', '龍吟九霄呀哈'];
+      const out = [];
+      const st = document.querySelector('.rt .st');
+      for (const k of keys) {
+        for (const name of names) {
+          st.querySelector('.av-wrap').outerHTML = window.__av.av({ pendant: k, avatar: 'fox', bg: '#fff7ea', name: 'x' }, 58);
+          const nm = st.querySelector('.nm');
+          nm.textContent = name;
+          const wrap = st.querySelector('.av-wrap');
+          const imgs = [...wrap.querySelectorAll('img.pov')];
+          await Promise.all(imgs.map(i => i.decode().catch(() => 0)));
+          const face = wrap.querySelector('.av').getBoundingClientRect();
+          const nr = nm.getBoundingClientRect();
+          const pal = wrap.querySelector('.pd-pal');
+          const pr = pal ? pal.getBoundingClientRect() : null;
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.ceil(nr.width));
+          c.height = Math.max(1, Math.ceil(nr.height));
+          const x = c.getContext('2d');
+          let hit = 0;
+          for (const img of imgs) {
+            const r = img.getBoundingClientRect();
+            x.clearRect(0, 0, c.width, c.height);
+            x.drawImage(img, r.left - nr.left, r.top - nr.top, r.width, r.height);
+            const data = x.getImageData(0, 0, c.width, c.height).data;
+            for (let i = 3; i < data.length; i += 4) if (data[i] > 28) hit++;
+          }
+          const fc = document.createElement('canvas');
+          fc.width = fc.height = 10;
+          const fx = fc.getContext('2d');
+          let faceHit = 0;
+          const ox = face.left + face.width / 2 - 5, oy = face.top + face.height / 2 - 5;
+          for (const img of imgs) {
+            const r = img.getBoundingClientRect();
+            fx.clearRect(0, 0, 10, 10);
+            fx.drawImage(img, r.left - ox, r.top - oy, r.width, r.height);
+            const data = fx.getImageData(0, 0, 10, 10).data;
+            for (let i = 3; i < data.length; i += 4) if (data[i] > 28) faceHit++;
+          }
+          const overlap = (a, b) => !!(a && b && a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5);
+          let palFace = false;
+          if (pr) {
+            const cx = face.left + face.width / 2, cy = face.top + face.height / 2, rad = face.width / 2 - 1;
+            const qx = Math.max(pr.left, Math.min(cx, pr.right));
+            const qy = Math.max(pr.top, Math.min(cy, pr.bottom));
+            palFace = (qx - cx) ** 2 + (qy - cy) ** 2 < rad * rad;
+          }
+          out.push({
+            k, name, hit, faceHit, palFace,
+            pal: pal ? pal.dataset.pal : '',
+            want: pals[k] || '',
+            sheen: getComputedStyle(wrap, '::after').animationName,
+            ellipsis: nm.scrollWidth > nm.clientWidth + 1,
+            text: nm.textContent,
+          });
+        }
+      }
+      return out;
+    })()`);
+    for (const row of clearFrames) {
+      assert(row.hit === 0, row.k + ' does not paint on ' + row.name + ' (' + row.hit + ')');
+      assert(row.faceHit === 0, row.k + ' leaves the face hole clear');
+      assert(!row.palFace, row.k + ' companion stays off the face');
+      assert(row.pal === row.want, row.k + ' companion is ' + row.want + ' (' + row.pal + ')');
+      assert(!row.ellipsis && row.text === row.name, row.k + ' keeps the full name ' + row.text);
+      const moving = row.k === 'frostmirror' || row.k === 'icesword' ? 'iceSweep' : 'pdSheen';
+      assert(row.sheen === moving, row.k + ' sheen is ' + moving + ' (' + row.sheen + ')');
+    }
+    const wear = async (k, name) => {
+      await cdp.eval(`(() => {
+        const st = document.querySelector('.rt .st');
+        st.querySelector('.nm').textContent = ${JSON.stringify(name)};
+        st.querySelector('.av-wrap').outerHTML = window.__av.av({ pendant: ${JSON.stringify(k)}, avatar: 'fox', bg: '#fff7ea', name: 'x' }, 58);
+        st.querySelector('.nm').textContent = ${JSON.stringify(name)};
+      })()`);
+      await cdp.eval(`Promise.all([...document.querySelectorAll('.rt .st img')].map(i => i.decode().catch(() => 0)))`);
+      await sleep(60);
+    };
+    await wear('icesword', 'Dickson');
+    await cdp.shot('seat-icesword-dickson-375');
+    await size(390, 844);
+    await sleep(80);
+    await cdp.shot('seat-icesword-dickson-390');
+    await size(375, 812);
+    await wear('foxqiu', '龍吟九霄呀哈');
+    await cdp.shot('seat-fox-pal-375');
+    await wear('skydragon', 'Dickson');
+    await cdp.shot('seat-dragon-pal-375');
+    await wear('whiteling', '瑞獸白靈呀');
+    await cdp.shot('seat-white-pal-375');
+    await wear('darkling', '瑞獸玄靈呀');
+    await cdp.shot('seat-dark-pal-375');
+    await wear('fairylake', '妖精之湖呀');
+    await cdp.shot('seat-fairy-pal-375');
+    await size(390, 844);
+    await wear('foxqiu', '龍吟九霄呀哈');
+    await cdp.shot('seat-fox-pal-390');
+    await wear('skydragon', 'Dickson');
+    await cdp.shot('seat-dragon-pal-390');
+    await size(375, 812);
+    await wear('foxheart', 'Dickson');
+    await cdp.shot('seat-heart-motion-a');
+    await sleep(1400);
+    await cdp.shot('seat-heart-motion-b');
+    await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    await sleep(40);
+    const reducedSheen = await cdp.eval(`(() => {
+      const wrap = document.querySelector('.rt .st .av-wrap');
+      const pal = wrap.querySelector('.pd-pal');
+      return { sheen: getComputedStyle(wrap, '::after').animationName, pal: pal ? getComputedStyle(pal).animationName : '', opacity: getComputedStyle(wrap, '::after').opacity };
+    })()`);
+    assert(reducedSheen.sheen === 'none' && reducedSheen.pal === 'none' && Number(reducedSheen.opacity) === 0, 'reduced motion freezes the sheen and the companion (' + JSON.stringify(reducedSheen) + ')');
+    await cdp.shot('seat-sheen-reduced-375');
+    await cdp.send('Emulation.setEmulatedMedia', { features: [] });
+
+    await put(tokens[gm.id], { pendant: 'foxqiu', avatar: 'fox', name: 'Dickson' });
+    await put(tokens[rich.id], { pendant: 'skydragon', avatar: 'dragonet', name: '龍吟九霄' });
+    await boot(tokens[gm.id], { name: 'Dickson', avatar: 'fox', bg: '#ffffff', fx: 'none', pendant: 'foxqiu' });
+    await cdp.eval(`document.querySelector('[data-a="create"]').click()`);
+    const hostReady = await cdp.eval(`new Promise(r => { const t = setInterval(() => { const img = document.querySelector('.rt .st .av img'); if (img && document.querySelector('.top-code') && document.querySelector('.rt .st .pd-pal')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 12000); })`, 20000);
+    assert(hostReady, 'host is seated with the fox companion');
+    const code = await cdp.eval(`document.querySelector('.top-code').textContent.trim()`);
+    const { io } = require('socket.io-client');
+    const sock = io(APP, { transports: ['websocket'], forceNew: true });
+    const emit = (e, d) => new Promise(res => sock.emit(e, d, res));
+    await new Promise(r => sock.on('connect', r));
+    const hello = await emit('hello', { token: tokens[rich.id] });
+    assert(hello && hello.ok !== false, 'neighbor socket joined the account ' + JSON.stringify(hello).slice(0, 180));
+    const joined = await emit('join', { code });
+    assert(joined && !joined.error, 'neighbor entered the room ' + JSON.stringify(joined).slice(0, 180));
+    const sat = await emit('act', { type: 'sit', data: { seat: 2 } });
+    assert(sat && sat.ok, 'neighbor sat beside the host ' + JSON.stringify(sat).slice(0, 180));
+    const pairReady = await cdp.eval(`new Promise(r => { const t = setInterval(() => { const seats = [...document.querySelectorAll('.rt .st .pd-pal')]; if (seats.length >= 2) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 8000); })`);
+    assert(pairReady, 'two animal pendants are on the table');
+    const pairGeom = await cdp.eval(`(() => {
+      const seats = [...document.querySelectorAll('.rt .st')].filter(s => s.querySelector('.pd-pal'));
+      const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+      const overlap = (a, b) => a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
+      return seats.map(s => {
+        const nm = box(s.querySelector('.nm'));
+        const pal = box(s.querySelector('.pd-pal'));
+        const names = seats.map(o => box(o.querySelector('.nm')));
+        return { text: s.querySelector('.nm').textContent, palOnOwn: overlap(pal, nm), palOnAny: names.some(n => overlap(pal, n)), ellipsis: s.querySelector('.nm').scrollWidth > s.querySelector('.nm').clientWidth + 1 };
+      });
+    })()`);
+    for (const row of pairGeom) {
+      assert(!row.palOnOwn && !row.palOnAny && !row.ellipsis, 'companion stays off every name (' + JSON.stringify(row) + ')');
+      assert(row.text === 'Dickson' || row.text === '龍吟九霄', 'adjacent seat keeps its name ' + row.text);
+    }
+    await cdp.eval(`Promise.all([...document.images].map(i => i.decode().catch(() => 0)))`);
+    await sleep(80);
+    await cdp.shot('seat-pair-fox-dragon-375');
+    await size(390, 844);
+    await sleep(80);
+    await cdp.shot('seat-pair-fox-dragon-390');
+    sock.close();
 
     const art = '/opt/cursor/artifacts';
     fs.mkdirSync(art, { recursive: true });

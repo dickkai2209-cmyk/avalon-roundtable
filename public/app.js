@@ -84,7 +84,7 @@ const PENDANTS = [
   ['frostmirror', '朔雪之映', 'free', 0, 1], ['icesword', '逆光之劍', 'free', 0, 1],
   ['fairylake', '妖精之湖', 'wins', 12], ['odineye', '奧丁之眼', 'wins', 14],
 ];
-const PD_V = 5;
+const PD_V = 6;
 const pdSrc = (k, back) => `/img/pd/${k}${back ? '_b' : ''}.webp?v=${PD_V}`;
 const MARK_CROWN = `<span class="mark crown" title="隊長"><span class="halo"></span><i class="glint a"></i><i class="glint b"></i><i class="glint c"></i><svg viewBox="0 0 64 44" width="30" height="20" aria-hidden="true"><path d="M6 36 L12 14 L24 26 L32 6 L40 26 L52 14 L58 36 Z" fill="#f6c445" stroke="#a86b08" stroke-width="2.4" stroke-linejoin="round"/><path d="M8 36 h48 v6 h-48 z" fill="#e8a820" stroke="#a86b08" stroke-width="2"/><circle cx="32" cy="12" r="2.6" fill="#fff8dc"/><circle cx="16" cy="18" r="2.2" fill="#fff8dc"/><circle cx="48" cy="18" r="2.2" fill="#fff8dc"/></svg></span>`;
 const MARK_WREATH = `<span class="mark wreath" title="湖中仙女"><span class="glow"></span><svg viewBox="0 0 78 40" width="54" height="26" aria-hidden="true"><path d="M8 34c8-16 18-24 31-24s23 8 31 24" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/><path d="M8 34c8-16 18-24 31-24s23 8 31 24" fill="none" stroke="#0c7c74" stroke-width="4.2" stroke-linecap="round"/><ellipse cx="16" cy="28" rx="8" ry="4" fill="#b7f3df" stroke="#0c6b5c" stroke-width="1.3" transform="rotate(-32 16 28)"/><ellipse cx="62" cy="28" rx="8" ry="4" fill="#b7f3df" stroke="#0c6b5c" stroke-width="1.3" transform="rotate(32 62 28)"/><ellipse cx="26" cy="16" rx="7" ry="3.3" fill="#7de8c4" stroke="#0c6b5c" stroke-width="1.2" transform="rotate(-52 26 16)"/><ellipse cx="52" cy="16" rx="7" ry="3.3" fill="#7de8c4" stroke="#0c6b5c" stroke-width="1.2" transform="rotate(52 52 16)"/><circle cx="18" cy="22" r="6.2" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle cx="18" cy="22" r="3.1" fill="#ff8fb8"/><circle class="mid" cx="39" cy="8" r="6.6" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle class="mid" cx="39" cy="8" r="3.2" fill="#ff8fb8"/><circle cx="60" cy="22" r="6.2" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle cx="60" cy="22" r="3.1" fill="#ff8fb8"/></svg></span>`;
@@ -96,6 +96,39 @@ function markLegend() {
 }
 const PD_BACK = { devil: 1, bat: 1, vampire: 1, foxqiu: 1, foxheart: 1, starmoon: 1, starplain: 1, whiteling: 1, darkling: 1, skydragon: 1, foxdance: 1, frostmirror: 1, icesword: 1, fairylake: 1, odineye: 1 };
 const PD_ICE = { frostmirror: 1, icesword: 1 };
+// Sheen theme for every original round frame. Ice keeps its own sweep.
+const PD_FX = {
+  foxqiu: 'qiu', foxheart: 'heart', starmoon: 'moon', starplain: 'plain',
+  whiteling: 'white', darkling: 'dark', skydragon: 'dragon', foxdance: 'dance',
+  frostmirror: 'ice', icesword: 'ice', fairylake: 'lake', odineye: 'eye',
+};
+// A companion only when the frame name names a creature. Stars, snow, sword and the eye stay plain.
+const PD_PAL = { foxqiu: 'fox', foxheart: 'fox', foxdance: 'fox', skydragon: 'dragon', whiteling: 'white', darkling: 'dark', fairylake: 'fairy' };
+function pdFxCls(k) {
+  const fx = PD_FX[k];
+  if (!fx) return '';
+  return fx === 'ice' ? ' pd-round pd-ice' : ' pd-round pd-sheen pd-sheen-' + fx;
+}
+const PD_PAL_SVG = {
+  fox: `<svg viewBox="0 0 64 64" aria-hidden="true"><path class="tail" d="M12 42c-8 2-10 14-2 16 8 1 14-6 14-12" fill="#f0a04c" stroke="#7a4012" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><ellipse class="fur" cx="30" cy="46" rx="15" ry="11" fill="#f6b25a" stroke="#7a4012" stroke-width="4"/><circle class="fur" cx="44" cy="30" r="12" fill="#f6b25a" stroke="#7a4012" stroke-width="4"/><path class="fur" d="M34 24l2-12 8 10z" fill="#f6b25a" stroke="#7a4012" stroke-width="4" stroke-linejoin="round"/><path class="fur" d="M44 20l6-10 4 12z" fill="#f6b25a" stroke="#7a4012" stroke-width="4" stroke-linejoin="round"/><path class="ear" d="M37 20l1-6 5 6z" fill="#ffd8c4"/><path class="ear" d="M46 16l4-6 3 8z" fill="#ffd8c4"/><circle cx="41" cy="30" r="1.8" fill="#2a2118"/><circle cx="48" cy="30" r="1.8" fill="#2a2118"/><ellipse cx="50" cy="34" rx="3" ry="2.1" fill="#fff6ee"/><circle cx="51" cy="34.2" r="1.2" fill="#e07a86"/></svg>`,
+  dragon: `<svg viewBox="0 0 64 64" aria-hidden="true"><path class="body" d="M14 46c2 10 14 12 22 6 6-4 4-12-2-14 8-2 16-10 14-18-3-9-16-10-22-2" fill="#f2c84a" stroke="#8a5c10" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><circle cx="44" cy="24" r="11" fill="#f6d56a" stroke="#8a5c10" stroke-width="4"/><path d="M38 16l-2-9 9 7z" fill="#e8a028" stroke="#8a5c10" stroke-width="3.5" stroke-linejoin="round"/><path d="M52 26c6 0 9 3 11 2" fill="none" stroke="#8a5c10" stroke-width="3" stroke-linecap="round"/><circle cx="47" cy="23" r="1.7" fill="#2a2118"/><path d="M24 44c3 4 10 4 12 0" fill="none" stroke="#fff6d8" stroke-width="3" stroke-linecap="round"/></svg>`,
+  fairy: `<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="20" cy="30" rx="11" ry="7" fill="#dffaf4" stroke="#1d7a72" stroke-width="3.5"/><ellipse cx="48" cy="30" rx="11" ry="7" fill="#dffaf4" stroke="#1d7a72" stroke-width="3.5"/><path d="M26 40c1 12 16 14 18 2 1-8-6-12-9-12s-10 4-9 10z" fill="#7fd0c8" stroke="#1d7a72" stroke-width="4" stroke-linejoin="round"/><circle cx="35" cy="24" r="11" fill="#ffe3d2" stroke="#1d7a72" stroke-width="4"/><path d="M30 16c2-6 8-6 10 0" fill="#ffe3d2" stroke="#1d7a72" stroke-width="3" stroke-linecap="round"/><circle cx="32" cy="24" r="1.6" fill="#1d3a36"/><circle cx="39" cy="24" r="1.6" fill="#1d3a36"/><path d="M33 28c1.2 1.2 3.2 1.2 4.2 0" fill="none" stroke="#c46a78" stroke-width="2" stroke-linecap="round"/></svg>`,
+};
+function beastSvg(tone) {
+  const dark = tone === 'dark';
+  const fill = dark ? '#314840' : '#f7f4ee';
+  const stroke = dark ? '#101c18' : '#8a7040';
+  const horn = dark ? '#8fd8b4' : '#e2b33a';
+  const mane = dark ? '#1b2e28' : '#fff';
+  const eye = dark ? '#e7fff4' : '#2a2118';
+  return `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M12 38c-6 8 0 16 8 12" fill="${mane}" stroke="${stroke}" stroke-width="4" stroke-linecap="round"/><ellipse cx="32" cy="44" rx="16" ry="11" fill="${fill}" stroke="${stroke}" stroke-width="4"/><circle cx="46" cy="31" r="11" fill="${fill}" stroke="${stroke}" stroke-width="4"/><path d="M42 22l2-11 7 9z" fill="${horn}" stroke="${stroke}" stroke-width="3.5" stroke-linejoin="round"/><path d="M18 48v8M26 50v8M36 50v8M44 47v7" fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round"/><circle cx="49" cy="30" r="1.6" fill="${eye}"/><ellipse cx="52" cy="34" rx="2.5" ry="1.7" fill="${dark ? '#d7a0b4' : '#f3c1c8'}"/></svg>`;
+}
+function pdPalHtml(k) {
+  const kind = PD_PAL[k];
+  if (!kind) return '';
+  const svg = kind === 'white' || kind === 'dark' ? beastSvg(kind) : PD_PAL_SVG[kind];
+  return `<span class="pd-pal pd-pal-${kind}" data-pal="${kind}">${svg}</span>`;
+}
 const PD_IMG = Object.fromEntries(PENDANTS.map(x => [x[0], 1]));
 const PHASE = { team: '組隊', vote: '投票', sword: '授予王者之劍', quest: '任務', swordflip: '王者之劍', lady: '湖中仙女', assassin: '刺殺梅林', end: '遊戲結束' };
 const TEAM_SIZES = { 5: [2, 3, 2, 3, 3], 6: [2, 3, 4, 3, 4], 7: [2, 3, 3, 4, 4], 8: [3, 4, 4, 5, 5], 9: [3, 4, 4, 5, 5], 10: [3, 4, 4, 5, 5], 11: [3, 4, 4, 5, 5], 12: [3, 4, 5, 5, 5] };
@@ -528,9 +561,9 @@ function faceCirc(p) {
 function av(p, size = 36) {
   const src = esc(photoSrc(p));
   const bg = esc((p && p.bg) || '#ffffff');
-  const ice = PD_ICE[(p && p.pendant) || 'none'] ? ' pd-ice' : '';
-  // Photo/circle is clipped inside .av only. Pendant overlays sit higher in an unclipped wrapper.
-  return `<span class="av-wrap${ice}">${pendantBack(p)}<span class="av s${size}" style="width:${size}px;height:${size}px;background:${bg}"><img src="${src}" alt="" width="${size}" height="${size}" decoding="async"></span>${pendantHtml(p)}</span>`;
+  const k = (p && p.pendant) || 'none';
+  // Photo/circle is clipped inside .av only. Pendant overlays and the companion sit higher in an unclipped wrapper.
+  return `<span class="av-wrap${pdFxCls(k)}">${pendantBack(p)}<span class="av s${size}" style="width:${size}px;height:${size}px;background:${bg}"><img src="${src}" alt="" width="${size}" height="${size}" decoding="async"></span>${pendantHtml(p)}${pdPalHtml(k)}</span>`;
 }
 const chip = (id, list) => { const p = P(id, list); return `<span class="chip">${av(p, 22)}${esc(p.name)}</span>`; };
 function voteTeamHtml(ids) {
@@ -556,8 +589,8 @@ function fxUnlocked(k) { const item = FXS.find(x => x[0] === k); return playedTo
 function pdUnlocked(k) { if (k === 'none') return true; const it = PENDANTS.find(x => x[0] === k); if (!it) return false; return unlockOk(it[2], it[3]); }
 const pdNeed = (it) => it[2] === 'wins' ? `勝 ${it[3]} 場解鎖` : it[2] === 'mvp' ? `MVP ${Math.min(mvpTotal(), it[3])}/${it[3]} 解鎖` : `玩 ${it[3]} 場解鎖`;
 function pdCell(k, n, sel, locked, sp, sub) {
-  const ice = PD_ICE[k] ? ' pd-ice' : '';
-  return `<button class="pdc ${sel ? 'sel' : ''} ${locked ? 'off' : ''}" data-pd="${k}">${sp ? '<span class="sp">✨</span>' : ''}${sel ? '<span class="ck">✓</span>' : ''}${locked ? '<span class="lk">🔒</span>' : ''}<div class="pdv${ice}">${k === 'none' ? '<span class="pdx">不佩戴</span>' : `${PD_BACK[k] ? `<img class="pov back" src="${pdSrc(k, 1)}" alt="">` : ''}${faceCirc(profile)}<img class="pov${PD_ICE[k] ? ' ice' : ''}" src="${pdSrc(k)}" alt="">`}</div><b>${n}</b>${sub ? `<i>${sub}</i>` : ''}</button>`;
+  const fx = pdFxCls(k);
+  return `<button class="pdc ${sel ? 'sel' : ''} ${locked ? 'off' : ''}" data-pd="${k}">${sp ? '<span class="sp">✨</span>' : ''}${sel ? '<span class="ck">✓</span>' : ''}${locked ? '<span class="lk">🔒</span>' : ''}<div class="pdv${fx}">${k === 'none' ? '<span class="pdx">不佩戴</span>' : `${PD_BACK[k] ? `<img class="pov back" src="${pdSrc(k, 1)}" alt="">` : ''}${faceCirc(profile)}<img class="pov${PD_ICE[k] ? ' ice' : ''}" src="${pdSrc(k)}" alt="">${pdPalHtml(k)}`}</div><b>${n}</b>${sub ? `<i>${sub}</i>` : ''}</button>`;
 }
 function pdPickerHtml(d) {
   const have = PENDANTS.filter(x => pdUnlocked(x[0])), lack = PENDANTS.filter(x => !pdUnlocked(x[0]));
@@ -672,8 +705,8 @@ function openPhotoCrop(bitmap, opts) {
   imgEl.src = bitmap.toDataURL('image/jpeg', 0.92);
   const pend = (opts && opts.pendant) || 'none';
   if (pend && pend !== 'none' && PD_IMG[pend]) {
-    ring.classList.toggle('pd-ice', !!PD_ICE[pend]);
-    ring.innerHTML = `${PD_BACK[pend] ? `<img class="pov back" src="${pdSrc(pend, 1)}" alt="">` : ''}<img class="pov${PD_ICE[pend] ? ' ice' : ''}" src="${pdSrc(pend)}" alt="">`;
+    ring.className = 'crop-ring' + pdFxCls(pend);
+    ring.innerHTML = `${PD_BACK[pend] ? `<img class="pov back" src="${pdSrc(pend, 1)}" alt="">` : ''}<img class="pov${PD_ICE[pend] ? ' ice' : ''}" src="${pdSrc(pend)}" alt="">${pdPalHtml(pend)}`;
   }
   const layout = () => {
     const wr = stage.getBoundingClientRect();
@@ -855,8 +888,8 @@ function editProfile(after, startTab) {
         .concat(PENDANTS.map(x => {
           const locked = !pdUnlocked(x[0]);
           const sel = d.pendant === x[0];
-          const ice = PD_ICE[x[0]] ? ' pd-ice' : '';
-          return `<button type="button" class="pdc ${sel?'sel':''} ${locked?'off':''}" data-pd="${x[0]}">${sel?'<span class="ck">✓</span>':''}${x[4]?'<span class="sp">✨</span>':''}${locked?'<span class="lk">🔒</span>':''}<div class="pdv${ice}">${PD_BACK[x[0]]?`<img class="pov back" src="${pdSrc(x[0],1)}" alt="">`:''}${faceCirc(d)}<img class="pov${PD_ICE[x[0]] ? ' ice' : ''}" src="${pdSrc(x[0])}" alt=""></div><b>${x[1]}</b>${locked?`<i>${pdNeed(x)}</i>`:''}</button>`;
+          const fx = pdFxCls(x[0]);
+          return `<button type="button" class="pdc ${sel?'sel':''} ${locked?'off':''}" data-pd="${x[0]}">${sel?'<span class="ck">✓</span>':''}${x[4]?'<span class="sp">✨</span>':''}${locked?'<span class="lk">🔒</span>':''}<div class="pdv${fx}">${PD_BACK[x[0]]?`<img class="pov back" src="${pdSrc(x[0],1)}" alt="">`:''}${faceCirc(d)}<img class="pov${PD_ICE[x[0]] ? ' ice' : ''}" src="${pdSrc(x[0])}" alt="">${pdPalHtml(x[0])}</div><b>${x[1]}</b>${locked?`<i>${pdNeed(x)}</i>`:''}</button>`;
         }));
       return `<div class="pe-grid">${cells.join('')}</div>`;
     }
@@ -2652,5 +2685,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
-window.__av = { makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
+window.__av = { av, makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

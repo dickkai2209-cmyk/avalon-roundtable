@@ -57,15 +57,19 @@ function skinLabel(role, skin) {
   if (role === 'servant' && (skin.id === 'classic' || skin.id === 'casual' || skin.id === 'festive')) return skin.n + ' · 女';
   return skin.n;
 }
+const ROLE_AV = [
+  ['merlin','梅林'],['percival','派西維爾'],['servant','忠臣'],['assassin','刺客'],
+  ['mordred','莫德雷特'],['oberon','奧柏倫'],['morgana','莫甘娜'],
+];
 const ANIMALS = [
   ['fox','狐狸'],['panda','熊貓'],['duck','小鴨'],['squirrel','松鼠'],['hedgehog','刺蝟'],['bunny','兔子'],
   ['bear','棕熊'],['redpanda','小熊貓'],['otter','水獺'],['hamster','倉鼠'],['shiba','柴犬'],['dalmatian','斑點狗'],
   ['capybara','水豚'],['penguin','企鵝'],['koala','無尾熊'],['cat','貓咪'],['wolf','狼仔'],['lion','獅子'],['piglet','豬仔'],['guineapig','天竺鼠'],
-  ['puffer','河豚'],['alien','外星人'],['wolfking','狼王'],['frog','青蛙'],['dragonet','小龍'],['tiger','老虎'],['hero','超人']
-];
+  ['puffer','河豚'],['alien','外星人'],['wolfking','狼王'],['frog','青蛙'],['dragonet','小龍'],['tiger','老虎'],['hero','超人'],
+].concat(ROLE_AV);
 const EMOJI_MAP = {'🦊':'fox','🐼':'panda','🦆':'duck','🐿️':'squirrel','🦔':'hedgehog','🐰':'bunny','🐻':'bear','🦝':'redpanda','🦦':'otter','🐹':'hamster','🐕':'shiba','🐶':'shiba','🦫':'capybara','🐧':'penguin','🐨':'koala','🐱':'cat','🐺':'wolf','🦁':'lion','🐷':'piglet','🐖':'piglet','🐡':'puffer','👽':'alien','🐸':'frog','🐯':'tiger','🐉':'dragonet'};
 const BGS = ['#ffffff', '#f3d9a4', '#f7c1c8', '#bfe3c9', '#bcd6ff', '#d9c6ff', '#ffe08a', '#c8eef0', '#ffcfa6', '#2b3a6e', '#3a2a1c'];
-const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['snow','聖誕飄雪',0],['spark','星火',1],['petals','花瓣',3],['howl','狼人咆哮',4],['fire','火焰圈',6],['lightning','閃電',10],['silver','銀白追光',0]];
+const FXS = [['none','無',0],['spot','聚光燈',0],['gold','金光',0],['snow','聖誕飄雪',0],['spark','星火',1],['petals','花瓣',3],['howl','狼人咆哮',4],['fire','火焰圈',6],['lightning','閃電',10],['signs','旺角燈牌',0],['ding','叮叮電車',2],['harbour','維港煙花',5],['ferry','渡海小輪',8],['hop','兔兔跳跳',0],['waddle','小鴨巡遊',3],['ham','倉鼠滾滾',7],['silver','銀白追光',0]];
 // [key, name, unlock type ('free'|'games'|'wins'), need, special?]
 const PENDANTS = [
   ['wolf', '滿月狼人', 'free', 0], ['pumpkin', '南瓜燈先知', 'free', 0], ['devil', '搗蛋小惡魔', 'free', 0],
@@ -85,7 +89,7 @@ const PENDANTS = [
   ['fairylake', '妖精之湖', 'wins', 12], ['odineye', '奧丁之眼', 'wins', 14],
   ['coffee', '一杯咖啡', 'support', 1],
 ];
-const PD_V = 6;
+const PD_V = 8;
 const pdSrc = (k, back) => `/img/pd/${k}${back ? '_b' : ''}.webp?v=${PD_V}`;
 const MARK_CROWN = `<span class="mark crown" title="隊長"><span class="halo"></span><i class="glint a"></i><i class="glint b"></i><i class="glint c"></i><svg viewBox="0 0 64 44" width="30" height="20" aria-hidden="true"><path d="M6 36 L12 14 L24 26 L32 6 L40 26 L52 14 L58 36 Z" fill="#f6c445" stroke="#a86b08" stroke-width="2.4" stroke-linejoin="round"/><path d="M8 36 h48 v6 h-48 z" fill="#e8a820" stroke="#a86b08" stroke-width="2"/><circle cx="32" cy="12" r="2.6" fill="#fff8dc"/><circle cx="16" cy="18" r="2.2" fill="#fff8dc"/><circle cx="48" cy="18" r="2.2" fill="#fff8dc"/></svg></span>`;
 const MARK_WREATH = `<span class="mark wreath" title="湖中仙女"><span class="glow"></span><svg viewBox="0 0 78 40" width="54" height="26" aria-hidden="true"><path d="M8 34c8-16 18-24 31-24s23 8 31 24" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/><path d="M8 34c8-16 18-24 31-24s23 8 31 24" fill="none" stroke="#0c7c74" stroke-width="4.2" stroke-linecap="round"/><ellipse cx="16" cy="28" rx="8" ry="4" fill="#b7f3df" stroke="#0c6b5c" stroke-width="1.3" transform="rotate(-32 16 28)"/><ellipse cx="62" cy="28" rx="8" ry="4" fill="#b7f3df" stroke="#0c6b5c" stroke-width="1.3" transform="rotate(32 62 28)"/><ellipse cx="26" cy="16" rx="7" ry="3.3" fill="#7de8c4" stroke="#0c6b5c" stroke-width="1.2" transform="rotate(-52 26 16)"/><ellipse cx="52" cy="16" rx="7" ry="3.3" fill="#7de8c4" stroke="#0c6b5c" stroke-width="1.2" transform="rotate(52 52 16)"/><circle cx="18" cy="22" r="6.2" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle cx="18" cy="22" r="3.1" fill="#ff8fb8"/><circle class="mid" cx="39" cy="8" r="6.6" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle class="mid" cx="39" cy="8" r="3.2" fill="#ff8fb8"/><circle cx="60" cy="22" r="6.2" fill="#fff" stroke="#0c7c74" stroke-width="1.6"/><circle cx="60" cy="22" r="3.1" fill="#ff8fb8"/></svg></span>`;
@@ -215,7 +219,7 @@ function saveHeld() {
 function clearHeld() { heldRoom = null; waitingRoom = null; saveHeld(); }
 const browsingView = (v) => v === 'skins' || v === 'rules' || v === 'ach' || v === 'board' || v === 'history' || v === 'stats' || v === 'detail';
 let selected = new Set(), lastSeatIds = [];
-const FX_EVERY = 30000;
+const FX_EVERY = 60000;
 const FX_HOLD = 2800;
 const fxBurst = new Map();
 const fxClocks = new Map();
@@ -271,7 +275,7 @@ function applyEntrance(el, fx) {
   el.classList.remove('enter');
   FXS.forEach(([k]) => el.classList.remove('fx-' + k));
   void el.offsetWidth;
-  el.classList.add('enter', 'fx-' + fx);
+  el.classList.add('fx-' + fx);
 }
 function playSeat(id, fx) {
   if (!fx || fx === 'none' || reducedFx()) return stopSeat(id);
@@ -726,7 +730,7 @@ function openRoomMenu() {
   const more = document.querySelector('.top-more');
   if (more) more.setAttribute('aria-expanded', 'true');
   openModal(`<div class="room-menu" role="dialog" aria-modal="true" aria-labelledby="room-menu-title">
-    <h2 id="room-menu-title">房間選單</h2><div class="mlist">
+    <h2 id="room-menu-title">房間選單</h2>${audioMenuHtml()}<div class="mlist">
     ${row('rules', '📖', '查看規則', '遊戲流程、角色能力、擴展玩法')}
     ${row('ref', '🔄', '刷新房間', '畫面唔同步或卡住時，重新連線並向伺服器攞最新狀態')}
     ${isGM() && !S.isHost ? row('seize', '👑', '搶房主', '接手房主權限，座位同對局保持不變') : ''}
@@ -756,6 +760,8 @@ function openRoomMenu() {
     };
     const dis = el.querySelector('[data-x=dis]'); if (dis) dis.onclick = (e) => { e.preventDefault(); e.stopPropagation(); if (confirm('確定解散房間？所有人將被移出。')) { closeModal(); act('dissolve'); } };
     $('#room-menu-close', el).onclick = (e) => { e.preventDefault(); closeModal(); };
+    audioBindControls();
+    audioPaint();
     trapSheetKeys(el, () => closeModal());
     const first = el.querySelector('.mrow');
     if (first && first.focus) first.focus({ preventScroll: true });
@@ -839,7 +845,7 @@ function pdPickerHtml(d) {
     ${lack.length ? `<div class="pdh">還未拿到</div><div class="pdgrid">${lack.map(x => pdCell(x[0], x[1], false, true, x[4], pdNeed(x))).join('')}</div>` : ''}`;
 }
 function previewHtml(d) {
-  return `<div class="preview-stage ${d.fx && d.fx !== 'none' ? 'enter fx-' + d.fx : ''}">${av(d, 56)}<div class="nm gold" style="position:absolute;bottom:10px">${esc(d.name || '騎士')}</div></div>`;
+  return `<div class="preview-stage ${d.fx && d.fx !== 'none' ? 'fx-' + d.fx : ''}">${av(d, 56)}<div class="nm gold" style="position:absolute;bottom:10px">${esc(d.name || '騎士')}</div></div>`;
 }
 
 // Circular photo crop (before upload). Gestures stay on the crop stage only.
@@ -1092,7 +1098,7 @@ function openPhotoCrop(bitmap, opts) {
 
 function editProfile(after, startTab) {
   const d = { ...profile, bg: profile.bg || '#ffffff' }; let tab = (startTab === 'pendant' || startTab === 'fx') ? startTab : 'avatar';
-  const FX_IC = { none:'—', spot:'💡', gold:'✨', snow:'❄️', spark:'🌟', petals:'🌸', howl:'🐺', fire:'🔥', lightning:'⚡', silver:'✦' };
+  const FX_IC = { none:'—', spot:'💡', gold:'✨', snow:'❄️', spark:'🌟', petals:'🌸', howl:'🐺', fire:'🔥', lightning:'⚡', signs:'🌃', ding:'🚋', harbour:'🎆', ferry:'⛴️', hop:'🐰', waddle:'🐤', ham:'🐹', silver:'✦' };
   const peek = (el) => {
     const avHost = el.querySelector('.pe-av');
     if (!avHost) return;
@@ -1140,10 +1146,12 @@ function editProfile(after, startTab) {
       return `<div class="pe-grid">${cells.join('')}</div>`;
     }
     const photoOn = d.avatar === 'photo' || (d.avatar && String(d.avatar).startsWith('data:')) || d._forceSub === 'photo';
-    const tiles = [`<button type="button" class="${photoOn?'sel':''}" data-upload="1"><div class="cell pe-camcell">📷</div><div class="lb">上載相片</div>${photoOn?'<span class="ck">✓</span>':''}</button>`]
-      .concat(ANIMALS.map(([k,n]) => `<button type="button" data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div>${k===d.avatar?'<span class="ck">✓</span>':''}</button>`));
+    const avTile = ([k, n]) => `<button type="button" data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div>${k===d.avatar?'<span class="ck">✓</span>':''}</button>`;
+    const photoBtn = `<button type="button" class="${photoOn?'sel':''}" data-upload="1"><div class="cell pe-camcell">📷</div><div class="lb">上載相片</div>${photoOn?'<span class="ck">✓</span>':''}</button>`;
+    const roleKeys = new Set(ROLE_AV.map(([k]) => k));
+    const beasts = ANIMALS.filter(([k]) => !roleKeys.has(k));
     const sw = `<div class="swatches">${BGS.map(c => `<button type="button" data-c="${c}" class="${c===d.bg?'sel':''}" style="background:${c}"></button>`).join('')}</div>`;
-    return `${sw}<div class="pe-grid">${tiles.join('')}</div>`;
+    return `${sw}<div class="pe-h">動物</div><div class="pe-grid">${photoBtn}${beasts.map(avTile).join('')}</div><div class="pe-h">角色</div><div class="pe-grid pe-roles">${ROLE_AV.map(avTile).join('')}</div>`;
   };
   const draw = (el) => {
     const n = d.name || '';
@@ -1516,11 +1524,11 @@ function canonicalSlots(seats) {
 }
 function roundTable(seats, o = {}) {
   const n = seats.length;
-  // Large ring: icon centres sit near the card edge so the middle stays open (5–12 seats).
-  const R = n >= 12 ? 39 : n >= 10 ? 40 : 42;
-  // One numeral radius for every seat: 0.55 of the avatar-centre ring (target ~190/350).
-  // Same angle as the icon, so avatar-centre to number-centre distance is identical.
-  const numR = Math.round(R * 0.55 * 10) / 10;
+  // Numerals stay on the original ring (0.55 of the old 42/40/39 radii):
+  // 23.1 / 22 / 21.5. Avatars step outward on one shared radius so a charm
+  // clears that numeral without dragging the digits toward the centre.
+  const numR = n >= 12 ? 21.5 : n >= 10 ? 22 : 23.1;
+  const R = n >= 12 ? 44 : n >= 10 ? 44.5 : n >= 8 ? 43.5 : 44;
   const avSize = o.avSize || (n >= 12 ? 46 : n >= 10 ? 52 : 58);
   const nums = [];
   const st = canonicalSlots(seats).map((s, i) => {
@@ -1738,7 +1746,7 @@ function showRole(first) {
       rv.classList.toggle('opened', on);
       $('#kn', el).classList.toggle('hidden', !on);
       $('#cov', el).classList.toggle('hidden', on);
-      if (on) burst($('#fxc', el), side);
+      if (on) { burst($('#fxc', el), side); if (window.AvalonAudio) AvalonAudio.cue('card'); }
     };
     $('#ok', el).onclick = closeModal;
   }, !!first);
@@ -1768,7 +1776,7 @@ function showVote(ev) {
     <div class="tally ${ev.approved ? 'result-good' : 'result-evil'}" id="tl">${ev.approved ? '✅ 組隊通過' : '❌ 組隊被否決'}<div class="small muted" style="font-family:sans-serif;font-weight:500">贊成 ${ev.yes} : 反對 ${ev.no}${ev.approved ? '' : `　（否決第 ${ev.attempt} 次）`}</div></div>
     <button class="btn" id="ok">繼續</button>`, async (el) => {
     $('#ok', el).onclick = closeModal;
-    const cs = $$('.vc', el); for (const c of cs) { await sleep(140); c.classList.add('on'); }
+    const cs = $$('.vc', el); for (const c of cs) { await sleep(140); c.classList.add('on'); if (window.AvalonAudio) AvalonAudio.cue('tick'); }
     await sleep(450); const t = $('#tl', el); t && t.classList.add('on');
   });
 }
@@ -1791,7 +1799,7 @@ function showQuest(ev) {
     for (let i = 0; i < cs.length; i++) {
       const last = i === cs.length - 1;
       if (last && cs.length > 1) { cs[i].classList.add('tense'); await sleep(1100); cs[i].classList.remove('tense'); }
-      cs[i].classList.add('on'); qBurst(cs[i], cards[i]); if (navigator.vibrate && !cards[i]) navigator.vibrate(60);
+      cs[i].classList.add('on'); qBurst(cs[i], cards[i]); if (window.AvalonAudio) AvalonAudio.cue('tick'); if (navigator.vibrate && !cards[i]) navigator.vibrate(60);
       await sleep(last ? 500 : 800);
     }
     const t = $('#tl', el); t && t.classList.add('on');
@@ -1803,7 +1811,7 @@ function showLady(ev) {
   if (!mine) return toast(`🌊 ${P(ev.holder, list).name} 用湖中仙女查驗了 ${P(ev.target, list).name}`);
   openModal(`<h2>湖中仙女的啟示</h2><div class="center">${chip(ev.target, list)}</div>
     <div class="flip" id="flip" style="width:min(56vw,200px)"><div class="in"><div class="face back"><div class="hint">點擊查看陣營</div></div><div class="face front"><div class="rc ${mine.side} lady-reveal"><div class="art" style="background-image:url(${img('lady')})"></div><div class="cap"><div class="rn" style="font-size:20px">${mine.side === 'good' ? '好人陣營' : '壞人陣營'}</div></div></div></div></div></div>
-    <p class="center small muted">只有你看到這個結果，你可以選擇說真話或說謊。</p><button class="btn" id="ok">知道了</button>`, (el) => { const f = $('#flip', el); f.onclick = () => f.classList.add('on'); $('#ok', el).onclick = closeModal; }, true);
+    <p class="center small muted">只有你看到這個結果，你可以選擇說真話或說謊。</p><button class="btn" id="ok">知道了</button>`, (el) => { const f = $('#flip', el); f.onclick = () => { if (f.classList.contains('on')) return; f.classList.add('on'); if (window.AvalonAudio) AvalonAudio.cue('card'); }; $('#ok', el).onclick = closeModal; }, true);
 }
 function factionText(s) {
   return String(s || '')
@@ -1966,14 +1974,26 @@ function render() {
   const app = $('#app'); const inRoom = S && S.code;
   if (view !== 'skins') app.dataset.v = view || '';
   if (view === 'room' && !inRoom && !waitingRoom) view = 'home';
+  if (window.AvalonAudio) AvalonAudio.scene(view === 'room' && S && S.code && S.game && S.game.phase !== 'end' ? 'game' : 'lobby');
   $('#backBtn').classList.toggle('hidden', view === 'home');
   const titles = { home: 'HK阿瓦隆', support: '支持我哋', room: inRoom ? null : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就', board: '排行榜' };
+  const inRoomView = !!(view === 'room' && inRoom);
+  const bar = document.querySelector('.topbar');
+  if (bar) bar.classList.toggle('in-room', inRoomView);
   const acts = $('#topRoomActs');
   if (acts) {
-    const show = !!(view === 'room' && inRoom);
+    const show = inRoomView;
     acts.classList.toggle('hidden', !show);
     if (show) acts.innerHTML = `<button type="button" class="rbtn top-inv" data-a="invite">邀請</button><button type="button" class="rbtn top-more" data-a="menu" aria-label="更多" aria-haspopup="dialog" aria-expanded="${document.querySelector('.room-menu') ? 'true' : 'false'}">⋯</button>`;
     else acts.innerHTML = '';
+  }
+  // Same gate as the old table control: host only, and not after the round ends.
+  const center = $('#topCenter');
+  if (center) {
+    const showRel = inRoomView && !!(S && S.isHost && !(S.game && S.game.phase === 'end'));
+    const relHtml = showRel ? '<button type="button" class="rbtn top-release" data-a="releaselist">釋出座位</button>' : '';
+    if (center._html !== relHtml) { center._html = relHtml; center.innerHTML = relHtml; }
+    center.classList.toggle('hidden', !showRel);
   }
   const titleEl = $('#topTitle');
   if (view === 'room' && inRoom) {
@@ -2220,9 +2240,6 @@ function cfgSheetHtml() {
     ${s.advanced ? `<div class="small muted" style="margin-top:8px">進階模式會改寫上方預設陣容</div>${[['percival','派西維爾'],['morgana','莫甘娜'],['mordred','莫德雷德'],['oberon','奧伯倫']].map(([k, nm]) => `<div class="toggle"><div class="grow"><b>${nm}</b></div><button class="sw ${s[k] ? 'on' : ''}" data-a="tg" data-k="${k}" ${dis}></button></div>`).join('')}` : ''}
     <button class="btn" data-a="cfgclose" style="margin-top:12px">完成</button>`;
 }
-function releaseOpen() {
-  return '<div class="release-row"><button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button></div>';
-}
 function lobbyHtml() {
   const n = S.capacity, x = S.seated, s = S.settings, host = S.isHost;
   const me = (S.seats || []).find(p => p && p.id === S.meId);
@@ -2235,7 +2252,6 @@ function lobbyHtml() {
       cls: p => (p.isHost || p.id === S.hostId ? 'host' : ''),
       sub: p => (p.isHost || p.id === S.hostId ? '<span class="hostpill">房主</span>' : '') + (p.id === S.meId ? '<span class="mepill">我</span>' : ''),
       center: `<div class="seatcount"><b>${x}<small>/${n}</small></b><span>已就座</span></div>` })}
-    ${host ? releaseOpen() : ''}
     </div>
   <div class="card cfgcard" data-a="cfg">
     <div class="row between"><h3 style="margin:0">${n} 人局</h3><span class="small gold">${host ? '調整 ›' : '查看 ›'}</span></div>
@@ -2331,9 +2347,11 @@ function gameHtml() {
     label: s => ended ? `<span class="lbl ${ROLE[s.role].side === 'good' ? 'g' : 'e'}">${ROLE[s.role].n}</span>` : (s.evil ? '<span class="lbl e">壞人</span>' : ''),
     center,
   });
-  return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : ''}${!me ? '<div class="specbar" data-spec="live">👁 觀戰中 · 唔會看到隱藏身分</div>' : ''}<div class="card">${trackHtml(g)}</div>
-  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:42px 10px 16px">${table}${S.isHost && !ended ? releaseOpen() : ''}</div>
+  const micCard = S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : '';
+  return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${!me ? '<div class="specbar" data-spec="live">👁 觀戰中 · 唔會看到隱藏身分</div>' : ''}<div class="card">${trackHtml(g)}</div>
+  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:42px 10px 40px">${table}</div>
   <div class="card thist" id="teamhist">${teamHistoryHtml(g)}${ended ? '' : markLegend()}</div>
+  ${micCard}
   ${ladyChainHtml(g.ladyLog, g.seats, ended) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats, ended)}</div>` : ''}
   ${panel ? `<div class="card${pickLive ? ' pick-ready' : ''}${g.phase === 'vote' ? ' vote-panel' : ''}">${panel}</div>` : ''}
   ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : ''}
@@ -2542,13 +2560,16 @@ const TABS = [['overview', '概覽'], ['sides', '陣營'], ['knows', '誰知道�
 const DEMO_SEATS = [['亞瑟', '🦁', '#ffe08a'], ['桂妮薇', '🦢', '#f7c1c8'], ['高文', '🐻', '#bfe3c9'], ['凱', '🦊', '#ffcfa6'], ['貝德維爾', '🦉', '#bcd6ff'], ['崔斯坦', '🐺', '#d9c6ff'], ['加拉哈德', '🐰', '#c8eef0'], ['伊索德', '🐱', '#f3d9a4']]
   .map(([name, avatar, bg], i) => ({ id: 'd' + i, name, avatar, bg }));
 const WK_ROLES = ['merlin', 'percival', 'servant', 'servant', 'assassin', 'morgana', 'mordred', 'oberon'];
-function rulesHtml() { return `<div class="tabs">${TABS.map(([k, n]) => `<button data-a="rtab" data-v="${k}" class="${k === rulesTab ? 'sel' : ''}">${n}</button>`).join('')}</div><div id="rulesBody"></div>`; }
-function mountRules() { const b = $('#rulesBody'); if (b) b.innerHTML = rulesBody(); $$('.tabs button').forEach(x => x.classList.toggle('sel', x.dataset.v === rulesTab)); if (rulesTab === 'round') animateDemo(); }
-function rulesBody() {
+function rulesHtml() {
+  const tabs = TABS.map(([k, n]) => `<button type="button" data-a="rtab" data-v="${k}" class="${k === rulesTab ? 'sel' : ''}" aria-selected="${k === rulesTab ? 'true' : 'false'}">${n}</button>`).join('');
+  const pages = TABS.map(([k, n], i) => `<section class="rules-page" data-tab="${k}" data-page="${i + 1}" aria-label="${n}">${rulesSection(k)}</section>`).join('');
+  return `<div class="rules-shell"><div class="tabs" role="tablist">${tabs}</div><div class="rules-pager" id="rulesPager">${pages}</div></div>`;
+}
+function rulesSection(tab) {
   const P_ = (h) => `<div class="card parch rules">${h}</div>`;
-  switch (rulesTab) {
+  switch (tab) {
     case 'overview': return P_(`<h4>🏰 遊戲目標</h4><p>圓桌旁坐著<b>亞瑟的忠臣（好人）</b>與<b>莫德雷德的爪牙（壞人）</b>。好人要完成 3 個任務；壞人要令 3 個任務失敗，或在最後刺殺梅林。</p>
-      <h4>👥 人數配置</h4><table><tr><th>人數</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th></tr><tr><td>好人</td><td>3</td><td>4</td><td>4</td><td>5</td><td>6</td><td>6</td><td>7</td><td>8</td></tr><tr><td>壞人</td><td>2</td><td>2</td><td>3</td><td>3</td><td>3</td><td>4</td><td>4</td><td>5</td></tr></table>
+      <h4>👥 人數配置</h4><table><tr><th>人數</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th></tr><tr><td>好人</td><td>3</td><td>4</td><td>4</td><td>5</td><td>6</td><td>6</td><td>7</td><td>7</td></tr><tr><td>壞人</td><td>2</td><td>2</td><td>3</td><td>3</td><td>3</td><td>4</td><td>4</td><td>5</td></tr></table>
       <h4>📱 使用方法</h4><p>一人建立房間，其他人掃二維碼或輸入 4 位房間號入座。每人手機只顯示自己的身份。重新整理或斷線會自動回到原座位（同一部手機同一瀏覽器）。</p>`);
     case 'sides': return `<div class="rolegrid">${ROLE_ORDER.map(k => `<div class="rolecell ${ROLE[k].side}" style="background-image:url(${img(k)})" data-a="rolepeek" data-r="${k}"><div class="t"><b>${ROLE[k].n}</b><span class="tiny">${ROLE[k].side === 'good' ? '好人陣營' : '壞人陣營'}</span></div></div>`).join('')}</div><div class="small muted center" style="margin-top:8px">點擊角色查看能力</div>`;
     case 'knows': {
@@ -2592,6 +2613,170 @@ function rulesBody() {
       <p class="small">本版本已實作王者之劍、蘭斯洛特與 11–12 人局，可在開局前於房間設定開啟。</p>`);
   }
   return '';
+}
+let rulesSnapLock = 0;
+function rulesPagerEl() { return document.getElementById('rulesPager'); }
+function rulesMotion() { return matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'; }
+function layoutRulePages() {
+  const pager = rulesPagerEl();
+  if (!pager) return 0;
+  const h = pager.clientHeight;
+  pager.querySelectorAll('.rules-page').forEach(p => { p.style.height = h + 'px'; });
+  return h;
+}
+function currentRuleIndex() {
+  const pager = rulesPagerEl();
+  if (!pager) return 0;
+  const h = pager.clientHeight || 1;
+  return Math.max(0, Math.min(TABS.length - 1, Math.round(pager.scrollTop / h)));
+}
+function syncRuleTabs() {
+  $$('.rules-shell .tabs button').forEach(x => {
+    const on = x.dataset.v === rulesTab;
+    x.classList.toggle('sel', on);
+    x.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  const sel = document.querySelector('.rules-shell .tabs button.sel');
+  const row = sel && sel.parentElement;
+  if (!sel || !row) return;
+  const left = sel.offsetLeft - (row.clientWidth - sel.offsetWidth) / 2;
+  row.scrollTo({ left: Math.max(0, left), behavior: rulesMotion() });
+}
+function scrollRulesTo(i, behavior) {
+  const pager = rulesPagerEl();
+  if (!pager) return;
+  i = Math.max(0, Math.min(TABS.length - 1, i | 0));
+  const prev = rulesTab;
+  rulesTab = TABS[i][0];
+  syncRuleTabs();
+  const h = layoutRulePages() || pager.clientHeight || 1;
+  const top = i * h;
+  const behaviorUsed = behavior || rulesMotion();
+  if (Math.abs(pager.scrollTop - top) > 2) {
+    rulesSnapLock = Date.now() + (behaviorUsed === 'auto' ? 0 : 650);
+    pager.scrollTo({ top, behavior: behaviorUsed });
+  }
+  if (rulesTab === 'round' && prev !== rulesTab) animateDemo();
+}
+function pageRules(dir) {
+  if (Date.now() < rulesSnapLock) return;
+  scrollRulesTo(currentRuleIndex() + dir);
+}
+function refreshRulePage(key) {
+  const page = document.querySelector(`.rules-page[data-tab="${key}"]`);
+  if (!page) return;
+  const top = page.scrollTop;
+  page.innerHTML = rulesSection(key);
+  page.scrollTop = top;
+}
+function rulesModalOpen() {
+  const m = document.getElementById('modal');
+  return !!(m && !m.classList.contains('hidden'));
+}
+function rulePageCanScroll(page, dy) {
+  if (!page || !dy) return false;
+  const max = page.scrollHeight - page.clientHeight;
+  if (max <= 8) return false;
+  if (dy > 0) return page.scrollTop < max - 4;
+  return page.scrollTop > 4;
+}
+function mountRules() {
+  const shell = document.querySelector('.rules-shell');
+  const pager = rulesPagerEl();
+  if (!shell || !pager) return;
+  const place = () => {
+    const h = layoutRulePages();
+    if (!h) return;
+    const i = Math.max(0, TABS.findIndex(([k]) => k === rulesTab));
+    pager.scrollTop = i * h;
+  };
+  place();
+  requestAnimationFrame(place);
+  syncRuleTabs();
+  if (rulesTab === 'round') animateDemo();
+  if (shell.dataset.bound) return;
+  shell.dataset.bound = '1';
+  let wheelAcc = 0, wheelAccAt = 0;
+  shell.addEventListener('wheel', (e) => {
+    if (rulesModalOpen()) return;
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    const page = e.target.closest && e.target.closest('.rules-page');
+    let dy = e.deltaY;
+    if (e.deltaMode === 1) dy *= 16;
+    else if (e.deltaMode === 2) dy *= pager.clientHeight || 400;
+    if (rulePageCanScroll(page, dy)) return;
+    e.preventDefault();
+    const now = Date.now();
+    if (now < rulesSnapLock) return;
+    wheelAcc = now - wheelAccAt > 180 ? dy : wheelAcc + dy;
+    wheelAccAt = now;
+    if (Math.abs(wheelAcc) < 28) return;
+    const dir = wheelAcc > 0 ? 1 : -1;
+    wheelAcc = 0;
+    pageRules(dir);
+  }, { passive: false });
+  let drag = null;
+  const suppressClick = () => {
+    shell.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); }, { capture: true, once: true });
+  };
+  shell.addEventListener('touchstart', (e) => {
+    if (rulesModalOpen() || e.touches.length !== 1) { drag = null; return; }
+    const t = e.touches[0];
+    const page = e.target.closest && e.target.closest('.rules-page');
+    drag = { x: t.clientX, y: t.clientY, pagerTop: pager.scrollTop, page, pageTop: page ? page.scrollTop : 0, axis: null };
+  }, { passive: true });
+  shell.addEventListener('touchmove', (e) => {
+    if (!drag || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - drag.x, dy = t.clientY - drag.y;
+    if (!drag.axis) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+  }, { passive: true });
+  shell.addEventListener('touchend', (e) => {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    if (d.axis === 'x') return;
+    const y = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : d.y;
+    const delta = d.y - y;
+    if (d.page && Math.abs(d.page.scrollTop - d.pageTop) > 4) return;
+    if (rulePageCanScroll(d.page, delta)) return;
+    if (Math.abs(delta) < 42) return;
+    const h = pager.clientHeight || 1;
+    const start = Math.round(d.pagerTop / h);
+    const dest = start + (delta > 0 ? 1 : -1);
+    suppressClick();
+    scrollRulesTo(dest);
+    requestAnimationFrame(() => scrollRulesTo(dest));
+  });
+  shell.addEventListener('touchcancel', () => { drag = null; });
+  shell.addEventListener('keydown', (e) => {
+    if (rulesModalOpen()) return;
+    if (e.target && e.target.closest && e.target.closest('input, textarea')) return;
+    if (e.key === 'ArrowDown' || e.key === 'PageDown') { e.preventDefault(); pageRules(1); }
+    else if (e.key === 'ArrowUp' || e.key === 'PageUp') { e.preventDefault(); pageRules(-1); }
+  });
+  pager.addEventListener('scroll', () => {
+    const key = TABS[currentRuleIndex()][0];
+    if (key === rulesTab) return;
+    const prev = rulesTab;
+    rulesTab = key;
+    syncRuleTabs();
+    if (key === 'round' && prev !== 'round') animateDemo();
+  }, { passive: true });
+  pager.addEventListener('scrollend', () => { rulesSnapLock = 0; });
+  const onResize = () => {
+    if (view !== 'rules' || !document.body.contains(pager)) {
+      window.removeEventListener('resize', onResize);
+      return;
+    }
+    const i = Math.max(0, TABS.findIndex(([k]) => k === rulesTab));
+    const h = layoutRulePages();
+    if (h) pager.scrollTop = i * h;
+  };
+  window.addEventListener('resize', onResize);
 }
 const DEMO = [
   { t: '① 隊長產生', d: '隊長按座位次序輪流擔任，皇冠在誰頭上誰就組隊。', leader: 'd0', team: [], rejects: 0, quests: [], round: 0, center: '<b>第 1 輪</b>需要 2 人' },
@@ -2900,6 +3085,439 @@ function saveSkins(prev) {
     throw err;
   });
 }
+
+// Original music and UI sounds for HK阿瓦隆.
+// Synthesized in the browser (Web Audio). No samples, no third-party recordings,
+// no game / film / character themes. The mixer is its own AudioContext and never
+// touches the room voice graph in voice.js.
+const AUDIO_KEY = 'cc.audio';
+const AUDIO_DEFAULT_VOL = 0.4;
+const AUDIO_BGM_BASE = 0.2;
+const AUDIO_SFX_BASE = 0.62;
+const AUDIO_SFX_PEAK = 0.4;
+const AUDIO_BUF_PEAK = 0.72;
+const AUDIO_ICON_ON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.1L11.5 18V6L7.1 9.5H4z" fill="currentColor"/><path d="M14.2 9.2a3.4 3.4 0 0 1 0 5.6M16.7 7a6.2 6.2 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+const AUDIO_ICON_OFF = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.1L11.5 18V6L7.1 9.5H4z" fill="currentColor"/><path d="M15 10l4.5 4.5M19.5 10L15 14.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+const AUDIO_CONFIRM = new Set(['start', 'propose', 'ready', 'sword', 'lady', 'assassinate', 'cfgclose', 'floorend', 'lobby', 'supportpay', 'toroom']);
+const AUDIO_OPEN = new Set(['menu', 'cfg', 'create', 'join', 'invite', 'profile', 'ptab', 'about', 'emote', 'releaselist', 'role']);
+const AUDIO_CANCEL = new Set(['swordskip', 'leave', 'voteremind-x', 'abandonseat', 'logout', 'floorskip']);
+let audioPrefs = { m: 0, v: AUDIO_DEFAULT_VOL };
+let audioOptIn = null;
+let audioCtx = null, audioMaster = null, audioBgmBus = null, audioSfxBus = null;
+let audioArmed = false, audioScene = 'lobby', audioActive = '', audioToken = 0;
+let audioSrc = null, audioFade = null, audioEngine = '';
+let audioBuffers = {}, audioMeta = {}, audioBufferJob = null, audioError = '';
+let audioRequested = [], audioPlayed = [], audioLastCard = 0;
+function audioReduced() {
+  try { return matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  catch (e) { return false; }
+}
+function audioLoad() {
+  try {
+    const o = JSON.parse(LS.getItem(AUDIO_KEY) || 'null');
+    if (!o || typeof o !== 'object') return;
+    if (o.m === 0 || o.m === 1) audioPrefs.m = o.m;
+    if (typeof o.v === 'number' && o.v >= 0 && o.v <= 1) audioPrefs.v = o.v;
+    if (o.b === 0 || o.b === 1) audioOptIn = o.b === 1;
+  } catch (e) {}
+}
+function audioSave() {
+  try {
+    const o = { m: audioPrefs.m ? 1 : 0, v: Math.round(audioPrefs.v * 100) / 100 };
+    if (audioOptIn != null) o.b = audioOptIn ? 1 : 0;
+    LS.setItem(AUDIO_KEY, JSON.stringify(o));
+  } catch (e) {}
+}
+function audioSilent() { return !!(audioPrefs.m || audioPrefs.v <= 0.001); }
+function audioBgmAllowed() {
+  if (audioSilent() || !audioArmed || !audioCtx || audioCtx.state !== 'running') return false;
+  if (audioReduced() && audioOptIn !== true) return false;
+  return true;
+}
+function audioTarget() { return audioSilent() ? 0 : audioPrefs.v; }
+function audioApply() {
+  if (!audioMaster || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  const target = audioTarget();
+  const cur = audioMaster.gain.value;
+  audioMaster.gain.cancelScheduledValues(now);
+  audioMaster.gain.setValueAtTime(cur, now);
+  audioMaster.gain.linearRampToValueAtTime(target, now + (target === 0 ? 0.12 : 0.08));
+}
+function audioMenuHtml() {
+  return `<div id="audioCtl" class="audio-ctl"><button type="button" id="audioMute" class="audio-mute" aria-pressed="false" aria-label="關閉遊戲音樂同音效"></button><div class="audio-copy"><b>遊戲音量</b><span>音樂同按鈕聲，唔會關房間咪</span></div><label class="audio-vol"><span class="sr-only">遊戲音量</span><input type="range" id="audioVol" min="0" max="100" value="40" step="1" aria-label="遊戲音量"></label></div>`;
+}
+function audioPaint() {
+  const btn = document.getElementById('audioMute');
+  const slider = document.getElementById('audioVol');
+  const ctl = document.getElementById('audioCtl');
+  if (!btn || !ctl) return;
+  const off = audioSilent();
+  btn.setAttribute('aria-pressed', off ? 'true' : 'false');
+  btn.setAttribute('aria-label', off ? '開啟遊戲音樂同音效' : '關閉遊戲音樂同音效');
+  btn.innerHTML = off ? AUDIO_ICON_OFF : AUDIO_ICON_ON;
+  ctl.classList.toggle('is-muted', off);
+  if (slider && document.activeElement !== slider) {
+    const next = String(Math.round(audioPrefs.v * 100));
+    if (slider.value !== next) slider.value = next;
+  }
+}
+function audioEnsure() {
+  if (audioCtx) return audioCtx;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  audioCtx = new AC();
+  audioMaster = audioCtx.createGain();
+  audioMaster.gain.value = audioTarget();
+  audioBgmBus = audioCtx.createGain();
+  audioBgmBus.gain.value = AUDIO_BGM_BASE;
+  audioSfxBus = audioCtx.createGain();
+  audioSfxBus.gain.value = AUDIO_SFX_BASE;
+  const comp = audioCtx.createDynamicsCompressor();
+  comp.threshold.value = -9;
+  comp.knee.value = 6;
+  comp.ratio.value = 8;
+  comp.attack.value = 0.004;
+  comp.release.value = 0.12;
+  audioBgmBus.connect(audioMaster);
+  audioSfxBus.connect(audioMaster);
+  audioMaster.connect(comp);
+  comp.connect(audioCtx.destination);
+  return audioCtx;
+}
+function audioTone(t, freq, freq2, dur, peak, type, attack) {
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type || 'sine';
+  const f1 = Math.max(40, freq);
+  o.frequency.setValueAtTime(f1, t);
+  const d = Math.max(0.04, dur);
+  if (freq2 && freq2 !== freq) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq2), t + d);
+  const a = Math.min(d * 0.45, Math.max(0.004, attack || 0.012));
+  const pk = Math.min(AUDIO_SFX_PEAK, Math.max(0.0008, peak));
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(pk, t + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g); g.connect(audioSfxBus);
+  o.start(t); o.stop(t + d + 0.03);
+}
+const AUDIO_CUES = {
+  tap: (t) => audioTone(t, 740, 560, 0.07, 0.28, 'sine', 0.008),
+  open: (t) => audioTone(t, 523, 784, 0.12, 0.3, 'triangle', 0.012),
+  confirm: (t) => { audioTone(t, 392, 392, 0.08, 0.26, 'triangle', 0.01); audioTone(t + 0.07, 523, 659, 0.14, 0.24, 'sine', 0.01); },
+  voteYes: (t) => audioTone(t, 494, 784, 0.16, 0.3, 'sine', 0.012),
+  voteNo: (t) => audioTone(t, 349, 196, 0.16, 0.28, 'triangle', 0.01),
+  cancel: (t) => audioTone(t, 440, 294, 0.11, 0.22, 'sine', 0.01),
+  questOk: (t) => { audioTone(t, 587, 880, 0.18, 0.26, 'sine', 0.014); audioTone(t + 0.02, 1174, 1174, 0.12, 0.08, 'sine', 0.02); },
+  questBad: (t) => audioTone(t, 220, 146, 0.2, 0.26, 'triangle', 0.012),
+  tick: (t) => audioTone(t, 988, 740, 0.05, 0.14, 'sine', 0.004),
+  card: (t) => { audioTone(t, 392, 587, 0.62, 0.3, 'sine', 0.045); audioTone(t + 0.03, 784, 988, 0.5, 0.09, 'sine', 0.06); },
+};
+function audioPlay(name) {
+  const fn = AUDIO_CUES[name] || AUDIO_CUES.tap;
+  const t = audioCtx.currentTime;
+  if (name === 'card') {
+    if (t - audioLastCard < 0.45) return;
+    audioLastCard = t;
+  }
+  audioPlayed.push(name);
+  if (audioPlayed.length > 40) audioPlayed.shift();
+  fn(t);
+}
+function audioCue(name) {
+  if (!name) return false;
+  audioRequested.push(name);
+  if (audioRequested.length > 40) audioRequested.shift();
+  if (audioSilent()) return false;
+  if (!audioArmed && (!audioCtx || audioCtx.state !== 'running')) return false;
+  audioEnsure();
+  if (!audioCtx) return false;
+  const run = () => { if (audioCtx && audioCtx.state === 'running' && !audioSilent()) audioPlay(name); };
+  if (audioCtx.state === 'running') run();
+  else audioCtx.resume().then(run).catch(() => {});
+  return true;
+}
+function audioCueFor(target) {
+  if (!target || !target.closest) return '';
+  if (target.closest('#audioCtl')) return '';
+  if (target.closest('#flip')) return '';
+  const host = target.closest('[data-a], button, #backBtn');
+  if (!host) return '';
+  if (host.disabled || host.getAttribute('aria-disabled') === 'true') return '';
+  const a = host.dataset.a || '';
+  const id = host.id || '';
+  if (a === 'vote') return host.dataset.v === '1' ? 'voteYes' : 'voteNo';
+  if (a === 'quest') return host.dataset.v === '1' ? 'questOk' : 'questBad';
+  if (AUDIO_CONFIRM.has(a) || id === 'ok' || id === 'sp-eq' || id === 'cropok' || id === 'ab-yes') return 'confirm';
+  if (AUDIO_CANCEL.has(a) || id === 'backBtn' || id === 'cc' || id === 'sp-x' || id === 'cropcancel' || id === 'ab-no' || id === 'rel-list-x' || id === 'room-menu-close') return 'cancel';
+  if (AUDIO_OPEN.has(a)) return 'open';
+  if (a || host.tagName === 'BUTTON') return 'tap';
+  return '';
+}
+function audioFromClick(e) {
+  const name = audioCueFor(e.target);
+  if (name) audioCue(name);
+}
+function audioRetire(sec) {
+  const g = audioFade, src = audioSrc;
+  if (!g || !src || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  try {
+    g.gain.cancelScheduledValues(now);
+    g.gain.setValueAtTime(g.gain.value, now);
+    g.gain.linearRampToValueAtTime(0, now + sec);
+  } catch (e) {}
+  setTimeout(() => { try { src.stop(); } catch (e) {} try { g.disconnect(); } catch (e) {} }, Math.ceil(sec * 1000) + 60);
+}
+function audioNormalize(buf) {
+  const data = buf.getChannelData(0);
+  let peak = 0;
+  for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+  const g = peak > 0.0001 ? AUDIO_BUF_PEAK / peak : 1;
+  if (g !== 1) for (let i = 0; i < data.length; i++) data[i] *= g;
+  let after = 0;
+  for (let i = 0; i < data.length; i++) after = Math.max(after, Math.abs(data[i]));
+  return { peak: after, edge: Math.abs(data[0] - data[data.length - 1]) };
+}
+function audioRenderLoop(kind, sampleRate) {
+  const seconds = 8;
+  const length = Math.round(seconds * sampleRate);
+  const off = new OfflineAudioContext(1, length, sampleRate);
+  const master = off.createGain();
+  master.gain.value = 1;
+  master.connect(off.destination);
+  const add = (freq, peak, type, t0, dur, attack, release) => {
+    const o = off.createOscillator();
+    o.type = type || 'sine';
+    o.frequency.value = freq;
+    const g = off.createGain();
+    const start = t0 || 0;
+    const end = dur ? Math.min(seconds - 0.05, start + dur) : seconds;
+    if (dur) {
+      const a = Math.min(attack || 0.04, (end - start) * 0.35);
+      g.gain.setValueAtTime(0, start);
+      g.gain.linearRampToValueAtTime(peak, start + a);
+      g.gain.linearRampToValueAtTime(0, end);
+    } else g.gain.value = peak;
+    o.connect(g); g.connect(master);
+    o.start(start); o.stop(Math.min(seconds, end + 0.01));
+  };
+  if (kind === 'game') {
+    add(98, 0.15, 'sine');
+    add(146, 0.07, 'sine');
+    add(196, 0.035, 'sine');
+    [262, 330, 392, 330, 294, 392, 440, 392, 330].forEach((f, i) => add(f, 0.09, 'triangle', 0.4 + i * 0.8, 0.62, 0.025, 0.32));
+  } else {
+    add(130, 0.16, 'sine');
+    add(196, 0.06, 'sine');
+    add(262, 0.03, 'sine');
+    [330, 392, 494, 440].forEach((f, i) => add(f, 0.11, 'sine', 0.55 + i * 2, 1.25, 0.04, 0.62));
+  }
+  return off.startRendering();
+}
+function audioEnsureBuffers() {
+  if (audioBufferJob) return audioBufferJob;
+  audioBufferJob = (async () => {
+    const rate = audioCtx.sampleRate;
+    const lobby = await audioRenderLoop('lobby', rate);
+    const game = await audioRenderLoop('game', rate);
+    audioBuffers.lobby = lobby;
+    audioBuffers.game = game;
+    audioMeta.lobby = audioNormalize(lobby);
+    audioMeta.game = audioNormalize(game);
+    audioEngine = 'buffer';
+  })().catch((err) => { audioError = String(err && err.message || err); audioBufferJob = null; throw err; });
+  return audioBufferJob;
+}
+function audioStartBuffer(scene) {
+  const buf = audioBuffers[scene];
+  if (!buf || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(1, now + 0.55);
+  src.connect(g); g.connect(audioBgmBus);
+  src.start();
+  audioRetire(0.55);
+  audioSrc = src;
+  audioFade = g;
+  audioActive = scene;
+}
+function audioStartLive(scene) {
+  const freqs = scene === 'game' ? [98, 146, 196] : [130, 196, 262];
+  const now = audioCtx.currentTime;
+  const mine = [];
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(0.45, now + 0.5);
+  freqs.forEach((f, i) => {
+    const o = audioCtx.createOscillator();
+    o.type = 'sine';
+    o.frequency.value = f;
+    const og = audioCtx.createGain();
+    og.gain.value = i === 0 ? 0.34 : 0.12;
+    o.connect(og); og.connect(g); o.start();
+    mine.push(o);
+  });
+  g.connect(audioBgmBus);
+  const handle = { stop() { mine.forEach((o) => { try { o.stop(); } catch (e) {} }); } };
+  audioRetire(0.4);
+  audioSrc = handle;
+  audioFade = g;
+  audioActive = scene;
+  if (!audioEngine) audioEngine = 'live';
+}
+async function audioEnsureBgm() {
+  if (!audioBgmAllowed()) return;
+  const token = ++audioToken;
+  const want = audioScene;
+  let ok = false;
+  try { await audioEnsureBuffers(); ok = true; } catch (e) { ok = false; }
+  if (token !== audioToken || !audioBgmAllowed() || want !== audioScene) return;
+  if (audioActive === want && audioSrc) return;
+  if (ok && audioBuffers[want]) audioStartBuffer(want);
+  else audioStartLive(want);
+}
+function audioGesture() {
+  audioArmed = true;
+  audioEnsure();
+  if (!audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume().then(() => { if (audioBgmAllowed()) audioEnsureBgm(); }).catch(() => {});
+  else if (audioBgmAllowed()) audioEnsureBgm();
+}
+function audioSceneTo(name) {
+  audioScene = name === 'game' ? 'game' : 'lobby';
+  if (audioBgmAllowed()) audioEnsureBgm();
+}
+function audioSetVol(v, fromUser) {
+  const next = Math.min(1, Math.max(0, Number(v) || 0));
+  audioPrefs.v = next;
+  if (fromUser) {
+    audioOptIn = true;
+    if (next > 0) audioPrefs.m = 0;
+  }
+  audioSave();
+  audioApply();
+  audioPaint();
+  if (fromUser && !audioSilent()) audioEnsureBgm();
+}
+function audioToggle() {
+  if (!audioSilent()) {
+    audioCue('tap');
+    audioPrefs.m = 1;
+  } else {
+    audioPrefs.m = 0;
+    if (audioPrefs.v <= 0.001) audioPrefs.v = AUDIO_DEFAULT_VOL;
+    audioOptIn = true;
+    audioApply();
+    audioCue('tap');
+  }
+  audioSave();
+  audioApply();
+  audioPaint();
+  if (!audioSilent()) audioEnsureBgm();
+}
+function audioSetMuted(on) {
+  audioPrefs.m = on ? 1 : 0;
+  if (!on) {
+    if (audioPrefs.v <= 0.001) audioPrefs.v = AUDIO_DEFAULT_VOL;
+    audioOptIn = true;
+  }
+  audioSave();
+  audioApply();
+  audioPaint();
+  if (!on) audioEnsureBgm();
+}
+function audioDebug() {
+  return {
+    vol: audioPrefs.v,
+    muted: !!audioPrefs.m,
+    silent: audioSilent(),
+    defaultVol: AUDIO_DEFAULT_VOL,
+    bgmBase: AUDIO_BGM_BASE,
+    sfxBase: AUDIO_SFX_BASE,
+    sfxPeak: AUDIO_SFX_PEAK,
+    bufPeak: AUDIO_BUF_PEAK,
+    ceiling: AUDIO_BGM_BASE * AUDIO_BUF_PEAK + AUDIO_SFX_BASE * AUDIO_SFX_PEAK,
+    targetGain: audioTarget(),
+    masterNow: audioMaster ? audioMaster.gain.value : 0,
+    contextState: audioCtx ? audioCtx.state : 'idle',
+    started: !!audioCtx,
+    armed: audioArmed,
+    scene: audioScene,
+    activeScene: audioActive,
+    bgmPlaying: !!(audioSrc && audioBgmAllowed()),
+    bgmOptIn: audioOptIn,
+    reduced: audioReduced(),
+    requested: audioRequested.slice(),
+    played: audioPlayed.slice(),
+    engine: audioEngine,
+    loopDelta: { lobby: audioMeta.lobby ? audioMeta.lobby.edge : null, game: audioMeta.game ? audioMeta.game.edge : null },
+    bufferPeak: { lobby: audioMeta.lobby ? audioMeta.lobby.peak : null, game: audioMeta.game ? audioMeta.game.peak : null },
+    license: 'original-synthesis',
+    routesVoice: false,
+    error: audioError,
+  };
+}
+function audioBindControls() {
+  const btn = document.getElementById('audioMute');
+  const slider = document.getElementById('audioVol');
+  if (btn && !btn.dataset.bound) {
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); audioGesture(); audioToggle(); });
+  }
+  if (slider && !slider.dataset.bound) {
+    slider.dataset.bound = '1';
+    slider.addEventListener('input', () => {
+      audioGesture();
+      audioSetVol(Number(slider.value) / 100, true);
+    });
+  }
+}
+let audioDocBound = false;
+function audioBind() {
+  if (audioDocBound) return;
+  audioDocBound = true;
+  audioBindControls();
+  document.addEventListener('pointerdown', () => audioGesture(), true);
+  document.addEventListener('keydown', (e) => { if (!e.repeat) audioGesture(); }, true);
+  document.addEventListener('click', (e) => { audioGesture(); audioFromClick(e); }, true);
+  document.addEventListener('visibilitychange', () => {
+    if (!audioCtx || document.hidden || !audioArmed) return;
+    audioCtx.resume().then(() => { if (audioBgmAllowed()) audioEnsureBgm(); }).catch(() => {});
+  });
+  try {
+    matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => {
+      if (audioBgmAllowed()) audioEnsureBgm();
+      else if (audioFade && audioCtx) {
+        const now = audioCtx.currentTime;
+        audioFade.gain.cancelScheduledValues(now);
+        audioFade.gain.setValueAtTime(audioFade.gain.value, now);
+        audioFade.gain.linearRampToValueAtTime(0, now + 0.35);
+        const src = audioSrc;
+        audioSrc = null; audioFade = null; audioActive = '';
+        setTimeout(() => { try { src && src.stop(); } catch (e) {} }, 420);
+      }
+    });
+  } catch (e) {}
+}
+audioLoad();
+audioPaint();
+audioBind();
+window.AvalonAudio = {
+  cue: audioCue,
+  scene: audioSceneTo,
+  gesture: audioGesture,
+  setMuted: audioSetMuted,
+  setVol: audioSetVol,
+  toggleMuted: audioToggle,
+  cueFor: audioCueFor,
+  debug: audioDebug,
+};
+
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-a]'); if (!el || !document.body.contains(el)) return;
   if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.closest('form')) e.preventDefault();
@@ -3068,10 +3686,16 @@ document.addEventListener('click', async (e) => {
     case 'story': return storySheet(window.__lastRecord);
     case 'storystats': return storySheet(null);
     case 'skin': return openSkinPreview(el.dataset.r, el.dataset.s);
-    case 'rtab': rulesTab = el.dataset.v; if (rulesTab === 'round') demoStep = 0; return mountRules();
-    case 'wk': wkRole = el.dataset.r; return mountRules();
-    case 'wkrev': wkReveal = !wkReveal; return mountRules();
-    case 'demo': demoStep = demoStep === DEMO.length - 1 && el.dataset.v === '1' ? 0 : Math.max(0, demoStep + Number(el.dataset.v)); return mountRules();
+    case 'rtab': {
+      const key = el.dataset.v;
+      const i = TABS.findIndex(([k]) => k === key);
+      if (key === 'round') { demoStep = 0; refreshRulePage('round'); }
+      scrollRulesTo(i < 0 ? 0 : i, 'auto');
+      return;
+    }
+    case 'wk': wkRole = el.dataset.r; return refreshRulePage('knows');
+    case 'wkrev': wkReveal = !wkReveal; return refreshRulePage('knows');
+    case 'demo': demoStep = demoStep === DEMO.length - 1 && el.dataset.v === '1' ? 0 : Math.max(0, demoStep + Number(el.dataset.v)); refreshRulePage('round'); animateDemo(); return;
     case 'rolepeek': { const k = el.dataset.r; return openModal(`<div class="flip on" style="cursor:default"><div class="in"><div class="face back"></div><div class="face front">${roleFace(k)}</div></div></div><p class="center" style="margin-top:14px">${ROLE[k].d}</p><button class="btn" id="ok">關閉</button>`, (m) => $('#ok', m).onclick = closeModal); }
   }
 });

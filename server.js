@@ -18,14 +18,14 @@ const PORT = process.env.PORT || 3000;
 const pubId = (pid) => crypto.createHash('sha256').update(String(pid)).digest('hex').slice(0, 10);
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const cleanName = (s) => Array.from(String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim()).slice(0, 10).join('') || '騎士';
-const ANIMALS = ['fox','panda','duck','squirrel','hedgehog','bunny','bear','redpanda','otter','hamster','shiba','dalmatian','capybara','penguin','koala','cat','wolf','lion','piglet','guineapig','puffer','alien','wolfking','frog','dragonet','tiger','hero'];
-const FXS = ['none','spot','gold','snow','spark','petals','howl','fire','lightning','silver'];
+const ANIMALS = ['fox','panda','duck','squirrel','hedgehog','bunny','bear','redpanda','otter','hamster','shiba','dalmatian','capybara','penguin','koala','cat','wolf','lion','piglet','guineapig','puffer','alien','wolfking','frog','dragonet','tiger','hero','merlin','percival','servant','assassin','mordred','oberon','morgana'];
+const FXS = ['none','spot','gold','snow','spark','petals','howl','fire','lightning','signs','ding','harbour','ferry','hop','waddle','ham','silver'];
 const EMOTES = ['1f602','1f62d','1f631','1f914','1f60e','1f621','1f64f','1f44d','1f44f','1f525','2764_fe0f','1f608','1f92b','1f440','1f389'];
 const emoteAt = new Map();
 // cosmetic unlock rules, enforced server-side (GM bypasses all)
 const PD_RULE = { wolf: ['free', 0], pumpkin: ['free', 0], devil: ['free', 0], crown: ['free', 0], bow: ['free', 0], santa: ['free', 0], holly: ['free', 0], newmoon: ['games', 1], halo: ['games', 2], egg: ['games', 3], ghost: ['games', 4], witch: ['games', 5], bolo: ['games', 6], tram: ['games', 7], bat: ['games', 8], vampire: ['games', 12], plume: ['wins', 1], taxi: ['wins', 2], merlinhat: ['wins', 3], lotus: ['wins', 5], neon: ['wins', 6], excal: ['wins', 10], laurel: ['mvp', 10], foxqiu: ['games', 9], foxheart: ['games', 15], starmoon: ['games', 11], starplain: ['wins', 4], whiteling: ['wins', 7], darkling: ['wins', 8], skydragon: ['games', 18], foxdance: ['wins', 9], frostmirror: ['free', 0], icesword: ['free', 0], fairylake: ['wins', 12], odineye: ['wins', 14] };
 const CB_RULE = { cardback: ['free', 0], cardback_xmas: ['free', 0], cardback_sakura: ['games', 2], cardback_halloween: ['games', 3], cardback_lny: ['games', 6], cardback_starry: ['wins', 3], cardback_neon: ['wins', 5], cardback_amigos: ['wins', 10] };
-const FX_NEED = { none: 0, spot: 0, gold: 0, snow: 0, spark: 1, petals: 3, howl: 4, fire: 6, lightning: 10 };
+const FX_NEED = { none: 0, spot: 0, gold: 0, snow: 0, spark: 1, petals: 3, howl: 4, fire: 6, lightning: 10, signs: 0, ding: 2, harbour: 5, ferry: 8, hop: 0, waddle: 3, ham: 7 };
 function unlockedBy(rule, st) { if (!rule) return false; const [k, n] = rule; return k === 'free' || (k === 'games' ? st.played : k === 'wins' ? st.won : st.mvp) >= n; }
 function sanitizeProfile(user, f, st) {
   // Support cosmetics stay locked until a verified webhook, including for a GM.

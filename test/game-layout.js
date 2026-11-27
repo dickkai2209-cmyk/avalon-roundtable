@@ -215,9 +215,31 @@ function bot(key, name) {
         return { seat: el.dataset.seat, text: (el.textContent || '').trim(), l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height };
       });
       const legend = document.querySelector('.markleg');
-      const release = document.querySelector('[data-a="releaselist"]');
+      const release = document.querySelector('.topbar [data-a="releaselist"]');
+      const title = document.querySelector('#topTitle');
+      const code = document.querySelector('.top-code');
+      const logo = document.querySelector('.topbar .tlogo');
+      const back = document.querySelector('#backBtn');
+      const inv = document.querySelector('.top-inv');
+      const more = document.querySelector('.top-more');
+      const conn = document.querySelector('#conn');
+      const header = document.querySelector('.topbar');
+      const hitOf = (el) => {
+        if (!el) return '';
+        const r = el.getBoundingClientRect();
+        const node = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(r.height / 2, 12));
+        if (!node) return '';
+        if (node.closest('[data-a="releaselist"]')) return 'release';
+        if (node.closest('.top-inv')) return 'invite';
+        if (node.closest('.top-more')) return 'more';
+        if (node.closest('.top-code')) return 'code';
+        if (node.closest('#backBtn')) return 'back';
+        return String(node.className || node.tagName).slice(0, 40);
+      };
+      const doc = document.documentElement;
       return {
         ih: innerHeight, iw: innerWidth, inset, insetTop, scroll: main.scrollTop,
+        sw: doc.scrollWidth, cw: doc.clientWidth,
         main: box(main), mainPos: getComputedStyle(main).position,
         card: box(card), rt: box(rt),
         fab: fab ? box(fab) : null, veto: vetoBox, bar: bar ? box(bar) : null,
@@ -225,6 +247,20 @@ function bot(key, name) {
         legend: legend ? legend.innerText.replace(/\\s+/g, ' ').trim() : '',
         release: release ? release.textContent.trim() : '',
         releaseBox: release ? box(release) : null,
+        releaseInCard: !!document.querySelector('.card [data-a="releaselist"]'),
+        releaseHit: hitOf(release),
+        titleClip: title ? title.scrollWidth - title.clientWidth : 99,
+        relClip: release ? release.scrollWidth - release.clientWidth : 99,
+        titleText: title ? title.textContent.replace(/\\s+/g, ' ').trim() : '',
+        headerBottom: header ? header.getBoundingClientRect().bottom : 0,
+        clusterRight: Math.max(back ? box(back).r : 0, logo ? box(logo).r : 0, title ? box(title).r : 0, code ? box(code).r : 0),
+        chevronGap: (back && logo) ? box(logo).l - box(back).r : 0,
+        logoSize: logo ? box(logo).w : 0,
+        logoTextGap: (logo && title) ? box(title).l - box(logo).r : 0,
+        toolsLeft: Math.min(inv ? box(inv).l : 9999, more ? box(more).l : 9999),
+        toolsRight: conn ? box(conn).r : (more ? box(more).r : 0),
+        backLeft: back ? box(back).l : 99,
+        orderOk: !!(back && logo && title && code && box(back).r <= box(logo).l + 1 && box(logo).r <= box(title).l + 2),
         nums, seats
       };
     })()`);
@@ -363,12 +399,24 @@ function bot(key, name) {
   }
   function assertReleasePlace(tag, g) {
     const b = g.releaseBox;
-    assert(b && g.release === '釋出座位', tag + ' host release control is on the table');
-    assert(b.w <= g.card.w * 0.55 && b.w >= 72, tag + ' release control is compact (' + b.w.toFixed(0) + '/' + g.card.w.toFixed(0) + ')');
-    assert(b.h >= 36 && b.h <= 56, tag + ' release control stays easy to tap (' + b.h.toFixed(0) + ')');
-    assert(b.l >= g.card.l + g.card.w * 0.42, tag + ' release control sits on the right (' + b.l.toFixed(0) + ')');
-    assert(g.card.r - b.r <= 24 && b.r <= g.card.r + 1, tag + ' release control is inset at the card edge');
-    assert(g.card.b - b.b <= 28 && b.b > g.card.t + g.card.h * 0.55, tag + ' release control sits at the bottom of the card');
+    assert(b && g.release === '釋出座位', tag + ' host release control is in the header');
+    assert(!g.releaseInCard, tag + ' release control is not on the table');
+    assert(g.releaseHit === 'release', tag + ' release control is the top hit (' + g.releaseHit + ')');
+    const inviteGap = g.toolsLeft - b.r;
+    assert((b.l + b.r) / 2 > g.iw * 0.58, tag + ' release control sits on the right (' + ((b.l + b.r) / 2).toFixed(1) + ')');
+    assert(inviteGap >= 2 && inviteGap <= 10, tag + ' release control sits against 邀請 (' + inviteGap.toFixed(1) + 'px)');
+    assert(b.t >= g.insetTop - 1 && b.b <= g.headerBottom + 1, tag + ' release control sits inside the top bar');
+    assert(b.h >= 28 && b.h <= 40, tag + ' release control is a compact tap target (' + b.h.toFixed(0) + ')');
+    assert(b.w >= 60 && b.w <= 130, tag + ' release label stays readable (' + b.w.toFixed(0) + ')');
+    assert(g.relClip <= 1 && g.titleClip <= 1, tag + ' header text is not clipped');
+    assert(/圓桌/.test(g.titleText) && g.orderOk, tag + ' back, logo, 圓桌 and the room code read left to right');
+    const wideBar = g.iw >= 388;
+    assert(g.logoSize >= (wideBar ? 27 : 25) && g.logoSize <= (wideBar ? 29 : 27), tag + ' room logo keeps the previous size (' + g.logoSize.toFixed(0) + ')');
+    assert(g.logoTextGap >= (wideBar ? 5 : 3) && g.logoTextGap <= (wideBar ? 10 : 8), tag + ' logo-to-圓桌 gap keeps the previous distance (' + g.logoTextGap.toFixed(1) + ')');
+    assert(g.chevronGap >= 14 && g.chevronGap <= 22, tag + ' the title group sits a little further from the back chevron (' + g.chevronGap.toFixed(1) + 'px)');
+    assert(g.backLeft <= 8 && g.clusterRight <= b.l - 4, tag + ' left cluster clears 釋出座位 (' + (b.l - g.clusterRight).toFixed(1) + ')');
+    assert(g.toolsRight <= g.iw + 1, tag + ' the right cluster stays on screen');
+    assert(g.sw <= g.cw + 1, tag + ' header does not overflow the screen');
     const bottom = g.seats.slice().sort((a, c) => c.cy - a.cy)[0];
     const name = nameBox(bottom);
     const num = g.nums.find(n => n.seat === bottom.seat);

@@ -127,6 +127,18 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
     await cdp.eval(`document.querySelector('[data-t="pendant"]').click()`);
     await cdp.eval(`document.querySelector('[data-pd="wolf"]').click()`);
     await cdp.eval(`document.querySelector('[data-t="avatar"]').click()`);
+    const rolePick = await cdp.eval(`(() => {
+      const heads = [...document.querySelectorAll('.pe-h')].map(el => el.textContent.trim());
+      const roleGrid = document.querySelector('.pe-roles');
+      const roles = roleGrid ? [...roleGrid.querySelectorAll('[data-e]')].map(b => ({ k: b.dataset.e, n: (b.querySelector('.lb') || {}).textContent || '', src: (b.querySelector('img') || {}).getAttribute('src') || '' })) : [];
+      const animal = [...document.querySelectorAll('.pe-grid')].find(g => !g.classList.contains('pe-roles'));
+      const beasts = animal ? [...animal.querySelectorAll('[data-e]')].map(b => b.dataset.e) : [];
+      const roleAfter = !!(animal && roleGrid && (animal.compareDocumentPosition(roleGrid) & Node.DOCUMENT_POSITION_FOLLOWING));
+      return { heads, roles, beasts, upload: !!(animal && animal.querySelector('[data-upload]')), roleAfter };
+    })()`);
+    assert(rolePick.heads.join() === '動物,角色' && rolePick.roleAfter, 'avatar picker puts 角色 at the bottom, after 動物 ' + JSON.stringify(rolePick.heads));
+    assert(rolePick.roles.map(r => r.k + ':' + r.n + ':' + r.src).join('|') === 'merlin:梅林:/img/av/merlin.webp|percival:派西維爾:/img/av/percival.webp|servant:忠臣:/img/av/servant.webp|assassin:刺客:/img/av/assassin.webp|mordred:莫德雷特:/img/av/mordred.webp|oberon:奧柏倫:/img/av/oberon.webp|morgana:莫甘娜:/img/av/morgana.webp', 'seven role faces are in the 角色 group');
+    assert(rolePick.upload && rolePick.beasts.includes('fox') && rolePick.roles.every(r => !rolePick.beasts.includes(r.k)), 'photo upload and animal faces stay, roles are not mixed in');
     // entrance preview anchored on own avatar; locked items do not equip
     await cdp.eval(`(() => {
       window.__puts = 0; const orig = window.fetch;
@@ -365,7 +377,10 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
         const gapSpread = Math.max(...gaps) - Math.min(...gaps);
         const ratio = dists.reduce((a, b) => a + b, 0) / iconD.reduce((a, b) => a + b, 0);
         assert(gapSpread <= 2.5, tag + '/' + n + ' avatar-to-number distance is the same (spread ' + gapSpread.toFixed(2) + 'px)');
-        assert(ratio > 0.50 && ratio < 0.60, tag + '/' + n + ' number ring is ~0.55 of the avatar ring (' + ratio.toFixed(3) + ')');
+        const wantNum = n >= 12 ? 21.5 : n >= 10 ? 22 : 23.1;
+        const numPx = dists.reduce((a, b) => a + b, 0) / n;
+        const wantPx = wantNum / 100 * m.rt.w;
+        assert(Math.abs(numPx - wantPx) <= 2.5, tag + '/' + n + ' numerals stay on the original ring (' + numPx.toFixed(1) + 'px vs ' + wantPx.toFixed(1) + ')');
         const host = ordered.find(s => s.pill) || ordered[0];
         const nameGap = host.nm.t - (host.icon.t + host.icon.h);
         assert(nameGap >= 1 && nameGap <= 6, tag + '/' + n + ' name sits ' + nameGap.toFixed(1) + 'px under the avatar');
@@ -499,6 +514,33 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
     atSeat(movedB, 6, 'host');
     assert((await cdp.eval(`document.querySelector('.rt .st[data-seat="8"] .nm').textContent`)) === '乙座', 'second player avatar arrived on seat 8');
     assert((await cdp.eval(`document.querySelector('.rt .st[data-seat="3"] .nm').textContent`)) === '空位', 'seat 3 is empty again');
+    const merlinFace = await cdp.eval(`(async () => {
+      const st = document.querySelector('.rt .st[data-seat="6"]');
+      const avSize = Math.round(parseFloat(getComputedStyle(st).getPropertyValue('--av')) || 58);
+      st.querySelector('.av-wrap').outerHTML = window.__av.av({ pendant: 'icesword', avatar: 'merlin', bg: '#bcd6ff', name: st.querySelector('.nm').textContent }, avSize);
+      const img = st.querySelector('.av img');
+      await img.decode().catch(() => 0);
+      const palEl = st.querySelector('.pd-pal');
+      palEl.style.animation = 'none';
+      palEl.style.transform = 'none';
+      const face = st.querySelector('.av').getBoundingClientRect();
+      const pal = palEl.getBoundingClientRect();
+      const no = document.querySelector('.rt > .no[data-seat="6"]').getBoundingClientRect();
+      const nm = st.querySelector('.nm').getBoundingClientRect();
+      const overlap = (a, b) => a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
+      const cx = face.left + face.width / 2, cy = face.top + face.height / 2, rad = face.width / 2 - 1;
+      const qx = Math.max(pal.left, Math.min(cx, pal.right));
+      const qy = Math.max(pal.top, Math.min(cy, pal.bottom));
+      return {
+        src: img.getAttribute('src'), pal: st.querySelector('.pd-pal').dataset.pal,
+        no: document.querySelector('.rt > .no[data-seat="6"]').textContent,
+        topLeft: pal.left < face.left + face.width * 0.45 && pal.top < cy,
+        onFace: (qx - cx) ** 2 + (qy - cy) ** 2 < rad * rad,
+        onNo: overlap(pal, no), onName: overlap(pal, nm),
+      };
+    })()`);
+    assert(merlinFace.src === '/img/av/merlin.webp' && merlinFace.pal === 'sword' && merlinFace.no === '6', 'lobby seat renders the Merlin face with the sword charm ' + JSON.stringify(merlinFace));
+    assert(merlinFace.topLeft && !merlinFace.onFace && !merlinFace.onNo && !merlinFace.onName, 'charm stays top-left of Merlin and the seat number stays clear ' + JSON.stringify(merlinFace));
     bot.close();
     await setSize(1280, 800);
     await sleep(80);

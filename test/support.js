@@ -149,7 +149,7 @@ async function hook(objType, object, id) {
   assert(!html.includes('tlogo" src="/img/amigos.webp"') && !html.includes('class="tlogo" src="/img/amigos.webp"'), 'Amigos is not the header mark');
   assert(app.includes('class="amigos-mark"') && app.includes('Amigosparty') && app.includes('Teddy Design Limited'), 'Amigos stays a sponsor credit');
   assert(app.includes('旺角霓虹'), 'card-back name 旺角霓虹 is left as venue flavour');
-  assert(html.includes('style.css?v=68') && html.includes('app.js?v=76') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'cache bust past live main');
+  assert(html.includes('style.css?v=85') && html.includes('app.js?v=85') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'cache bust past live main');
   assert(!html.includes('style.css?v=67') && !html.includes('app.js?v=75'), 'live cache versions are not reused');
   assert(!app.includes("if (profile.pendant === 'coffee') profile.pendant = 'none'"), 'a saved coffee pendant is kept on load');
   assert(app.includes("if (it[2] === 'support') return hasBenefit('coffee')"), 'coffee still unlocks only with the support benefit');
@@ -166,7 +166,16 @@ async function hook(objType, object, id) {
   assert(logo.slice(0, 4).toString() === 'RIFF' && logo.slice(8, 12).toString() === 'WEBP', 'merlin logo is webp');
   assert(html.includes('rel="icon" href="/img/icon-192.png?v=68"'), 'favicon is the Merlin icon');
   assert(html.includes('rel="apple-touch-icon" href="/img/icon-192.png?v=68"'), 'apple touch icon is the Merlin icon');
-  assert(html.includes('property="og:image" content="https://avalon-roundtable-10t9.onrender.com/img/icon-512.png?v=68"'), 'share image is the absolute Merlin icon');
+  assert(html.includes('property="og:title" content="HK阿瓦隆 · 網頁版阿瓦隆"'), 'share title stays HK阿瓦隆');
+  assert(html.includes('property="og:site_name" content="HK阿瓦隆"'), 'share site name stays HK阿瓦隆');
+  assert(html.includes('property="og:description" content="HK阿瓦隆 HK AVALON · by Amigosparty"'), 'share description stays HK阿瓦隆');
+  assert(html.includes('property="og:image" content="https://avalon-roundtable-10t9.onrender.com/img/icon-192.png?v=73"'), 'share image is the compact Merlin thumbnail');
+  assert(html.includes('property="og:image:type" content="image/png"'), 'share image is declared as a png');
+  assert(html.includes('property="og:image:width" content="192"') && html.includes('property="og:image:height" content="192"'), 'share image declares its real 192 pixel size');
+  assert(html.includes('name="twitter:card" content="summary"') && !html.includes('summary_large_image'), 'chat cards use the compact summary layout');
+  assert(!html.includes('icon-512'), 'the page does not use the 512 icon as a link preview');
+  const shareIcon = merlinIconStats(fs.readFileSync(path.join(root, 'public/img/icon-192.png')));
+  assert(shareIcon.w === 192 && shareIcon.h === 192 && shareIcon.w < 300 && shareIcon.h < 200, 'compact share thumb stays under the large-preview size');
   assert(manifest.includes('/img/icon-192.png?v=68') && manifest.includes('/img/icon-512.png?v=68') && manifest.includes('/img/icon.svg?v=68'), 'manifest icons point at Merlin');
   const svg = read('public/img/icon.svg');
   const embedded = Buffer.from((svg.match(/base64,([A-Za-z0-9+/=]+)/) || ['', ''])[1], 'base64');

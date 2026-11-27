@@ -21,7 +21,7 @@ const PRESETS = {
   9:  { good: ['merlin', 'percival', 'servant', 'servant', 'servant', 'servant'], evil: ['morgana', 'assassin', 'minion'] },
   10: { good: ['merlin', 'percival', 'servant', 'servant', 'servant', 'servant'], evil: ['mordred', 'morgana', 'assassin', 'oberon'] },
   11: { good: ['merlin', 'percival', 'lancelot_good', 'servant', 'servant', 'servant', 'servant'], evil: ['mordred', 'morgana', 'assassin', 'lancelot_evil'] },
-  12: { good: ['merlin', 'percival', 'lancelot_good', 'servant', 'servant', 'servant', 'servant', 'servant'], evil: ['mordred', 'morgana', 'assassin', 'lancelot_evil', 'oberon'] },
+  12: { good: ['merlin', 'percival', 'lancelot_good', 'servant', 'servant', 'servant', 'servant'], evil: ['mordred', 'morgana', 'assassin', 'lancelot_evil', 'oberon'] },
 };
 
 function defaultSettings(n) {

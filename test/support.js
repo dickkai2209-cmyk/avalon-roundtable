@@ -92,7 +92,16 @@ async function hook(objType, object, id) {
   assert(!html.includes('tlogo" src="/img/amigos.webp"') && !html.includes('class="tlogo" src="/img/amigos.webp"'), 'Amigos is not the header mark');
   assert(app.includes('class="amigos-mark"') && app.includes('Amigosparty') && app.includes('Teddy Design Limited'), 'Amigos stays a sponsor credit');
   assert(app.includes('旺角霓虹'), 'card-back name 旺角霓虹 is left as venue flavour');
-  assert(html.includes('style.css?v=61') && html.includes('app.js?v=69') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'cache bust past live main');
+  assert(html.includes('style.css?v=63') && html.includes('app.js?v=71') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'cache bust past live main');
+  assert(!app.includes("if (profile.pendant === 'coffee') profile.pendant = 'none'"), 'a saved coffee pendant is kept on load');
+  assert(app.includes("if (it[2] === 'support') return hasBenefit('coffee')"), 'coffee still unlocks only with the support benefit');
+  assert(app.includes('const COFFEE_PLACE = { left: 0.21, top: -0.46, size: 0.58 }'), 'coffee placement is centred on the crown');
+  assert(css.includes('.av-wrap>.pov.coffee,\n.pdv>.pov.coffee,\n.crop-ring>.pov.coffee{left:21%;right:auto;top:-46%;bottom:auto;width:58%;height:58%;z-index:4}'), 'picker, seat, and crop ring share the crown placement');
+  assert(css.includes('.support-ic .pov.coffee{position:static;width:34px;height:34px;left:auto;right:auto;top:auto;bottom:auto}'), 'support page keeps a small static cup');
+  const cropFn = app.slice(app.indexOf('const pend = (opts && opts.pendant)'), app.indexOf('const layout = () =>'));
+  assert(cropFn.includes("pend === 'coffee' ? COFFEE_SVG"), 'crop ring draws the coffee svg on the crown');
+  const drawFn = app.slice(app.indexOf('async function canvasDrawAv'), app.indexOf('// ================= poster'));
+  assert(drawFn.includes("if (k === 'coffee')") && drawFn.includes('coffeeCupUrl()') && drawFn.includes('COFFEE_PLACE') && drawFn.indexOf("k === 'coffee'") < drawFn.indexOf('pdSrc(k)'), 'poster draws the cup on the crown instead of a missing image');
   assert(fs.existsSync(path.join(root, 'public/img/logo-merlin.webp')) && fs.existsSync(path.join(root, 'public/img/logo-merlin.png')), 'logo asset is webp and png');
   const logo = fs.readFileSync(path.join(root, 'public/img/logo-merlin.webp'));
   assert(logo.slice(0, 4).toString() === 'RIFF' && logo.slice(8, 12).toString() === 'WEBP', 'merlin logo is webp');
@@ -314,9 +323,180 @@ async function hook(objType, object, id) {
     assert(layout.n === 4 && layout.w === w && layout.h1 >= 48 && !layout.covers, name + ' support list sits under the header ' + JSON.stringify(layout));
     const shot = await send('Page.captureScreenshot', { format: 'png' });
     fs.writeFileSync(path.join(OUT, 'support-' + w + '.png'), Buffer.from(shot.data, 'base64'));
+    const icon = await evalj(`(() => { const el = document.querySelector('.support-ic .pov.coffee'); const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return { pos: cs.position, w: Math.round(r.width), h: Math.round(r.height) }; })()`);
+    assert(icon.pos === 'static' && icon.w >= 30 && icon.w <= 40 && icon.h >= 30 && icon.h <= 40, name + ' support icon stays a small static cup ' + JSON.stringify(icon));
   };
   await shoot('375', 375, 812);
   await shoot('390', 390, 844);
+
+  const STORE = '/cursor/stores/self/t267-coffee';
+  fs.mkdirSync(STORE, { recursive: true });
+  const saveShot = async (name) => {
+    const { data } = await send('Page.captureScreenshot', { format: 'png' });
+    const buf = Buffer.from(data, 'base64');
+    fs.writeFileSync(path.join(OUT, name + '.png'), buf);
+    fs.writeFileSync(path.join(STORE, name + '.png'), buf);
+  };
+  const bootAs = async (token, guest, profile) => {
+    await evalj(`localStorage.clear(); sessionStorage.clear();
+      localStorage.setItem('cc.token', ${JSON.stringify(token)});
+      localStorage.setItem('cc.guest', ${JSON.stringify(guest)});
+      localStorage.setItem('cc.profile', ${JSON.stringify(JSON.stringify(profile))});`);
+    await send('Page.navigate', { url: APP });
+    const ready = await evalj(`new Promise(r => { const t = setInterval(() => { if (document.querySelector('#topTitle') && window.__av) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 8000); })`);
+    assert(ready === 1, 'coffee ui booted');
+  };
+  const waitFor = async (expr, label) => {
+    const ok = await evalj(`new Promise(r => { const t = setInterval(() => { try { if (${expr}) { clearInterval(t); r(1); } } catch (e) {} }, 50); setTimeout(() => r(0), 8000); })`);
+    assert(ok === 1, label);
+  };
+  await send('DOM.enable');
+  await send('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 2, mobile: true });
+  await bootAs(tokens[other.id], 'simsupoth' + stamp, { name: '路人', avatar: 'fox', bg: '#fff7ea', fx: 'none', pendant: 'none' });
+  await evalj(`window.__av.go('home')`);
+  await waitFor(`document.querySelector('[data-a="ptab"]')`, 'home pendant button');
+  await evalj(`document.querySelector('[data-a="ptab"]').click()`);
+  await waitFor(`document.querySelector('[data-pd="coffee"].off')`, 'locked coffee cell');
+  const locked = await evalj(`(() => { const b = document.querySelector('[data-pd="coffee"]'); b.scrollIntoView({ block: 'center' }); const face = b.querySelector('.pdcirc').getBoundingClientRect(); const cup = b.querySelector('.pov.coffee').getBoundingClientRect(); return { off: b.classList.contains('off'), sub: (b.querySelector('i') || {}).textContent || '', svg: !!b.querySelector('svg.pov.coffee'), img: !!b.querySelector('img.pov'), dx: Math.abs((cup.left + cup.width / 2) - (face.left + face.width / 2)), dip: (cup.bottom - face.top) / face.width, size: cup.width / face.width, above: face.top - cup.top }; })()`);
+  assert(locked.off && locked.sub === '支持解鎖' && locked.svg && !locked.img, 'locked picker shows the cup and 支持解鎖 ' + JSON.stringify(locked));
+  assert(locked.dx < 3 && locked.size > 0.5 && locked.size < 0.7 && locked.dip > 0.04 && locked.dip < 0.22 && locked.above > 8, 'locked cup sits on the crown ' + JSON.stringify(locked));
+  await sleep(80);
+  await saveShot('coffee-locked-375');
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await sleep(80);
+  await saveShot('coffee-locked-390');
+
+  await send('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 2, mobile: true });
+  await bootAs(tokens[fresh.id], 'simsupfresh' + stamp, { name: '新客', avatar: 'fox', bg: '#fff7ea', fx: 'none', pendant: 'coffee' });
+  await waitFor(`document.querySelector('.rt .st .pov.coffee') && document.querySelector('.rt .st .nm') && document.querySelector('.rt .st .nm').textContent.includes('新客')`, 'seated coffee pendant');
+  await sleep(120);
+  const seat = await evalj(`(() => { const st = [...document.querySelectorAll('.rt .st')].find(s => (s.querySelector('.nm') || {}).textContent === '新客'); const face = st.querySelector('.av').getBoundingClientRect(); const cup = st.querySelector('.pov.coffee').getBoundingClientRect(); const nm = st.querySelector('.nm').getBoundingClientRect(); const overlap = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1; return { text: st.querySelector('.nm').textContent, dx: Math.abs((cup.left + cup.width / 2) - (face.left + face.width / 2)), dip: (cup.bottom - face.top) / face.width, size: cup.width / face.width, onName: overlap(cup, nm), faceMid: cup.bottom < face.top + face.height * 0.42 }; })()`);
+  assert(seat.text === '新客' && seat.dx < 3 && seat.size > 0.5 && seat.size < 0.7 && seat.dip > 0.04 && seat.dip < 0.22 && seat.faceMid && !seat.onName, 'seated cup is on the crown and clear of the name ' + JSON.stringify(seat));
+  await saveShot('coffee-seat-375');
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await sleep(100);
+  await saveShot('coffee-seat-390');
+
+  const crowd = await evalj(`(async () => {
+    const cupImg = await new Promise((resolve, reject) => {
+      const probe = document.querySelector('.pov.coffee');
+      const xml = new XMLSerializer().serializeToString(probe);
+      const svg = xml.includes('xmlns=') ? xml : xml.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('cup'));
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+    const host = document.createElement('div');
+    host.className = 'card tbl';
+    host.style.cssText = 'position:fixed;left:0;top:70px;width:' + document.documentElement.clientWidth + 'px;z-index:60;background:#fff';
+    document.body.appendChild(host);
+    const bad = [];
+    for (const n of [5, 8, 10, 12]) {
+      const seats = Array.from({ length: n }, (_, i) => ({ id: 'p' + i, seat: i + 1, name: i % 2 ? '咖啡友' : '新客', pendant: (i === 0 || i === 3) ? 'coffee' : 'none', avatar: 'fox', bg: '#fff7ea', online: true }));
+      host.innerHTML = window.__av.roundTable(seats);
+      const box = host.getBoundingClientRect();
+      const c = document.createElement('canvas');
+      const sc = 2;
+      c.width = Math.max(1, Math.ceil(box.width * sc));
+      c.height = Math.max(1, Math.ceil(box.height * sc));
+      const x = c.getContext('2d');
+      host.querySelectorAll('.pov.coffee').forEach((cup) => {
+        const cr = cup.getBoundingClientRect();
+        x.drawImage(cupImg, (cr.left - box.left) * sc, (cr.top - box.top) * sc, cr.width * sc, cr.height * sc);
+      });
+      const data = x.getImageData(0, 0, c.width, c.height).data;
+      const hits = (rect, pred) => {
+        let n = 0;
+        const x0 = Math.max(0, Math.floor((rect.left - box.left) * sc));
+        const y0 = Math.max(0, Math.floor((rect.top - box.top) * sc));
+        const x1 = Math.min(c.width, Math.ceil((rect.right - box.left) * sc));
+        const y1 = Math.min(c.height, Math.ceil((rect.bottom - box.top) * sc));
+        for (let y = y0; y < y1; y++) for (let px = x0; px < x1; px++) {
+          if (data[(y * c.width + px) * 4 + 3] <= 28) continue;
+          if (!pred || pred(box.left + px / sc, box.top + y / sc)) n++;
+        }
+        return n;
+      };
+      host.querySelectorAll('.rt .st .av').forEach((faceEl) => {
+        if (!faceEl.parentElement.querySelector('.pov.coffee')) return;
+        const f = faceEl.getBoundingClientRect();
+        const cx = f.left + f.width / 2, cy = f.top + f.height / 2, rad = f.width * 0.36;
+        const inner = hits(f, (px, py) => Math.hypot(px - cx, py - cy) < rad);
+        if (inner) bad.push('face ' + n + ' ' + inner);
+      });
+      host.querySelectorAll('.nm').forEach((el) => {
+        const hit = hits(el.getBoundingClientRect());
+        if (hit) bad.push('name ' + el.textContent + ' n=' + n + ' ' + hit);
+      });
+    }
+    host.remove();
+    return bad.slice(0, 8);
+  })()`);
+  assert(!crowd.length, 'coffee ink stays off the face and every seat name ' + JSON.stringify(crowd));
+
+  await send('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 2, mobile: true });
+  await evalj(`window.__av.go('home')`);
+  await waitFor(`document.querySelector('[data-a="ptab"]')`, 'supporter home');
+  await evalj(`document.querySelector('[data-a="ptab"]').click()`);
+  await waitFor(`document.querySelector('[data-pd="coffee"].sel') && !document.querySelector('[data-pd="coffee"]').classList.contains('off')`, 'selected coffee cell');
+  await evalj(`document.querySelector('[data-pd="coffee"]').scrollIntoView({ block: 'center' })`);
+  await sleep(80);
+  const picked = await evalj(`(() => { const b = document.querySelector('[data-pd="coffee"]'); const face = b.querySelector('.pdcirc').getBoundingClientRect(); const cup = b.querySelector('.pov.coffee').getBoundingClientRect(); const prev = document.querySelector('.pe-av .pov.coffee').getBoundingClientRect(); const pf = document.querySelector('.pe-av .av').getBoundingClientRect(); return { sel: b.classList.contains('sel'), dx: Math.abs((cup.left + cup.width / 2) - (face.left + face.width / 2)), dip: (cup.bottom - face.top) / face.width, pdx: Math.abs((prev.left + prev.width / 2) - (pf.left + pf.width / 2)), pdip: (prev.bottom - pf.top) / pf.width }; })()`);
+  assert(picked.sel && picked.dx < 3 && picked.dip > 0.04 && picked.dip < 0.22 && picked.pdx < 3 && picked.pdip > 0.04 && picked.pdip < 0.22, 'selected cell and editor preview put the cup on the crown ' + JSON.stringify(picked));
+  await saveShot('coffee-selected-375');
+  const previewTop = await evalj(`(() => { const r = document.querySelector('.pe-top').getBoundingClientRect(); return { x: Math.max(0, r.x), y: Math.max(0, r.y), width: r.width, height: r.height }; })()`);
+  await send('Page.captureScreenshot', { format: 'png', clip: { x: previewTop.x, y: previewTop.y, width: previewTop.width, height: previewTop.height, scale: 2 } }).then(({ data }) => {
+    const buf = Buffer.from(data, 'base64');
+    fs.writeFileSync(path.join(OUT, 'coffee-editor-375.png'), buf);
+    fs.writeFileSync(path.join(STORE, 'coffee-editor-375.png'), buf);
+  });
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await sleep(80);
+  await saveShot('coffee-selected-390');
+  const previewTop390 = await evalj(`(() => { const r = document.querySelector('.pe-top').getBoundingClientRect(); return { x: Math.max(0, r.x), y: Math.max(0, r.y), width: r.width, height: r.height }; })()`);
+  await send('Page.captureScreenshot', { format: 'png', clip: { x: previewTop390.x, y: previewTop390.y, width: previewTop390.width, height: previewTop390.height, scale: 2 } }).then(({ data }) => {
+    const buf = Buffer.from(data, 'base64');
+    fs.writeFileSync(path.join(OUT, 'coffee-editor-390.png'), buf);
+    fs.writeFileSync(path.join(STORE, 'coffee-editor-390.png'), buf);
+  });
+
+  await send('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 2, mobile: true });
+  const faceFile = path.join(root, 'public/img/av/fox.webp');
+  const doc = await send('DOM.getDocument', { depth: 0 });
+  const input = await send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '#file' });
+  assert(input && input.nodeId, 'crop file input is in the editor');
+  await send('DOM.setFileInputFiles', { nodeId: input.nodeId, files: [faceFile] });
+  await waitFor(`document.querySelector('#cropring .pov.coffee')`, 'crop ring coffee cup');
+  await sleep(150);
+  const crop = await evalj(`(() => { const ring = document.querySelector('#cropring'); const cup = ring.querySelector('.pov.coffee'); const rr = ring.getBoundingClientRect(); const cr = cup.getBoundingClientRect(); return { img: !!ring.querySelector('img.pov'), dx: Math.abs((cr.left + cr.width / 2) - (rr.left + rr.width / 2)), dip: (cr.bottom - rr.top) / rr.width, size: cr.width / rr.width }; })()`);
+  assert(!crop.img && crop.dx < 3 && crop.size > 0.5 && crop.size < 0.7 && crop.dip > 0.04 && crop.dip < 0.22, 'crop ring cup sits on the crown ' + JSON.stringify(crop));
+  await saveShot('coffee-crop-375');
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await sleep(100);
+  await saveShot('coffee-crop-390');
+
+  const drawn = await evalj(`(async () => {
+    const paint = async (pendant) => {
+      const c = document.createElement('canvas'); c.width = c.height = 240;
+      const x = c.getContext('2d');
+      const load = (src) => new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+      await window.__av.canvasDrawAv(x, load, { pendant, avatar: 'fox', bg: '#fff7ea' }, 120, 130, 70);
+      return x.getImageData(0, 0, 240, 240).data;
+    };
+    const a = await paint('coffee'), b = await paint('none');
+    const differ = (i) => Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) + Math.abs(a[i + 3] - b[i + 3]) > 48;
+    let crown = 0, inner = 0;
+    for (let y = 0; y < 240; y++) for (let px = 0; px < 240; px++) {
+      if (!differ((y * 240 + px) * 4)) continue;
+      const d = Math.hypot(px - 120, y - 130);
+      if (d < 46) inner++;
+      else if (y < 60) crown++;
+    }
+    return { crown, inner };
+  })()`);
+  assert(drawn.crown > 20 && drawn.inner === 0, 'canvas poster paints the cup above the face ' + JSON.stringify(drawn));
+
   ws.close();
   stopChrome();
   stop();

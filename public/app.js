@@ -156,7 +156,6 @@ let profile = JSON.parse(LS.getItem('cc.profile') || 'null') || { name: LS.getIt
 profile.avatar = migrateAvatar(profile.avatar);
 profile.pendant = (profile.pendant && profile.pendant !== 'lion') ? profile.pendant : 'none';
 if (profile.pendant && profile.pendant !== 'none' && !PENDANTS.some(x => x[0] === profile.pendant)) profile.pendant = 'none';
-if (profile.pendant === 'coffee') profile.pendant = 'none';
 if (profile.fx === 'silver') profile.fx = 'spot';
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const saveProfile = () => LS.setItem('cc.profile', JSON.stringify(profile));
@@ -632,6 +631,12 @@ function photoSrc(p) {
   return key === 'photo' ? (p.photoUrl || '') : `/img/av/${key}.webp`;
 }
 const COFFEE_SVG = `<svg class="pov coffee" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="56" rx="14" ry="3.5" fill="#edd9b8"/><path d="M16 28h24c1 9-.5 16-5 20-6 5-14 5-19 0-4-4-5-11-5-20z" fill="#fffdf8" stroke="#6a4324" stroke-width="3" stroke-linejoin="round"/><path d="M20 28c1-7 5-10 8-10 2 0 3 2 3 2" fill="#7a4a28"/><path d="M40 32h5c4 0 7 3 7 6.5S49 45 45 45h-5" fill="none" stroke="#6a4324" stroke-width="3" stroke-linecap="round"/><path d="M24 18c1-5 0-7 3-9" fill="none" stroke="#d5dee8" stroke-width="2.2" stroke-linecap="round"/><path d="M33 16c1-4 0-6 3-8" fill="none" stroke="#d5dee8" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+// Matches .pov.coffee in style.css: centred on the crown, saucer just inside the circle.
+const COFFEE_PLACE = { left: 0.21, top: -0.46, size: 0.58 };
+function coffeeCupUrl() {
+  const svg = COFFEE_SVG.includes('xmlns=') ? COFFEE_SVG : COFFEE_SVG.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
 function pendantHtml(p) {
   const k = (p && p.pendant) || 'none'; if (!PD_IMG[k]) return '';
   if (k === 'coffee') return COFFEE_SVG;
@@ -794,7 +799,8 @@ function openPhotoCrop(bitmap, opts) {
   const pend = (opts && opts.pendant) || 'none';
   if (pend && pend !== 'none' && PD_IMG[pend]) {
     ring.className = 'crop-ring' + pdFxCls(pend);
-    ring.innerHTML = `${PD_BACK[pend] ? `<img class="pov back" src="${pdSrc(pend, 1)}" alt="">` : ''}<img class="pov${PD_ICE[pend] ? ' ice' : ''}" src="${pdSrc(pend)}" alt="">${pdPalHtml(pend)}`;
+    const art = pend === 'coffee' ? COFFEE_SVG : `<img class="pov${PD_ICE[pend] ? ' ice' : ''}" src="${pdSrc(pend)}" alt="">`;
+    ring.innerHTML = `${PD_BACK[pend] ? `<img class="pov back" src="${pdSrc(pend, 1)}" alt="">` : ''}${art}${pdPalHtml(pend)}`;
   }
   const layout = () => {
     const wr = stage.getBoundingClientRect();
@@ -2434,7 +2440,14 @@ async function canvasDrawAv(x, load, p, cx, cy, rad) {
   }
   x.restore();
   const k = p && p.pendant;
-  if (k && k !== 'none') {
+  if (k === 'coffee') {
+    const cup = await load(coffeeCupUrl());
+    if (cup) {
+      const d = rad * 2;
+      const w = d * COFFEE_PLACE.size;
+      x.drawImage(cup, cx - rad + d * COFFEE_PLACE.left, cy - rad + d * COFFEE_PLACE.top, w, w);
+    }
+  } else if (k && k !== 'none') {
     if (PD_BACK[k]) { const bi = await load(pdSrc(k, 1)); if (bi) x.drawImage(bi, cx - ov / 2, cy - ov / 2, ov, ov); }
     if (PD_IMG[k]) { const pi = await load(pdSrc(k)); if (pi) x.drawImage(pi, cx - ov / 2, cy - ov / 2, ov, ov); }
   }
@@ -2876,5 +2889,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
-window.__av = { av, roundTable, makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
+window.__av = { av, roundTable, canvasDrawAv, makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

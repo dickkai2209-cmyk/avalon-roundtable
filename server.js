@@ -64,8 +64,19 @@ function pubPlayer(p) {
 function seated(room) { return room.seats.map((p, i) => p && { ...p, seat: i + 1 }).filter(Boolean); }
 function findPlayer(room, pid) { return room.seats.find(p => p && p.pid === pid) || null; }
 function findSeat(room, pid) { return room.seats.findIndex(p => p && p.pid === pid); }
-function inGameSeat(room, pid) { return !!(room.game && room.game.seats.some(s => s.pid === pid)); }
+function inGameSeat(room, pid) { return !!(room.game && room.game.seats.some(s => s && s.pid === pid)); }
 function isSeatedPid(room, pid) { return !!findPlayer(room, pid) || inGameSeat(room, pid); }
+// A reserved game seat must come back as that seat. If the lobby row was lost
+// on restore, rebuild it from the live game seat so rejoin is not a spectator.
+function ensureLobbySeat(room, pid) {
+  if (!room || !pid || findPlayer(room, pid) || !room.game || !Array.isArray(room.game.seats) || !Array.isArray(room.seats)) return;
+  const i = room.game.seats.findIndex(s => s && s.pid === pid);
+  if (i < 0) return;
+  const cur = room.seats[i];
+  if (cur && cur.pid && cur.pid !== pid) return;
+  const gs = room.game.seats[i];
+  room.seats[i] = { pid, id: gs.id, name: gs.name, avatar: gs.avatar, bg: gs.bg, fx: gs.fx, pendant: gs.pendant || 'none', pv: gs.pv || 0, ready: false, seat: i + 1 };
+}
 function rememberWatcher(room, socket) {
   if (!socket || !socket.data || !socket.data.pid) return;
   room.watchers = room.watchers || {};
@@ -765,15 +776,31 @@ function viewFor(room, pid) {
 }
 
 const persistT = new Map();
+function memberList(room) {
+  const raw = room && room.members;
+  if (!raw) return [];
+  const list = raw instanceof Set || Array.isArray(raw) ? [...raw] : (typeof raw === 'object' ? Object.values(raw) : []);
+  return list.filter(pid => typeof pid === 'string' && pid.length >= 8);
+}
+function roomSnapshot(room) {
+  return JSON.parse(JSON.stringify({ ...room, members: memberList(room) }));
+}
 function persistRoom(room) {
   if (persistT.has(room.code)) return;
   persistT.set(room.code, setTimeout(() => {
     persistT.delete(room.code);
     if (!rooms.has(room.code)) return;
-    db.saveRoom(room.code, { ...room, members: [...room.members] }).catch(e => console.error('saveRoom', e.message));
+    db.saveRoom(room.code, roomSnapshot(room)).catch(e => console.error('saveRoom', e.message));
   }, 600));
 }
+function forgetPid(code, pid) { if (pid && pidRoom.get(pid) === code) pidRoom.delete(pid); }
 function dropRoom(code) {
+  const room = rooms.get(code);
+  if (room) {
+    for (const pid of memberList(room)) forgetPid(code, pid);
+    for (const p of room.seats || []) if (p) forgetPid(code, p.pid);
+    if (room.game && room.game.seats) for (const s of room.game.seats) if (s) forgetPid(code, s.pid);
+  }
   const f = floors.get(code);
   if (f) clearTimeout(f.timer);
   floors.delete(code);
@@ -784,15 +811,26 @@ function dropRoom(code) {
   rooms.delete(code); clearTimeout(persistT.get(code)); persistT.delete(code);
   db.deleteRoom(code).catch(() => {});
 }
+function reviveRoom(raw) {
+  let d = raw;
+  if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { return null; } }
+  if (!d || typeof d !== 'object' || !d.code) return null;
+  const seats = Array.isArray(d.seats) ? d.seats : [];
+  const room = { ...d, seats, members: new Set(memberList(d)) };
+  for (const p of seats) if (p && p.pid) room.members.add(p.pid);
+  if (room.game && Array.isArray(room.game.seats)) for (const s of room.game.seats) if (s && s.pid) room.members.add(s.pid);
+  if (room.watchers && typeof room.watchers === 'object') {
+    for (const pid of room.members) if (isSeatedPid(room, pid)) delete room.watchers[pid];
+  } else room.watchers = {};
+  return room;
+}
 async function restoreRooms() {
   try {
-    for (const d of await db.loadRooms()) {
-      if (!d || !d.code || rooms.has(d.code)) continue;
-      const room = { ...d, members: new Set(d.members || []) };
+    for (const raw of await db.loadRooms()) {
+      const room = reviveRoom(raw);
+      if (!room || rooms.has(room.code)) continue;
       rooms.set(room.code, room);
       for (const pid of room.members) pidRoom.set(pid, room.code);
-      for (const p of room.seats) if (p) pidRoom.set(p.pid, room.code);
-      if (room.game) for (const s of room.game.seats) pidRoom.set(s.pid, room.code);
     }
     if (rooms.size) console.log('restored rooms:', rooms.size);
   } catch (e) { console.error('restoreRooms', e.message); }
@@ -836,14 +874,34 @@ function broadcast(room) {
 function leaveCurrent(socket, pid, removeFromLobby) {
   const code = pidRoom.get(pid); if (!code) return;
   const room = rooms.get(code);
-  if (!room) { pidRoom.delete(pid); return; }
-  if (removeFromLobby && (!room.game || room.game.phase === 'end')) {
+  if (!room) { pidRoom.delete(pid); if (socket) socket.data.room = null; return; }
+  const live = room.game && room.game.phase !== 'end';
+  const keepSeat = !!(removeFromLobby && live && isSeatedPid(room, pid));
+  if (removeFromLobby && !keepSeat) {
     standUp(room, pid); room.members.delete(pid); pidRoom.delete(pid);
+    if (room.watchers) delete room.watchers[pid];
     if (room.hostPid === pid) pickNextHost(room, pid);
     if (!room.members.size && !seated(room).length) dropRoom(code);
   }
-  socket.leave(code); socket.data.room = null;
+  if (socket) { socket.leave(code); if (socket.data.room === code) socket.data.room = null; }
   if (rooms.has(code)) broadcast(room);
+}
+// Give up a reserved mid-game seat. The role stays on the seat for someone else;
+// this player is no longer a member and can open or join another room.
+function abandonSeat(room, pid) {
+  const g = room.game;
+  const live = g && g.phase !== 'end';
+  if (live && Array.isArray(g.seats)) {
+    const gs = g.seats.find(s => s && s.pid === pid);
+    if (gs) { gs.pid = null; gs.claimable = true; }
+  }
+  const wasHost = room.hostPid === pid;
+  standUp(room, pid);
+  if (room.watchers) delete room.watchers[pid];
+  room.members.delete(pid);
+  if (pidRoom.get(pid) === room.code) pidRoom.delete(pid);
+  if (wasHost) pickNextHost(room, pid);
+  if (!room.members.size && !seated(room).length) dropRoom(room.code);
 }
 
 const app = express();
@@ -890,12 +948,14 @@ app.get('/api/qr', async (req, res) => {
 
 app.post('/api/auth/guest', async (req, res) => {
   try {
-    const guestKey = String(req.body.guestKey || '');
-    if (guestKey.length < 8 || guestKey.length > 80) return res.status(400).json({ error: '無效身份' });
+    const guestKey = String((req.body && req.body.guestKey) || '').trim();
+    const userId = String((req.body && (req.body.userId || req.body.pid)) || '').trim();
+    const keys = [guestKey, userId].filter(k => k.length >= 8 && k.length <= 80);
+    if (!keys.length) return res.status(400).json({ error: '無效身份' });
     const profile = req.body.profile || {};
-    const known = await userByKey(guestKey);
+    const known = await resolveIdentity(keys);
     const u = known || await db.createGuest({
-      guestKey, name: cleanName(profile.name), avatar: cleanAvatar(profile.avatar),
+      guestKey: guestKey || keys[0], name: cleanName(profile.name), avatar: cleanAvatar(profile.avatar),
       bg: cleanBg(profile.bg), fx: cleanFx(profile.fx), pendant: cleanPendant(profile.pendant), skins: profile.skins || {},
     });
     const token = await db.createSession(u.id);
@@ -1034,14 +1094,27 @@ app.get('/g/:gid', (req, res) => res.redirect('/?game=' + encodeURIComponent(req
 app.get(['/r/:code', '/room/:code'], (req, res) => res.redirect('/?room=' + encodeURIComponent(req.params.code.toUpperCase())));
 
 async function userByKey(guestKey) {
-  const key = String(guestKey || '');
+  const key = String(guestKey || '').trim();
   if (key.length < 8 || key.length > 80) return null;
-  return await db.getUserByGuestKey(key) || await db.getUser(key);
+  // User id and public id win over guest_key so a later empty row cannot shadow the real account.
+  return await db.getUser(key) || await db.getUserByPubId(key) || await db.getUserByGuestKey(key);
 }
-async function bindSocketUser(socket, token, guestKey, profile) {
+async function resolveIdentity(keys) {
+  const seen = new Set();
+  for (const raw of keys) {
+    const key = String(raw || '').trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const u = await userByKey(key);
+    if (u) return u;
+  }
+  return null;
+}
+async function bindSocketUser(socket, token, guestKey, profile, userId) {
   let u = token ? await db.getUserByToken(token) : null;
-  if (!u && guestKey) u = await userByKey(guestKey);
-  if (!u && guestKey) u = await db.createGuest({ guestKey, name: cleanName(profile && profile.name), avatar: cleanAvatar(profile && profile.avatar), bg: cleanBg(profile && profile.bg), fx: cleanFx(profile && profile.fx), pendant: cleanPendant(profile && profile.pendant) });
+  if (!u) u = await resolveIdentity([guestKey, userId]);
+  const key = String(guestKey || '').trim();
+  if (!u && key.length >= 8 && key.length <= 80) u = await db.createGuest({ guestKey: key, name: cleanName(profile && profile.name), avatar: cleanAvatar(profile && profile.avatar), bg: cleanBg(profile && profile.bg), fx: cleanFx(profile && profile.fx), pendant: cleanPendant(profile && profile.pendant) });
   if (!u) return null;
   socket.data.pid = u.id;
   vetoCache.set(u.id, db.isGM(u) ? 999 : (u.veto_cards == null ? 1 : u.veto_cards));
@@ -1335,21 +1408,24 @@ function voiceCtx(socket) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('hello', async ({ token, guestKey, pid: rawPid, name, avatar, bg, fx, pendant } = {}, cb = () => {}) => {
-    socket.data.sent = null;
-    const u = await bindSocketUser(socket, token, guestKey || rawPid, { name, avatar, bg, fx, pendant });
+  socket.on('hello', async ({ token, guestKey, pid: rawPid, userId, name, avatar, bg, fx, pendant } = {}, cb = () => {}) => {
+    socket.data.sent = null; socket.data.lastJ = null;
+    const u = await bindSocketUser(socket, token, guestKey || rawPid, { name, avatar, bg, fx, pendant }, userId || rawPid);
     if (!u) return cb({ error: '請先登入或建立訪客' });
     const pid = u.id;
     const code = pidRoom.get(pid); const room = code && rooms.get(code);
     if (room && (room.members.has(pid) || isSeatedPid(room, pid))) {
-      room.members.add(pid);
-      const p = findPlayer(room, pid);
-      if (p && (!room.game || room.game.phase === 'end')) applyProfile(p, socket.data);
-      if (!isSeatedPid(room, pid)) rememberWatcher(room, socket);
+      const lobby = findPlayer(room, pid);
+      ensureLobbySeat(room, pid);
+      room.members.add(pid); pidRoom.set(pid, code);
+      if (lobby && (!room.game || room.game.phase === 'end')) applyProfile(lobby, socket.data);
+      if (isSeatedPid(room, pid)) { if (room.watchers) delete room.watchers[pid]; }
+      else rememberWatcher(room, socket);
       socket.join(code); socket.data.room = code; markOnline(room, pid); broadcast(room);
-      return cb({ room: code, user: db.pubUser(u) });
+      const seatedNow = isSeatedPid(room, pid);
+      return cb({ room: code, user: db.pubUser(u), spectating: !seatedNow, seated: seatedNow });
     }
-    cb({ room: null, user: db.pubUser(u) });
+    cb({ room: null, user: db.pubUser(u), spectating: false, seated: false });
   });
   socket.on('profile', async (prof = {}) => {
     const pid = socket.data.pid; if (!pid) return;
@@ -1362,35 +1438,58 @@ io.on('connection', (socket) => {
     if (room && (!room.game || room.game.phase === 'end')) { const p = findPlayer(room, pid); if (p) { applyProfile(p, socket.data); broadcast(room); } else { rememberWatcher(room, socket); broadcast(room); } }
   });
   socket.on('create', async (_, cb = () => {}) => {
-    socket.data.sent = null;
+    socket.data.sent = null; socket.data.lastJ = null;
     const pid = socket.data.pid; if (!pid) return cb({ error: '請先設定暱稱' });
     const cur = pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
-    if (cur && cur.game && cur.game.phase !== 'end') return cb({ error: '你正在另一局遊戲中' });
+    if (cur && cur.game && cur.game.phase !== 'end' && isSeatedPid(cur, pid))
+      return cb({ error: '你正在另一局遊戲中', room: cur.code, stillSeated: true });
     leaveCurrent(socket, pid, true);
     const room = makeRoom(socket.data);
     pidRoom.set(pid, room.code); socket.join(room.code); socket.data.room = room.code; markOnline(room, pid);
     broadcast(room); cb({ room: room.code });
   });
   socket.on('join', ({ code } = {}, cb = () => {}) => {
-    socket.data.sent = null;
+    socket.data.sent = null; socket.data.lastJ = null;
     const pid = socket.data.pid; if (!pid) return cb({ error: '請先設定暱稱' });
     code = String(code || '').toUpperCase().trim();
     const room = rooms.get(code); if (!room) return cb({ error: `找不到房間 ${code}` });
     const cur = pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
     if (cur && cur !== room && cur.game && cur.game.phase !== 'end' && isSeatedPid(cur, pid))
-      return cb({ error: '你正在另一局遊戲中' });
+      return cb({ error: '你正在另一局遊戲中', room: cur.code, stillSeated: true });
     if (cur !== room) leaveCurrent(socket, pid, true);
+    ensureLobbySeat(room, pid);
     room.members.add(pid); pidRoom.set(pid, code);
-    if (!isSeatedPid(room, pid)) rememberWatcher(room, socket);
+    if (isSeatedPid(room, pid)) { if (room.watchers) delete room.watchers[pid]; }
+    else rememberWatcher(room, socket);
     socket.join(code); socket.data.room = code; markOnline(room, pid); broadcast(room);
-    cb({ room: code, spectating: !isSeatedPid(room, pid) });
+    cb({ room: code, spectating: !isSeatedPid(room, pid), seated: isSeatedPid(room, pid) });
   });
-  socket.on('leave', (_, cb = () => {}) => {
-    socket.data.sent = null;
-    const pid = socket.data.pid; const room = pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
-    if (room && room.game && room.game.phase !== 'end' && isSeatedPid(room, pid)) { socket.leave(room.code); socket.data.room = null; return cb({ ok: true, stillSeated: true }); }
-    if (room && room.watchers) delete room.watchers[pid];
-    leaveCurrent(socket, pid, true); cb({ ok: true });
+  socket.on('leave', (payload, cb = () => {}) => {
+    if (typeof payload === 'function') { cb = payload; payload = {}; }
+    if (!payload || typeof payload !== 'object') payload = {};
+    if (typeof cb !== 'function') cb = () => {};
+    socket.data.sent = null; socket.data.lastJ = null;
+    const pid = socket.data.pid; const room = pid && pidRoom.get(pid) && rooms.get(pidRoom.get(pid));
+    if (!room) { socket.data.room = null; return cb({ ok: true }); }
+    const live = room.game && room.game.phase !== 'end';
+    const seatedNow = isSeatedPid(room, pid);
+    if (payload.abandon && seatedNow) {
+      const code = room.code;
+      abandonSeat(room, pid);
+      socket.leave(code);
+      if (socket.data.room === code) socket.data.room = null;
+      if (rooms.has(code)) broadcast(rooms.get(code) || room);
+      return cb({ ok: true, abandoned: true });
+    }
+    if (live && seatedNow) {
+      socket.leave(room.code);
+      if (socket.data.room === room.code) socket.data.room = null;
+      broadcast(room);
+      return cb({ ok: true, stillSeated: true, room: room.code });
+    }
+    if (room.watchers) delete room.watchers[pid];
+    leaveCurrent(socket, pid, true);
+    cb({ ok: true });
   });
   socket.on('act', async ({ type, data } = {}, cb = () => {}) => {
     const pid = socket.data.pid; const room = socket.data.room && rooms.get(socket.data.room);
@@ -1406,7 +1505,7 @@ io.on('connection', (socket) => {
     if (rooms.has(room.code)) syncFloor(room);
     broadcast(room); cb({ ok: true });
   });
-  socket.on('resync', () => { socket.data.sent = null; const room = socket.data.room && rooms.get(socket.data.room); if (room) broadcast(room); });
+  socket.on('resync', () => { socket.data.sent = null; socket.data.lastJ = null; const room = socket.data.room && rooms.get(socket.data.room); if (room) broadcast(room); });
   socket.on('emote', ({ e } = {}) => {
     const pid = socket.data.pid; const room = socket.data.room && rooms.get(socket.data.room);
     if (!room || !pid || !EMOTES.includes(e)) return;
@@ -1514,7 +1613,7 @@ setInterval(() => {
 }, 30 * 60 * 1000).unref();
 
 async function flushRooms() {
-  await Promise.all([...rooms.values()].map(r => db.saveRoom(r.code, { ...r, members: [...r.members] }).catch(() => {})));
+  await Promise.all([...rooms.values()].map(r => db.saveRoom(r.code, roomSnapshot(r)).catch(() => {})));
   if (db.flush) db.flush();
 }
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { flushRooms().finally(() => process.exit(0)); setTimeout(() => process.exit(0), 4000).unref(); });

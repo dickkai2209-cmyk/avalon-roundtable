@@ -173,22 +173,34 @@ async function getUserByToken(raw) {
   return s ? mem.users.find(u => u.id === s.user_id) : null;
 }
 
+async function findExistingIdentity(key) {
+  const k = String(key || '').trim();
+  if (k.length < 8 || k.length > 80) return null;
+  return await getUser(k) || await getUserByPubId(k) || await getUserByGuestKey(k);
+}
 async function createGuest({ guestKey, name, avatar, bg, fx, pendant, skins }) {
-  const existing = await getUserByGuestKey(guestKey);
+  const key = String(guestKey || '').trim();
+  const existing = await findExistingIdentity(key);
   if (existing) return existing;
   const id = newId();
   const pub = require('crypto').createHash('sha256').update(id).digest('hex').slice(0, 10);
   const u = {
-    id, username: null, username_norm: null, password_hash: null, guest_key: guestKey, pub_id: pub,
+    id, username: null, username_norm: null, password_hash: null, guest_key: key, pub_id: pub,
     name: name || '', avatar: avatar || 'fox', bg: bg || '#f3d9a4', fx: fx || 'spot',
     pendant: pendant || 'none', skins: skins || {}, veto_cards: 1, created_at: new Date().toISOString(),
   };
-  if (mode === 'pg') {
-    await pool.query(
-      `INSERT INTO users (id,guest_key,pub_id,name,avatar,bg,fx,pendant,skins) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [u.id, u.guest_key, u.pub_id, u.name, u.avatar, u.bg, u.fx, u.pendant, JSON.stringify(u.skins || {})]
-    );
-  } else { mem.users.push(u); saveJson(); }
+  try {
+    if (mode === 'pg') {
+      await pool.query(
+        `INSERT INTO users (id,guest_key,pub_id,name,avatar,bg,fx,pendant,skins) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [u.id, u.guest_key, u.pub_id, u.name, u.avatar, u.bg, u.fx, u.pendant, JSON.stringify(u.skins || {})]
+      );
+    } else { mem.users.push(u); saveJson(); }
+  } catch (e) {
+    const again = await findExistingIdentity(key);
+    if (again) return again;
+    throw e;
+  }
   return u;
 }
 

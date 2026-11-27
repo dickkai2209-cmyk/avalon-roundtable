@@ -155,7 +155,7 @@ const saveProfile = () => LS.setItem('cc.profile', JSON.stringify(profile));
 let skinSel = JSON.parse(LS.getItem('cc.skins') || '{}');
 let myStats = { played: 0, won: 0, roles: {}, mvp: 0 };
 const authHdr = () => token ? { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-const api = (url, opt = {}) => fetch(url, { ...opt, headers: { ...authHdr(), ...(opt.headers || {}) } }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || '請求失敗'); return j; });
+const api = (url, opt = {}) => fetch(url, { ...opt, headers: { ...authHdr(), ...(opt.headers || {}) } }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) { const err = new Error(j.error || '請求失敗'); err.status = r.status; throw err; } return j; });
 function checkAch() { // one-time unlock celebration for 10次MVP
   if (!myStats || (myStats.mvp || 0) < 10 || LS.getItem('cc.ach.mvp10')) return; LS.setItem('cc.ach.mvp10', '1');
   queueModal(() => openModal(`<div class="achpop"><div class="ap-glow"></div><div class="ap-medal">🌈</div><div class="ap-t">成就解鎖</div><h2>10次MVP</h2><div class="small muted center">獎勵：<b>閃光卡牌特效</b> ✨ 同 <b>MVP金桂冠</b> 掛件<br>可以喺「角色皮膚」同「掛件」使用</div>
@@ -166,7 +166,10 @@ const rolePlayed = (r) => isGM() ? 1e9 : (((myStats.roles || {})[r] || {}).playe
 const skinOf = (role) => { const s = skinById(skinSel[role]); const played = rolePlayed(role); return s && played >= s.need ? s.id : 'classic'; };
 function applyUser(u, stats) {
   if (!u) return;
+  const prevGuest = LS.getItem('cc.guest');
+  const prevPid = LS.getItem('cc.pid');
   account = u; pid = u.id; LS.setItem('cc.pid', pid);
+  if (!prevGuest) LS.setItem('cc.guest', prevPid || pid);
   profile = { id: u.id, name: u.name || profile.name, avatar: u.avatar || profile.avatar, photoUrl: u.photoUrl || null, bg: u.bg || profile.bg, fx: u.fx || profile.fx, pendant: (u.pendant && u.pendant !== 'lion') ? u.pendant : 'none' };
   if (u.skins) skinSel = { ...skinSel, ...u.skins };
   if (stats) { myStats = stats; setTimeout(checkAch, 600); }
@@ -174,16 +177,35 @@ function applyUser(u, stats) {
 }
 let sessionOk = null; // resolved once per page load; create/join no longer re-fetch /api/me every time
 function ensureSession() { if (account && token && sessionOk) return sessionOk; sessionOk = ensureSession0().catch(e => { sessionOk = null; throw e; }); return sessionOk; }
+function authIdentity() {
+  const guest = guestKey();
+  const userId = LS.getItem('cc.pid') || pid || '';
+  return { guestKey: guest, userId };
+}
 async function ensureSession0() {
-  try {
-    if (token) { const r = await api('/api/me'); applyUser(r.user, r.stats); return r.user; }
-  } catch (e) { token = ''; LS.removeItem('cc.token'); }
-  const r = await api('/api/auth/guest', { method: 'POST', body: JSON.stringify({ guestKey: guestKey(), profile }) });
+  if (token) {
+    try { const r = await api('/api/me'); applyUser(r.user, r.stats); return r.user; }
+    catch (e) {
+      if (e.status && e.status !== 401) throw e;
+      token = ''; LS.removeItem('cc.token');
+    }
+  }
+  const r = await api('/api/auth/guest', { method: 'POST', body: JSON.stringify({ ...authIdentity(), profile }) });
   token = r.token; LS.setItem('cc.token', token); applyUser(r.user, r.stats); return r.user;
 }
 
 // ================= state & socket =================
 let S = null, view = 'home', viewArg = null;
+let heldRoom = null, waitingRoom = null;
+try { heldRoom = JSON.parse(sessionStorage.getItem('cc.held') || 'null'); if (!heldRoom || !heldRoom.code) heldRoom = null; } catch (e) { heldRoom = null; }
+function saveHeld() {
+  try {
+    if (heldRoom && heldRoom.code) sessionStorage.setItem('cc.held', JSON.stringify({ code: heldRoom.code, seated: !!heldRoom.seated }));
+    else sessionStorage.removeItem('cc.held');
+  } catch (e) {}
+}
+function clearHeld() { heldRoom = null; waitingRoom = null; saveHeld(); }
+const browsingView = (v) => v === 'skins' || v === 'rules' || v === 'ach' || v === 'board' || v === 'history' || v === 'stats' || v === 'detail';
 let selected = new Set(), lastSeatIds = [], enterIds = new Set();
 let seenEvent = 0;
 (function pickGoogleToken() {
@@ -205,9 +227,20 @@ const helloProfile = () => ({ name: profile.name, avatar: profile.avatar, bg: pr
 socket.on('connect', () => {
   $('#conn').classList.add('on');
   ensureSession().then(() => {
-    socket.emit('hello', { token, guestKey: guestKey(), ...helloProfile() }, (r) => {
+    socket.emit('hello', { token, ...authIdentity(), ...helloProfile() }, (r) => {
       if (r && r.user) applyUser(r.user);
-      if (!r || !r.room) { S = null; if (view === 'room') go('home'); }
+      if (r && r.room) {
+        heldRoom = { code: r.room, seated: !!r.seated };
+        saveHeld();
+        autoRoom = false;
+        waitingRoom = r.room;
+        if (!browsingView(view)) view = 'room';
+        socket.emit('resync');
+      } else if (r && !r.error) {
+        clearHeld();
+        S = null;
+        if (view === 'room') view = 'home';
+      }
       if (pendingJoin) { const c = pendingJoin; pendingJoin = null; ensureName(() => joinRoom(c)); }
       if (pendingGame) { const gid = pendingGame; pendingGame = null; return go('detail', { gid, from: 'home' }); }
       if (view === 'skins' || view === 'rules' || view === 'ach' || view === 'board') return; // keep selection UI / scroll
@@ -273,6 +306,12 @@ socket.on('state', (st) => {
   if (st.game && ['vote', 'quest', 'end'].includes(st.game.phase)) selected = new Set();
   if (st.game && prev && prev.game && prev.game.phase !== st.game.phase) selected = new Set();
   S = st;
+  if (waitingRoom && st.code === waitingRoom) waitingRoom = null;
+  if (st.code) {
+    const seated = !st.spectating && !!(st.mySeat || (st.game && st.game.me));
+    heldRoom = { code: st.code, seated };
+    saveHeld();
+  }
   if (window.AvalonVoice) AvalonVoice.sync(st);
   if (st && st.myAvoidResult && st.myAvoidResult.gid) {
     const prevR = prev && prev.myAvoidResult;
@@ -296,9 +335,15 @@ socket.on('state', (st) => {
   if (cfgOpen && !st.game && !$('#modal').classList.contains('hidden')) $('#sheet').innerHTML = cfgSheetHtml();
   syncVoteRemind();
 });
-socket.on('kicked', () => { S = null; toast('你已被房主移出房間'); go('home'); });
-socket.on('dissolved', () => { S = null; toast('房間已解散'); go('home'); });
-const emit = (ev, data) => new Promise((res) => socket.emit(ev, data, (r) => { if (r && r.error) toast(r.error); if (r && r.dissolved) { S = null; go('home'); } res(r || {}); }));
+socket.on('kicked', () => { S = null; clearHeld(); toast('你已被房主移出房間'); go('home'); });
+socket.on('dissolved', () => { S = null; clearHeld(); toast('房間已解散'); go('home'); });
+const emit = (ev, data) => new Promise((res) => socket.emit(ev, data, (r) => {
+  if (r && r.stillSeated && r.room) { heldRoom = { code: r.room, seated: true }; saveHeld(); }
+  if (r && r.abandoned) clearHeld();
+  if (r && r.error) toast(r.error);
+  if (r && r.dissolved) { S = null; clearHeld(); go('home'); }
+  res(r || {});
+}));
 const act = (type, data) => emit('act', { type, data });
 
 // ================= helpers =================
@@ -1007,8 +1052,38 @@ function editProfile(after, startTab) {
 }
 
 function ensureName(fn) { if (profile.name) fn(); else editProfile(fn); }
-async function createRoom() { await ensureSession(); const r = await emit('create'); if (r.room) go('room'); }
-async function joinRoom(code) { await ensureSession(); const r = await emit('join', { code }); if (r.room) { closeModal(); go('room'); if (r.spectating) toast('已進入觀戰'); } }
+function confirmAbandon() {
+  const code = (S && S.code) || (heldRoom && heldRoom.code);
+  if (!code) return;
+  openModal(`<div class="actconf" id="actconf" role="dialog" aria-modal="true" aria-labelledby="abandon-title"><h2 id="abandon-title">放棄座位？</h2>
+    <p class="actconf-note">房間 ${esc(code)} 的座位會空出來。本局身份留在座位上，其他人可以接手。之後你可以建立或加入另一個房間。</p>
+    <div class="actconf-btns"><button type="button" class="btn ghost" id="ab-no">取消</button><button type="button" class="btn" id="ab-yes">放棄座位</button></div></div>`, (el) => {
+    $('#ab-no', el).onclick = (e) => { e.preventDefault(); closeModal(); };
+    $('#ab-yes', el).onclick = async (e) => {
+      e.preventDefault();
+      closeModal();
+      const r = await emit('leave', { abandon: true });
+      if (r && (r.abandoned || r.ok) && !r.error) {
+        clearHeld(); waitingRoom = null; S = null;
+        toast('已放棄座位');
+        go('home');
+      }
+    };
+  });
+}
+async function createRoom() {
+  await ensureSession();
+  const r = await emit('create');
+  if (r.room) { clearHeld(); go('room'); }
+  else if (r.stillSeated) go('home');
+}
+async function joinRoom(code) {
+  await ensureSession();
+  const r = await emit('join', { code });
+  if (r.room) { closeModal(); waitingRoom = null; go('room'); if (r.spectating) toast('已進入觀戰'); }
+  else if (r.stillSeated) { closeModal(); go('home'); }
+  else if (r.error && heldRoom && heldRoom.code === String(code || '').toUpperCase() && /找不到/.test(r.error)) { clearHeld(); render(); }
+}
 let discoverOn = false, sitPend = 0, sitGen = 0;
 function clearSitPreview() {
   document.querySelectorAll('.rt .st.sit-preview').forEach(el => {
@@ -1053,7 +1128,7 @@ function requestPosition() {
 }
 function joinDialog() {
   openModal(`<h2>加入房間</h2><input class="inp code-inp" id="cd" maxlength="4" placeholder="····" autocomplete="off" aria-label="4 位房間號">
-  <p class="muted small center">輸入同枱朋友的 4 位房間號，或用相機掃描他們的二維碼。遊戲進行中會以觀戰進入，不會佔用座位。</p><button class="btn" id="ok">進入圓桌</button>
+  <p class="muted small center">輸入同枱朋友的 4 位房間號，或用相機掃描他們的二維碼。未就座的玩家在遊戲進行中會以觀戰進入；你自己的座位會保留。</p><button class="btn" id="ok">進入圓桌</button>
   <button type="button" class="btn ghost" id="near">搜尋附近房間</button>
   <p class="tiny muted center">搜尋半徑 5 公里。要按一下先會問位置。</p><div id="nearbox"></div>`, (el) => {
     const cd = $('#cd', el); setTimeout(() => cd.focus(), 60);
@@ -1103,7 +1178,7 @@ function authDialog(mode) {
         await ensureSession();
         const r = await api(mode==='login'?'/api/auth/login':'/api/auth/register', { method:'POST', body: JSON.stringify({ username: $('#un',el).value, password: $('#pw',el).value, guestKey: guestKey() }) });
         token = r.token; LS.setItem('cc.token', token); applyUser(r.user, r.stats);
-        socket.emit('hello', { token, guestKey: guestKey(), ...profile }, () => {});
+        socket.emit('hello', { token, ...authIdentity(), ...helloProfile() }, () => {});
         closeModal(); render(); toast(mode==='login'?'歡迎回來':'帳號已建立，資料會永久保存');
       } catch (e) { toast(e.message); }
     };
@@ -1119,7 +1194,7 @@ async function googleLogin() {
     if (r.url) location.href = r.url;
   } catch (e) { toast(e.message || 'Google 登入失敗'); }
 }
-async function doLogout() { try { await api('/api/auth/logout', { method:'POST' }); } catch(e){} token=''; LS.removeItem('cc.token'); account=null; await ensureSession(); socket.emit('hello', { token, guestKey: guestKey(), ...helloProfile() }, ()=>{}); render(); toast('已登出，現為訪客'); }
+async function doLogout() { try { await api('/api/auth/logout', { method:'POST' }); } catch(e){} token=''; LS.removeItem('cc.token'); account=null; await ensureSession(); socket.emit('hello', { token, ...authIdentity(), ...helloProfile() }, ()=>{}); render(); toast('已登出，現為訪客'); }
 
 // ================= components =================
 function roomHead() {
@@ -1676,7 +1751,7 @@ function setHTML(el, html) {
 function render() {
   const app = $('#app'); const inRoom = S && S.code;
   if (view !== 'skins') app.dataset.v = view || '';
-  if (view === 'room' && !inRoom) view = 'home';
+  if (view === 'room' && !inRoom && !waitingRoom) view = 'home';
   $('#backBtn').classList.toggle('hidden', view === 'home');
   const titles = { home: '旺角阿瓦隆', room: inRoom ? null : '房間', history: '歷史記錄', stats: '數據統計', rules: '規則介紹', skins: '角色皮膚', detail: '對局詳情', ach: '成就', board: '排行榜' };
   const acts = $('#topRoomActs');
@@ -1694,6 +1769,7 @@ function render() {
   }
   if (view !== 'home' && view !== 'room') app._html = null;
   if (view === 'home') setHTML(app, homeHtml());
+  else if (view === 'room' && !inRoom) setHTML(app, `<div class="card resume-card center"><b>正在返回房間 ${esc(waitingRoom || '')}</b><div class="muted small">座位同身份會保留</div></div>`);
   else if (view === 'room') {
     const scroller = document.scrollingElement;
     const mainEl = document.querySelector('main');
@@ -1746,8 +1822,23 @@ function render() {
   }
   else if (view === 'detail') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadDetail(viewArg.gid); }
 }
+function resumeCard() {
+  const liveS = S && S.code ? S : null;
+  const code = liveS ? liveS.code : (heldRoom && heldRoom.code);
+  if (!code) return '';
+  const playing = liveS ? !!(liveS.game && liveS.game.phase !== 'end') : true;
+  const seated = liveS ? (!liveS.spectating && !!(liveS.mySeat || (liveS.game && liveS.game.me))) : !!heldRoom.seated;
+  const spectating = liveS ? !!liveS.spectating : !seated;
+  const note = seated && playing ? '遊戲進行中，你的座位仍然保留'
+    : (liveS && liveS.game ? (liveS.game.phase === 'end' ? '已結束，可以返回房間' : (spectating ? '你正在觀戰，房間仍然保留' : '遊戲中')) : (liveS ? '等待開局' : '房間仍然保留'));
+  const sub = liveS ? `<div class="muted small">就座 ${liveS.seated}/${liveS.capacity} · ${note}</div>` : `<div class="muted small">${note}</div>`;
+  const leaveBtn = seated && playing
+    ? '<button type="button" class="btn ghost" data-a="abandonseat">放棄座位並離開</button>'
+    : (spectating && playing ? '<button type="button" class="btn ghost" data-a="leave">離開此房間</button>' : '');
+  return `<div class="card resume-card" data-held="${esc(code)}"><div class="resume-copy"><span class="code">${esc(code)}</span>${liveS && liveS.isHost ? '<span class="badge host">房主</span>' : ''}${sub}</div><button type="button" class="btn" data-a="toroom">返回房間</button>${leaveBtn}</div>`;
+}
 function homeHtml() {
-  const inRoom = S && S.code;
+  const inRoom = (S && S.code) || (heldRoom && heldRoom.code);
   const vc = account ? account.vetoCards : null;
   return `  <div class="card prof-head">
     <div class="prof-row">
@@ -1757,7 +1848,7 @@ function homeHtml() {
     </div>
     <div class="acct">${account && (account.username || account.google) ? `<div class="row between acct-row"><div class="acct-status">已登入${account.google ? '<span class="badge">Google</span>' : ''}</div><button type="button" class="btn sm dark acct-out" data-a="logout">登出</button></div>` : `<div class="tiny muted">目前是訪客。註冊或用 Google 登入後，資料永久保存、換機也能找回。</div><div class="btns"><button class="btn sm" data-a="register">註冊帳號</button><button class="btn sm ghost" data-a="login">登入</button></div>`}</div>
   </div>
-  ${inRoom ? `<div class="card"><div class="row between"><div><span class="code">${S.code}</span>${S.isHost ? '<span class="badge host">房主</span>' : ''}<div class="muted small">就座 ${S.seated}/${S.capacity} · ${S.game ? (S.game.phase === 'end' ? '已結束' : '遊戲中') : '等待開局'}</div></div><button class="btn sm" data-a="toroom">回到房間</button></div></div>` : ''}
+  ${inRoom ? resumeCard() : ''}
   ${inRoom ? '' : `<div class="bigcards">
     <div class="bigcard create" data-a="create"><div class="ic">⚔️</div><b>建立房間</b><span>我做房主</span></div>
     <div class="bigcard join" data-a="join"><div class="ic">🛡️</div><b>加入房間</b><span>輸入 4 位房間號</span></div>
@@ -2582,7 +2673,12 @@ document.addEventListener('click', async (e) => {
     case 'savecard': return saveCard(window.__lastRecord);
     case 'create': return ensureName(createRoom);
     case 'join': return ensureName(joinDialog);
-    case 'toroom': return go('room');
+    case 'toroom': {
+      if (S && S.code) return go('room');
+      if (heldRoom && heldRoom.code) return joinRoom(heldRoom.code);
+      return;
+    }
+    case 'abandonseat': return confirmAbandon();
     case 'go': return go(el.dataset.v);
     case 'reloadboard': return loadBoard();
     case 'invite': return inviteDialog();
@@ -2650,7 +2746,20 @@ document.addEventListener('click', async (e) => {
         });
     }
     case 'menu': return openRoomMenu();
-    case 'leave': { const r = await emit('leave'); S = null; if (r.stillSeated) toast('遊戲進行中，你的座位會保留'); return go('home'); }
+    case 'leave': {
+      const r = await emit('leave');
+      waitingRoom = null;
+      if (r.stillSeated && r.room) {
+        heldRoom = { code: r.room, seated: true };
+        saveHeld();
+        S = null;
+        toast('遊戲進行中，你的座位會保留。可以返回房間。');
+        return go('home');
+      }
+      clearHeld();
+      S = null;
+      return go('home');
+    }
     case 'veto': if (confirm('使用回避卡退出本支隊伍？本輪否決不增加，且你本輪不能再被選入。')) return act('veto'); return;
     case 'sword': { const id=[...selected][0]; if (id) { const r=await act('sword',{id}); if(r.ok) selected=new Set(); } return; }
     case 'swordflip': { const id=[...selected][0]; if (id && confirm('翻轉 '+P(id).name+' 的任務卡？')) { const r=await act('swordflip',{id}); if(r.ok) selected=new Set(); } return; }

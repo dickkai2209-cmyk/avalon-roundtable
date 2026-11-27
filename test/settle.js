@@ -322,12 +322,12 @@ function bot(key, name) {
     await evalj(`document.querySelector('#dl').click()`);
     let poster = null;
     for (let i = 0; i < 25 && !poster; i++) {
-      poster = fs.readdirSync(OUT).find(f => !beforeFiles.has(f) && f.startsWith('mongkok-avalon-') && f.endsWith('.png'));
+      poster = fs.readdirSync(OUT).find(f => !beforeFiles.has(f) && f.startsWith('hk-avalon-') && f.endsWith('.png'));
       if (!poster) await sleep(200);
     }
     if (!poster) {
       const b64 = await evalj(`(async () => { const img = document.querySelector('.modal img'); const buf = await fetch(img.src).then(r => r.arrayBuffer()); const bytes = new Uint8Array(buf); let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); })()`);
-      poster = 'mongkok-avalon-' + gme().gid.slice(0, 8) + '.png';
+      poster = 'hk-avalon-' + gme().gid.slice(0, 8) + '.png';
       fs.writeFileSync(path.join(OUT, poster), Buffer.from(b64, 'base64'));
     }
     const bytes = fs.readFileSync(path.join(OUT, poster));

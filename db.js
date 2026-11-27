@@ -3,12 +3,13 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const support = require('./support');
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const JSON_FILE = path.join(DATA_DIR, 'db.json');
 const PHOTO_DIR = path.join(DATA_DIR, 'photos');
 const BCRYPT_ROUNDS = 10;
 // never pull the photo BYTEA on ordinary user lookups (it is served separately via /api/avatar)
-const UCOLS = 'id,username,username_norm,password_hash,guest_key,pub_id,name,avatar,bg,fx,pendant,skins,created_at,updated_at,veto_cards,google_sub,email,(photo IS NOT NULL) AS has_photo';
+const UCOLS = 'id,username,username_norm,password_hash,guest_key,pub_id,name,avatar,bg,fx,pendant,skins,created_at,updated_at,veto_cards,google_sub,email,support_benefits,(photo IS NOT NULL) AS has_photo';
 const UCOLS_U = UCOLS.split(',').map(c => c.startsWith('(') ? '(u.photo IS NOT NULL) AS has_photo' : 'u.' + c).join(',');
 
 let mode = 'json';
@@ -76,6 +77,14 @@ async function init() {
         ALTER TABLE users ADD COLUMN IF NOT EXISTS veto_cards INT NOT NULL DEFAULT 1;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT UNIQUE;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS support_benefits JSONB NOT NULL DEFAULT '[]';
+        CREATE TABLE IF NOT EXISTS support_payments (
+          ref TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          event_id TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS support_payments_user_idx ON support_payments(user_id);
         ALTER TABLE games ADD COLUMN IF NOT EXISTS review JSONB;
         ALTER TABLE games ADD COLUMN IF NOT EXISTS lady_start TEXT;
         ALTER TABLE games ADD COLUMN IF NOT EXISTS lady_used JSONB;
@@ -98,7 +107,7 @@ async function init() {
   } else {
     fs.mkdirSync(PHOTO_DIR, { recursive: true });
     try { mem = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8')); } catch (e) { /* fresh */ }
-    mem.users = mem.users || []; mem.sessions = mem.sessions || []; mem.games = mem.games || []; mem.stats = mem.stats || {}; mem.rooms = mem.rooms || {};
+    mem.users = mem.users || []; mem.sessions = mem.sessions || []; mem.games = mem.games || []; mem.stats = mem.stats || {}; mem.rooms = mem.rooms || {}; mem.supportPayments = mem.supportPayments || [];
     mode = 'json';
     console.log('DB: local json at', JSON_FILE);
   }
@@ -136,6 +145,7 @@ function pubUser(u) {
     google: !!u.google_sub, email: u.email || null,
     vetoCards: u.veto_cards == null ? 1 : u.veto_cards,
     name: u.name, avatar: u.avatar, bg: u.bg, fx: u.fx, pendant: u.pendant,
+    benefits: support.normalizeBenefits(u.support_benefits),
     skins: typeof u.skins === 'string' ? JSON.parse(u.skins) : (u.skins || {}),
     hasPhoto: u.avatar === 'photo' || !!(u.has_photo || u.photo || (mode === 'json' && fs.existsSync(path.join(PHOTO_DIR, u.id + '.webp')))),
     photoUrl: u.avatar === 'photo' ? `/api/avatar/${u.id}?v=${u.updated_at ? new Date(u.updated_at).getTime() : 0}` : null,
@@ -178,10 +188,13 @@ async function createGuest({ guestKey, name, avatar, bg, fx, pendant, skins }) {
   if (existing) return existing;
   const id = newId();
   const pub = require('crypto').createHash('sha256').update(id).digest('hex').slice(0, 10);
+  // Support cosmetics are never accepted at account creation. A webhook is the only grant.
+  if (pendant === 'coffee') pendant = 'none';
+  if (fx === 'silver') fx = 'spot';
   const u = {
     id, username: null, username_norm: null, password_hash: null, guest_key: guestKey, pub_id: pub,
     name: name || '', avatar: avatar || 'fox', bg: bg || '#f3d9a4', fx: fx || 'spot',
-    pendant: pendant || 'none', skins: skins || {}, veto_cards: 1, created_at: new Date().toISOString(),
+    pendant: pendant || 'none', skins: skins || {}, support_benefits: [], veto_cards: 1, created_at: new Date().toISOString(),
   };
   if (mode === 'pg') {
     await pool.query(
@@ -521,13 +534,53 @@ async function purgeTestData() {
   mem.users = mem.users.filter(u => !ids.has(u.id)); mem.sessions = mem.sessions.filter(s => !ids.has(s.user_id || s.userId)); for (const id of ids) delete mem.stats[id];
   saveJson(); return { users: ids.size, games: g0 - mem.games.length, rooms };
 }
+function parseBenefits(u) { return support.normalizeBenefits(u && u.support_benefits); }
+
+// One successful payment fills only the benefits this account does not already own.
+// The same Stripe ref is a no-op. Card data is never stored.
+async function grantSupport(userId, ref, eventId) {
+  ref = String(ref || '');
+  if (!ref || !userId) return { missing: true, added: [], owned: [] };
+  if (mode === 'pg') {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const cur = await client.query(`SELECT support_benefits FROM users WHERE id=$1 FOR UPDATE`, [userId]);
+      if (!cur.rows[0]) { await client.query('ROLLBACK'); return { missing: true, added: [], owned: [] }; }
+      const owned = support.normalizeBenefits(cur.rows[0].support_benefits);
+      const ins = await client.query(
+        `INSERT INTO support_payments (ref, user_id, event_id) VALUES ($1,$2,$3) ON CONFLICT (ref) DO NOTHING RETURNING ref`,
+        [ref, userId, eventId || null]
+      );
+      if (!ins.rows.length) { await client.query('COMMIT'); return { duplicate: true, added: [], owned }; }
+      const merged = support.mergeBenefits(owned);
+      await client.query(`UPDATE users SET support_benefits=$2::jsonb, updated_at=now() WHERE id=$1`, [userId, JSON.stringify(merged.owned)]);
+      await client.query('COMMIT');
+      return { duplicate: false, added: merged.added, owned: merged.owned };
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch (err) {}
+      throw e;
+    } finally { client.release(); }
+  }
+  const u = mem.users.find(x => x.id === userId);
+  if (!u) return { missing: true, added: [], owned: [] };
+  mem.supportPayments = mem.supportPayments || [];
+  const owned = support.normalizeBenefits(u.support_benefits);
+  if (mem.supportPayments.some(p => p.ref === ref)) return { duplicate: true, added: [], owned };
+  const merged = support.mergeBenefits(owned);
+  u.support_benefits = merged.owned;
+  mem.supportPayments.push({ ref, user_id: userId, event_id: eventId || null, created_at: new Date().toISOString() });
+  saveJson();
+  return { duplicate: false, added: merged.added, owned: merged.owned };
+}
+
 async function findGMCandidates() {
   if (mode !== 'pg') return [];
   return (await pool.query(`SELECT id, username, name, email, google_sub IS NOT NULL AS google, created_at FROM users WHERE email ILIKE '%dickson%' OR username ILIKE '%dickson%' OR name ILIKE '%dickson%' OR email = $1 ORDER BY created_at LIMIT 10`, [(process.env.GM_EMAIL || GM_EMAIL_DEFAULT).toLowerCase()])).rows;
 }
 module.exports = {
   isGM, findGMCandidates, purgeTestData, flush, saveRoom, deleteRoom, loadRooms,
-  init, mode: () => mode, pubUser,
+  init, mode: () => mode, pubUser, parseBenefits, grantSupport,
   getUser, getUserByUsername, getUserByGuestKey, getUserByPubId, getUserByToken,
   createGuest, updateUser, setPhoto, getPhoto,
   validUsername, validPassword, registerOrUpgrade, verifyLogin,

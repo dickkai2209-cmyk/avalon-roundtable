@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { Server } = require('socket.io');
 const db = require('./db');
+const support = require('./support');
 const { build: buildReview } = require('./review');
 const {
   TEAM_SIZES, EVIL_COUNT, ROLE_SIDE, ROLE_NAME,
@@ -18,7 +19,7 @@ const pubId = (pid) => crypto.createHash('sha256').update(String(pid)).digest('h
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const cleanName = (s) => Array.from(String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim()).slice(0, 10).join('') || '騎士';
 const ANIMALS = ['fox','panda','duck','squirrel','hedgehog','bunny','bear','redpanda','otter','hamster','shiba','dalmatian','capybara','penguin','koala','cat','wolf','lion','piglet','guineapig','puffer','alien','wolfking','frog','dragonet','tiger','hero'];
-const FXS = ['none','spot','gold','snow','spark','petals','howl','fire','lightning'];
+const FXS = ['none','spot','gold','snow','spark','petals','howl','fire','lightning','silver'];
 const EMOTES = ['1f602','1f62d','1f631','1f914','1f60e','1f621','1f64f','1f44d','1f44f','1f525','2764_fe0f','1f608','1f92b','1f440','1f389'];
 const emoteAt = new Map();
 // cosmetic unlock rules, enforced server-side (GM bypasses all)
@@ -31,15 +32,19 @@ async function enforceUnlocks(user, f) {
   // MVP rewards (pendant + shiny card effect) require 10 real MVPs — even for GM
   if (f.pendant === 'laurel' && st.mvp < 10) f.pendant = 'none';
   if (f.skins && f.skins._shiny && st.mvp < 10) f.skins._shiny = false;
+  // Support cosmetics stay locked until a verified webhook, including for a GM.
+  const owned = db.parseBenefits(user);
+  if (f.pendant === 'coffee' && !owned.includes('coffee')) f.pendant = 'none';
+  if (f.fx === 'silver' && !owned.includes('silver')) f.fx = 'spot';
   if (db.isGM(user)) return null;
-  if (f.pendant && f.pendant !== 'none' && f.pendant !== 'laurel' && !unlockedBy(PD_RULE[f.pendant], st)) f.pendant = 'none';
+  if (f.pendant && f.pendant !== 'none' && f.pendant !== 'laurel' && f.pendant !== 'coffee' && !unlockedBy(PD_RULE[f.pendant], st)) f.pendant = 'none';
   if (f.fx && st.played < (FX_NEED[f.fx] || 0)) f.fx = 'spot';
   if (f.skins) {
     if (f.skins._cardback && !unlockedBy(CB_RULE[f.skins._cardback], st)) f.skins._cardback = 'cardback';
   }
   return null;
 }
-const PENDANTS = ['none','wolf','pumpkin','devil','crown','bow','santa','holly','newmoon','halo','egg','ghost','witch','bolo','tram','bat','vampire','plume','taxi','merlinhat','lotus','neon','excal','laurel','foxqiu','foxheart','starmoon','starplain','whiteling','darkling','skydragon','foxdance','frostmirror','icesword','fairylake','odineye'];
+const PENDANTS = ['none','wolf','pumpkin','devil','crown','bow','santa','holly','newmoon','halo','egg','ghost','witch','bolo','tram','bat','vampire','plume','taxi','merlinhat','lotus','neon','excal','laurel','foxqiu','foxheart','starmoon','starplain','whiteling','darkling','skydragon','foxdance','frostmirror','icesword','fairylake','odineye','coffee'];
 const cleanAvatar = (s) => ANIMALS.includes(s) || s === 'photo' ? s : 'fox';
 const cleanBg = (s) => /^#[0-9a-fA-F]{6}$/.test(String(s)) ? s : '#f3d9a4';
 const cleanFx = (s) => FXS.includes(s) ? s : 'spot';
@@ -55,11 +60,15 @@ function newCode() {
 }
 
 function pubPlayer(p) {
-  return {
+  const o = {
     id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx, pendant: p.pendant,
     photoUrl: p.avatar === 'photo' ? `/api/avatar/${p.id}?v=${p.pv || 0}` : `/img/av/${p.avatar || 'fox'}.webp`,
     ready: !!p.ready, seat: p.seat,
   };
+  // Cosmetic flags only. Payment refs and the benefit ledger stay off the room payload.
+  if (p.badge) o.badge = true;
+  if (p.spotlight) o.spotlight = true;
+  return o;
 }
 function seated(room) { return room.seats.map((p, i) => p && { ...p, seat: i + 1 }).filter(Boolean); }
 function findPlayer(room, pid) { return room.seats.find(p => p && p.pid === pid) || null; }
@@ -91,9 +100,9 @@ function spectatorList(room) {
   return out;
 }
 function newPlayer(pid, d, seat) {
-  return { pid, id: pubId(pid), name: d.name || '騎士', avatar: d.avatar || 'fox', bg: d.bg, fx: d.fx, pendant: d.pendant || 'none', pv: d.pv || 0, ready: false, seat };
+  return { pid, id: pubId(pid), name: d.name || '騎士', avatar: d.avatar || 'fox', bg: d.bg, fx: d.fx, pendant: d.pendant || 'none', pv: d.pv || 0, ready: false, seat, badge: !!d.badge, spotlight: !!d.spotlight };
 }
-function applyProfile(p, d) { p.name = d.name; p.avatar = d.avatar; p.bg = d.bg; p.fx = d.fx; p.pendant = d.pendant || 'none'; p.pv = d.pv || 0; }
+function applyProfile(p, d) { p.name = d.name; p.avatar = d.avatar; p.bg = d.bg; p.fx = d.fx; p.pendant = d.pendant || 'none'; p.pv = d.pv || 0; p.badge = !!d.badge; p.spotlight = !!d.spotlight; }
 
 function makeRoom(host) {
   const code = newCode();
@@ -166,7 +175,7 @@ async function startGame(room) {
   for (let i = 0; i < players.length; i++) {
     if (raw[i] && cards[i] <= 0) result[i] = { role: raw[i], status: 'insufficient' };
   }
-  const seats = players.map((p, i) => ({ pid: p.pid, id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx, pendant: p.pendant, pv: p.pv || 0, role: assign[i] }));
+  const seats = players.map((p, i) => ({ pid: p.pid, id: p.id, name: p.name, avatar: p.avatar, bg: p.bg, fx: p.fx, pendant: p.pendant, pv: p.pv || 0, role: assign[i], badge: !!p.badge, spotlight: !!p.spotlight }));
   const forcedLeader = process.env.FORCE_LEADER;
   const leader = forcedLeader != null && forcedLeader !== '' && Number.isInteger(Number(forcedLeader))
     ? ((Number(forcedLeader) % n) + n) % n
@@ -350,7 +359,8 @@ async function act(room, pid, type, data) {
         if (d.fx) gs.fx = d.fx;
         if (d.pendant) gs.pendant = d.pendant;
         if (d.pv) gs.pv = d.pv;
-        room.seats[i] = { pid, id: gs.id, name: gs.name, avatar: gs.avatar, bg: gs.bg, fx: gs.fx, pendant: gs.pendant || 'none', pv: gs.pv || 0, ready: false, seat: i + 1 };
+        gs.badge = !!d.badge; gs.spotlight = !!d.spotlight;
+        room.seats[i] = { pid, id: gs.id, name: gs.name, avatar: gs.avatar, bg: gs.bg, fx: gs.fx, pendant: gs.pendant || 'none', pv: gs.pv || 0, ready: false, seat: i + 1, badge: !!d.badge, spotlight: !!d.spotlight };
         if (room.watchers) delete room.watchers[pid];
         return null;
       }
@@ -721,6 +731,8 @@ function viewFor(room, pid) {
       seats: g.seats.map((s, i) => ({
         seat: i + 1,
         id: s.id, name: s.name, avatar: s.avatar, bg: s.bg, fx: s.fx, pendant: s.pendant,
+        ...(s.badge ? { badge: true } : {}),
+        ...(s.spotlight ? { spotlight: true } : {}),
         photoUrl: s.avatar === 'photo' ? `/api/avatar/${s.id}?v=${s.pv || 0}` : `/img/av/${s.avatar || 'fox'}.webp`,
         online: playerOnline(room, s.pid),
         claimable: s.claimable ? true : undefined,
@@ -856,6 +868,22 @@ app.use((req, res, next) => { // Server-Timing: app processing time (excludes ne
   next();
 });
 app.use(require('compression')());
+// Raw body, before JSON parsing, so the Stripe signature can be checked.
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const checked = support.readWebhook(req.body, req.headers['stripe-signature']);
+  if (checked.status !== 200) return res.status(checked.status).json({ error: checked.error });
+  const decision = support.decideEvent(checked.event);
+  if (!decision.grant) return res.json({ received: true, granted: false });
+  try {
+    const result = await db.grantSupport(decision.userId, decision.ref, checked.event && checked.event.id);
+    if (!result || result.missing) return res.json({ received: true, granted: false });
+    if (result.owned) paintSupport(decision.userId, result.owned);
+    res.json({ received: true, granted: !result.duplicate && result.added.length > 0 });
+  } catch (e) {
+    console.error('support grant failed');
+    res.status(500).json({ error: '暫時未能記錄' });
+  }
+});
 app.use(express.json({ limit: '2mb' }));
 app.get(['/privacy', '/terms'], (req, res) => res.set('Cache-Control', 'public, max-age=600').sendFile(path.join(__dirname, 'public', req.path.slice(1) + '.html')));
 app.get('/healthz', (req, res) => res.set('Cache-Control', 'no-store').send('ok'));
@@ -926,6 +954,34 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/logout', async (req, res) => { await db.deleteSession(bearer(req)); res.json({ ok: true }); });
 app.get('/api/me', authUser, async (req, res) => {
   res.json({ user: db.pubUser(req.user), stats: await db.getStats(req.user.id) });
+});
+app.get('/api/support', authUser, (req, res) => {
+  const owned = db.parseBenefits(req.user);
+  res.set('Cache-Control', 'no-store').json({
+    currency: support.CURRENCY,
+    unitAmount: support.UNIT_AMOUNT,
+    label: support.LABEL,
+    ready: support.checkoutAvailable(),
+    benefits: support.CATALOG.map(b => ({ id: b.id, name: b.name, desc: b.desc, owned: owned.includes(b.id) })),
+    owned,
+  });
+});
+app.post('/api/support/checkout', authUser, async (req, res) => {
+  if (!support.checkoutAvailable()) return res.status(503).json({ error: '收款尚未設定' });
+  // A Checkout Session does not unlock anything. Only a verified webhook does.
+  if (process.env.STRIPE_MOCK === '1') {
+    return res.json({ url: 'https://checkout.stripe.com/c/pay/cs_test_mock', id: 'cs_test_mock' });
+  }
+  try {
+    const Stripe = require('stripe');
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: support.API_VERSION });
+    const params = support.buildCheckoutParams({ userId: req.user.id, origin: baseUrl(req), integrationId: support.integrationId() });
+    const session = await stripe.checkout.sessions.create(params);
+    res.json({ url: session.url, id: session.id });
+  } catch (e) {
+    console.error('support checkout failed');
+    res.status(502).json({ error: '暫時未能開始付款' });
+  }
 });
 app.put('/api/me', authUser, async (req, res) => {
   try {
@@ -1050,7 +1106,29 @@ async function bindSocketUser(socket, token, guestKey, profile) {
   socket.data.bg = u.bg;
   socket.data.fx = u.fx;
   socket.data.pendant = u.pendant || 'none';
+  const owned = db.parseBenefits(u);
+  socket.data.badge = owned.includes('badge');
+  socket.data.spotlight = owned.includes('silver');
+  socket.data.supportEmote = owned.includes('emote');
   return u;
+}
+function paintSupport(userId, owned) {
+  const list = Array.isArray(owned) ? owned : [];
+  const badge = list.includes('badge');
+  const spotlight = list.includes('silver');
+  const supportEmote = list.includes('emote');
+  for (const s of io.sockets.sockets.values()) {
+    if (s.data.pid !== userId) continue;
+    s.data.badge = badge;
+    s.data.spotlight = spotlight;
+    s.data.supportEmote = supportEmote;
+  }
+  for (const room of rooms.values()) {
+    let changed = false;
+    for (const p of room.seats) if (p && p.pid === userId) { p.badge = badge; p.spotlight = spotlight; changed = true; }
+    if (room.game) for (const p of room.game.seats) if (p && p.pid === userId) { p.badge = badge; p.spotlight = spotlight; changed = true; }
+    if (changed) broadcast(room);
+  }
 }
 
 const voicePub = new Map();
@@ -1409,7 +1487,9 @@ io.on('connection', (socket) => {
   socket.on('resync', () => { socket.data.sent = null; const room = socket.data.room && rooms.get(socket.data.room); if (room) broadcast(room); });
   socket.on('emote', ({ e } = {}) => {
     const pid = socket.data.pid; const room = socket.data.room && rooms.get(socket.data.room);
-    if (!room || !pid || !EMOTES.includes(e)) return;
+    if (!room || !pid) return;
+    if (e === support.SUPPORT_EMOTE) { if (!socket.data.supportEmote) return; }
+    else if (!EMOTES.includes(e)) return;
     if (!room.members.has(pid) && !findPlayer(room, pid)) return;
     const now = Date.now(); if (now - (emoteAt.get(pid) || 0) < 1900) return; emoteAt.set(pid, now);
     io.to(room.code).emit('emote', { id: pubId(pid), e });
@@ -1523,7 +1603,7 @@ db.init().then(async () => {
   try { const c = await db.findGMCandidates(); console.log('GM config: email=' + (process.env.GM_EMAIL || '-') + ' id=' + (process.env.GM_USER_ID || '-') + ' candidates=' + JSON.stringify(c.map(u => ({ id: u.id, username: u.username, name: u.name, email: u.email, google: u.google, gm: db.isGM({ ...u, google_sub: u.google ? 1 : null }) })))); } catch (e) { console.error('gm', e.message); }
   if (process.env.PURGE_TEST_DATA !== '0') { try { const r = await db.purgeTestData(); if (r.users) console.log('purged test data', JSON.stringify(r)); } catch (e) { console.error('purge', e.message); } }
 }).then(restoreRooms).then(() => {
-  server.listen(PORT, () => console.log('旺角阿瓦隆 on :' + PORT, 'db=' + db.mode()));
+  server.listen(PORT, '0.0.0.0', () => console.log('HK阿瓦隆 on :' + PORT, 'db=' + db.mode()));
   // keep the free Render instance warm (it sleeps after 15 min idle); disable with KEEPALIVE=0
   const self = process.env.KEEPALIVE_URL || (process.env.RENDER_EXTERNAL_URL && process.env.RENDER_EXTERNAL_URL + '/healthz');
   if (self && process.env.KEEPALIVE !== '0') setInterval(() => fetch(self).catch(() => {}), 10 * 60 * 1000).unref();

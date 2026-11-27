@@ -97,6 +97,7 @@ function markLegend() {
 }
 const PD_BACK = { devil: 1, bat: 1, vampire: 1, foxqiu: 1, foxheart: 1, starmoon: 1, starplain: 1, whiteling: 1, darkling: 1, skydragon: 1, foxdance: 1, frostmirror: 1, icesword: 1, fairylake: 1, odineye: 1 };
 const PD_ICE = { frostmirror: 1, icesword: 1 };
+const SUPPORT_FRAMES = ['foxqiu', 'foxheart', 'starmoon', 'starplain', 'whiteling', 'darkling', 'skydragon', 'foxdance', 'frostmirror', 'icesword', 'fairylake', 'odineye'];
 // Sheen theme for every original round frame. Ice keeps its own sweep.
 const PD_FX = {
   foxqiu: 'qiu', foxheart: 'heart', starmoon: 'moon', starplain: 'plain',
@@ -156,7 +157,6 @@ let profile = JSON.parse(LS.getItem('cc.profile') || 'null') || { name: LS.getIt
 profile.avatar = migrateAvatar(profile.avatar);
 profile.pendant = (profile.pendant && profile.pendant !== 'lion') ? profile.pendant : 'none';
 if (profile.pendant && profile.pendant !== 'none' && !PENDANTS.some(x => x[0] === profile.pendant)) profile.pendant = 'none';
-if (profile.pendant === 'coffee') profile.pendant = 'none';
 if (profile.fx === 'silver') profile.fx = 'spot';
 const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const saveProfile = () => LS.setItem('cc.profile', JSON.stringify(profile));
@@ -214,7 +214,155 @@ function saveHeld() {
 }
 function clearHeld() { heldRoom = null; waitingRoom = null; saveHeld(); }
 const browsingView = (v) => v === 'skins' || v === 'rules' || v === 'ach' || v === 'board' || v === 'history' || v === 'stats' || v === 'detail';
-let selected = new Set(), lastSeatIds = [], enterIds = new Set();
+let selected = new Set(), lastSeatIds = [];
+const FX_EVERY = 30000;
+const FX_HOLD = 2800;
+const fxBurst = new Map();
+const fxClocks = new Map();
+const fxEpoch = new Map();
+const fxPainted = new Map();
+function reducedFx() {
+  try { return matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  catch (e) { return false; }
+}
+function fxAfter(fn, ms) {
+  const hook = window.__fxTimers;
+  if (hook && typeof hook.after === 'function') return hook.after(fn, ms);
+  return setTimeout(fn, ms);
+}
+function fxCancel(id) {
+  const hook = window.__fxTimers;
+  if (hook && typeof hook.clear === 'function') return hook.clear(id);
+  clearTimeout(id);
+}
+function seatedNow(st) {
+  if (!st) return [];
+  const list = st.game ? (st.game.seats || []) : (st.seats || []);
+  return list.filter(s => s && !s.empty && !s.claimable && s.id);
+}
+function validFx(fx) {
+  return fx && fx !== 'none' && FXS.some(x => x[0] === fx) ? fx : '';
+}
+function playedFx(p) {
+  if (!p) return '';
+  if (p.spotlight) return 'silver';
+  return validFx(p.fx);
+}
+function seatNode(id) {
+  const safe = window.CSS && CSS.escape ? CSS.escape(id) : id;
+  return document.querySelector('.rt .st[data-id="' + safe + '"]');
+}
+function stopSeat(id) {
+  const c = fxClocks.get(id);
+  if (c) { fxCancel(c.timer); fxCancel(c.hold); fxClocks.delete(id); }
+  fxBurst.delete(id);
+  fxEpoch.delete(id);
+  fxPainted.delete(id);
+  const node = seatNode(id);
+  if (!node) return;
+  node.classList.remove('enter');
+  FXS.forEach(([k]) => node.classList.remove('fx-' + k));
+}
+function stopAllEntrance() {
+  for (const id of [...fxClocks.keys()]) stopSeat(id);
+  fxBurst.clear();
+}
+function applyEntrance(el, fx) {
+  el.classList.remove('enter');
+  FXS.forEach(([k]) => el.classList.remove('fx-' + k));
+  void el.offsetWidth;
+  el.classList.add('enter', 'fx-' + fx);
+}
+function playSeat(id, fx) {
+  if (!fx || fx === 'none' || reducedFx()) return stopSeat(id);
+  const c = fxClocks.get(id);
+  if (c) c.fx = fx;
+  const epoch = (fxEpoch.get(id) || 0) + 1;
+  fxEpoch.set(id, epoch);
+  fxBurst.set(id, fx);
+  const el = seatNode(id);
+  if (el) {
+    applyEntrance(el, fx);
+    fxPainted.set(id, epoch);
+  }
+  if (!c) return;
+  fxCancel(c.hold);
+  c.hold = fxAfter(() => {
+    if (fxBurst.get(id) !== fx) return;
+    fxBurst.delete(id);
+    const node = seatNode(id);
+    if (!node) return;
+    node.classList.remove('enter');
+    node.classList.remove('fx-' + fx);
+  }, FX_HOLD);
+}
+function armSeat(id, ms, fn) {
+  const c = fxClocks.get(id);
+  if (!c) return;
+  fxCancel(c.timer);
+  c.timer = fxAfter(fn || (() => beginSeat(id)), ms);
+}
+function beginSeat(id) {
+  const c = fxClocks.get(id);
+  const cur = seatedNow(S).find(s => s && s.id === id);
+  const fx = cur && playedFx(cur);
+  if (!c || !fx || reducedFx()) return stopSeat(id);
+  c.fx = fx;
+  playSeat(id, fx);
+  armSeat(id, FX_EVERY);
+}
+function paintUnshown() {
+  if (reducedFx()) return;
+  for (const [id, fx] of fxBurst) {
+    if (fxPainted.get(id) === fxEpoch.get(id)) continue;
+    const el = seatNode(id);
+    if (!el) continue;
+    applyEntrance(el, fx);
+    fxPainted.set(id, fxEpoch.get(id));
+  }
+}
+function syncEntranceFx(prevIds) {
+  if (reducedFx() || !S || !S.code) { stopAllEntrance(); return; }
+  const occ = seatedNow(S);
+  const live = new Set(occ.map(p => p.id));
+  for (const id of [...fxClocks.keys()]) if (!live.has(id)) stopSeat(id);
+  const known = prevIds instanceof Set;
+  const fresh = [];
+  for (const p of occ) {
+    const fx = playedFx(p);
+    if (!fx) { stopSeat(p.id); continue; }
+    const clock = fxClocks.get(p.id);
+    if (!clock) {
+      fxClocks.set(p.id, { fx, timer: 0, hold: 0 });
+      if (known && prevIds.has(p.id)) {
+        playSeat(p.id, fx);
+        armSeat(p.id, FX_EVERY);
+      } else fresh.push(p);
+    } else if (clock.fx !== fx) {
+      clock.fx = fx;
+      playSeat(p.id, fx);
+      armSeat(p.id, FX_EVERY);
+    }
+  }
+  fresh.forEach((p, i) => {
+    const delay = fresh.length > 1 ? i * 450 : 0;
+    if (delay === 0) beginSeat(p.id);
+    else armSeat(p.id, delay, () => beginSeat(p.id));
+  });
+}
+try {
+  matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => {
+    if (reducedFx()) { stopAllEntrance(); return; }
+    if (!S || !S.code) return;
+    for (const p of seatedNow(S)) {
+      const fx = playedFx(p);
+      if (!fx) continue;
+      if (!fxClocks.has(p.id)) fxClocks.set(p.id, { fx, timer: 0, hold: 0 });
+      fxClocks.get(p.id).fx = fx;
+      armSeat(p.id, FX_EVERY);
+    }
+  });
+} catch (e) {}
 let seenEvent = 0;
 (function pickGoogleToken() {
   const h = new URLSearchParams(location.hash.slice(1));
@@ -333,12 +481,9 @@ socket.on('state', (st) => {
     st = m;
   }
   const prev = S;
-  const occ = (st.seats || []).filter(s => !s.empty);
-  if (prev && prev.code === st.code && !st.game) {
-    const old = new Set(lastSeatIds);
-    occ.forEach(p => { if (!old.has(p.id)) { enterIds.add(p.id); setTimeout(() => enterIds.delete(p.id), 2800); } });
-  }
-  lastSeatIds = occ.map(p => p.id);
+  const sameRoom = !!(prev && st && prev.code && prev.code === st.code);
+  const prevIds = sameRoom ? new Set(lastSeatIds) : null;
+  lastSeatIds = seatedNow(st).map(p => p.id);
   if (!prev || !!prev.game !== !!st.game || (prev.game && st.game && prev.game.gid !== st.game.gid)) selected = new Set();
   if (st.game && ['vote', 'quest', 'end'].includes(st.game.phase)) selected = new Set();
   if (st.game && prev && prev.game && prev.game.phase !== st.game.phase) selected = new Set();
@@ -363,6 +508,7 @@ socket.on('state', (st) => {
   }
   if (autoRoom && view === 'home' && st.code) { autoRoom = false; view = 'room'; }
   handleEvent(st);
+  syncEntranceFx(prevIds);
   if (actConfirm && !actConfirm.busy && !confirmStillValid(actConfirm)) {
     toast(actConfirm.kind === 'lady' ? '查驗已經失效' : '刺殺已經失效', 'bad');
     closeModal();
@@ -372,8 +518,8 @@ socket.on('state', (st) => {
   if (cfgOpen && !st.game && !$('#modal').classList.contains('hidden')) $('#sheet').innerHTML = cfgSheetHtml();
   syncVoteRemind();
 });
-socket.on('kicked', () => { S = null; clearHeld(); toast('你已被房主移出房間'); go('home'); });
-socket.on('dissolved', () => { S = null; clearHeld(); toast('房間已解散'); go('home'); });
+socket.on('kicked', () => { stopAllEntrance(); S = null; clearHeld(); toast('你已被房主移出房間'); go('home'); });
+socket.on('dissolved', () => { stopAllEntrance(); S = null; clearHeld(); toast('房間已解散'); go('home'); });
 const emit = (ev, data) => new Promise((res) => socket.emit(ev, data, (r) => {
   if (r && r.stillSeated && r.room) { heldRoom = { code: r.room, seated: true }; saveHeld(); }
   if (r && r.abandoned) clearHeld();
@@ -632,6 +778,12 @@ function photoSrc(p) {
   return key === 'photo' ? (p.photoUrl || '') : `/img/av/${key}.webp`;
 }
 const COFFEE_SVG = `<svg class="pov coffee" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="56" rx="14" ry="3.5" fill="#edd9b8"/><path d="M16 28h24c1 9-.5 16-5 20-6 5-14 5-19 0-4-4-5-11-5-20z" fill="#fffdf8" stroke="#6a4324" stroke-width="3" stroke-linejoin="round"/><path d="M20 28c1-7 5-10 8-10 2 0 3 2 3 2" fill="#7a4a28"/><path d="M40 32h5c4 0 7 3 7 6.5S49 45 45 45h-5" fill="none" stroke="#6a4324" stroke-width="3" stroke-linecap="round"/><path d="M24 18c1-5 0-7 3-9" fill="none" stroke="#d5dee8" stroke-width="2.2" stroke-linecap="round"/><path d="M33 16c1-4 0-6 3-8" fill="none" stroke="#d5dee8" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+// Matches .pov.coffee in style.css: centred on the crown, saucer just inside the circle.
+const COFFEE_PLACE = { left: 0.21, top: -0.46, size: 0.58 };
+function coffeeCupUrl() {
+  const svg = COFFEE_SVG.includes('xmlns=') ? COFFEE_SVG : COFFEE_SVG.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
 function pendantHtml(p) {
   const k = (p && p.pendant) || 'none'; if (!PD_IMG[k]) return '';
   if (k === 'coffee') return COFFEE_SVG;
@@ -664,6 +816,7 @@ const inviteUrl = (code) => `${PUBLIC_ORIGIN}/r/${code}`;
 const pct = (w, p) => p ? Math.round(w * 100 / p) : 0;
 const isGM = () => !!(account && account.gm);
 const hasBenefit = (id) => !!(account && Array.isArray(account.benefits) && account.benefits.includes(id));
+const supportFrameIds = () => (account && Array.isArray(account.supportFrames) ? account.supportFrames : []);
 const playedTotal = () => isGM() ? 1e9 : (myStats.played || 0);
 const winsTotal = () => isGM() ? 1e9 : (myStats.won || 0);
 const mvpTotal = () => (myStats.mvp || 0); // even GM must earn 10 real MVPs for 桂冠 / 閃光特效
@@ -674,7 +827,7 @@ function fxUnlocked(k) {
   if (k === 'silver') return hasBenefit('silver');
   const item = FXS.find(x => x[0] === k); return playedTotal() >= (item ? item[2] : 0);
 }
-function pdUnlocked(k) { if (k === 'none') return true; const it = PENDANTS.find(x => x[0] === k); if (!it) return false; if (it[2] === 'support') return hasBenefit('coffee'); return unlockOk(it[2], it[3]); }
+function pdUnlocked(k) { if (k === 'none') return true; const it = PENDANTS.find(x => x[0] === k); if (!it) return false; if (it[2] === 'support') return hasBenefit('coffee'); if (supportFrameIds().includes(k)) return true; return unlockOk(it[2], it[3]); }
 const pdNeed = (it) => it[2] === 'support' ? '支持解鎖' : it[2] === 'wins' ? `勝 ${it[3]} 場解鎖` : it[2] === 'mvp' ? `MVP ${Math.min(mvpTotal(), it[3])}/${it[3]} 解鎖` : `玩 ${it[3]} 場解鎖`;
 function pdCell(k, n, sel, locked, sp, sub) {
   const fx = pdFxCls(k);
@@ -794,7 +947,8 @@ function openPhotoCrop(bitmap, opts) {
   const pend = (opts && opts.pendant) || 'none';
   if (pend && pend !== 'none' && PD_IMG[pend]) {
     ring.className = 'crop-ring' + pdFxCls(pend);
-    ring.innerHTML = `${PD_BACK[pend] ? `<img class="pov back" src="${pdSrc(pend, 1)}" alt="">` : ''}<img class="pov${PD_ICE[pend] ? ' ice' : ''}" src="${pdSrc(pend)}" alt="">${pdPalHtml(pend)}`;
+    const art = pend === 'coffee' ? COFFEE_SVG : `<img class="pov${PD_ICE[pend] ? ' ice' : ''}" src="${pdSrc(pend)}" alt="">`;
+    ring.innerHTML = `${PD_BACK[pend] ? `<img class="pov back" src="${pdSrc(pend, 1)}" alt="">` : ''}${art}${pdPalHtml(pend)}`;
   }
   const layout = () => {
     const wr = stage.getBoundingClientRect();
@@ -937,7 +1091,7 @@ function openPhotoCrop(bitmap, opts) {
 }
 
 function editProfile(after, startTab) {
-  const d = { ...profile, bg: profile.bg || '#ffffff' }; let tab = startTab === 'fx' ? 'avatar' : (startTab || 'avatar');
+  const d = { ...profile, bg: profile.bg || '#ffffff' }; let tab = (startTab === 'pendant' || startTab === 'fx') ? startTab : 'avatar';
   const FX_IC = { none:'—', spot:'💡', gold:'✨', snow:'❄️', spark:'🌟', petals:'🌸', howl:'🐺', fire:'🔥', lightning:'⚡', silver:'✦' };
   const peek = (el) => {
     const avHost = el.querySelector('.pe-av');
@@ -971,6 +1125,9 @@ function editProfile(after, startTab) {
   const markSel = (root, sel, btn) => { $$(sel, root).forEach(x => { x.classList.toggle('sel', x === btn); const ck = x.querySelector('.ck'); if (x === btn) { if (!ck) x.insertAdjacentHTML('beforeend', '<span class="ck">✓</span>'); } else if (ck) ck.remove(); }); };
   const pickMsg = (name) => toast(`已選擇：${name}，按保存套用`);
   const bodyHtml = () => {
+    if (tab === 'fx') {
+      return `<div class="pe-fx">${FXS.map(([k,n,need]) => `<button type="button" data-fx="${k}" class="${d.fx===k?'sel':''} ${fxUnlocked(k)?'':'off'}">${FX_IC[k]||''} ${n}${fxUnlocked(k)?'':` 🔒${k==='silver'?'支持':need+'場'}`}</button>`).join('')}</div>`;
+    }
     if (tab === 'pendant') {
       const cells = [`<button type="button" class="pdc ${!d.pendant || d.pendant==='none'?'sel':''}" data-pd="none"><div class="pdv"><span class="pdx">不佩戴</span></div><b>不佩戴</b></button>`]
         .concat(PENDANTS.map(x => {
@@ -986,8 +1143,7 @@ function editProfile(after, startTab) {
     const tiles = [`<button type="button" class="${photoOn?'sel':''}" data-upload="1"><div class="cell pe-camcell">📷</div><div class="lb">上載相片</div>${photoOn?'<span class="ck">✓</span>':''}</button>`]
       .concat(ANIMALS.map(([k,n]) => `<button type="button" data-e="${k}" class="${k===d.avatar?'sel':''}"><div class="cell" style="background:${d.bg}"><img src="/img/av/${k}.webp" alt=""></div><div class="lb">${n}</div>${k===d.avatar?'<span class="ck">✓</span>':''}</button>`));
     const sw = `<div class="swatches">${BGS.map(c => `<button type="button" data-c="${c}" class="${c===d.bg?'sel':''}" style="background:${c}"></button>`).join('')}</div>`;
-    const fxs = `<div class="pe-fxlab">入場特效</div><div class="pe-fx">${FXS.map(([k,n,need]) => `<button type="button" data-fx="${k}" class="${d.fx===k?'sel':''} ${fxUnlocked(k)?'':'off'}">${FX_IC[k]||''} ${n}${fxUnlocked(k)?'':` 🔒${k==='silver'?'支持':need+'場'}`}</button>`).join('')}</div>`;
-    return `${sw}<div class="pe-grid">${tiles.join('')}</div>${fxs}`;
+    return `${sw}<div class="pe-grid">${tiles.join('')}</div>`;
   };
   const draw = (el) => {
     const n = d.name || '';
@@ -1002,18 +1158,19 @@ function editProfile(after, startTab) {
           <span class="pe-cnt"><i id="nlen">${Array.from(n).length}</i>/10</span>
         </div>
       </div>
-      <div class="seg pe-tabs"><button type="button" data-t="avatar" class="${tab==='avatar'?'sel':''}">頭像</button><button type="button" data-t="pendant" class="${tab==='pendant'?'sel':''}">掛件</button></div>
+      <div class="seg pe-tabs"><button type="button" data-t="avatar" class="${tab==='avatar'?'sel':''}">頭像</button><button type="button" data-t="pendant" class="${tab==='pendant'?'sel':''}">掛件</button><button type="button" data-t="fx" class="${tab==='fx'?'sel':''}">入場特效</button></div>
       <div class="pe-body">${bodyHtml()}</div>
       <input id="file" type="file" accept="image/*" hidden>
       <div class="pe-bot"><button type="button" class="btn pe-save" id="ok">保存</button></div>
     </div>`;
     bind(el);
     if (d._photo && d.avatar === 'photo') { const img = el.querySelector('.pe-av .av img'); if (img) img.src = d._photo; }
+    if (tab === 'fx') replayEntrancePreview(el, d._fxPreview || d.fx);
   };
   const bind = (el) => {
     const nm = $('#nm', el);
     if (nm) nm.oninput = () => { d.name = nm.value; const nlen = $('#nlen', el); if (nlen) nlen.textContent = Array.from(d.name||'').length; };
-    $$('[data-t]', el).forEach(b => b.onclick = () => { tab = b.dataset.t; const body = el.querySelector('.pe-body'); if (body) body.innerHTML = bodyHtml(); $$('.pe-tabs [data-t]', el).forEach(x => x.classList.toggle('sel', x.dataset.t === tab)); bindBody(el); });
+    $$('[data-t]', el).forEach(b => b.onclick = () => { tab = b.dataset.t; const body = el.querySelector('.pe-body'); if (body) body.innerHTML = bodyHtml(); $$('.pe-tabs [data-t]', el).forEach(x => x.classList.toggle('sel', x.dataset.t === tab)); bindBody(el); if (tab === 'fx') replayEntrancePreview(el, d._fxPreview || d.fx); });
     bindBody(el);
     const pickFile = () => { const f = $('#file', el); if (f) f.click(); };
     $$('[data-cam]', el).forEach(b => b.onclick = (ev) => { ev.preventDefault(); pickFile(); });
@@ -1382,8 +1539,7 @@ function roundTable(seats, o = {}) {
     if (s.claimable) {
       return `<div class="st claim click" style="${pos}" data-sid="${s.id}" data-id="${s.id}" data-seat="${seatNo}" data-a="sit"><div class="av-empty">+</div><div class="nm">${esc(s.name || '可接手')}</div><div class="st-pills"><span class="claimpill">可接手</span></div></div>`;
     }
-    const enterFx = s.spotlight ? 'silver' : (s.fx || 'spot');
-    const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '') + (enterIds.has(s.id) ? ` enter fx-${enterFx}` : '');
+    const cls = (o.cls ? o.cls(s, i) : '') + (o.click && o.click(s, i) ? ' click' : '');
     const action = o.action || 'sel';
     const actAttr = o.click && o.click(s, i) ? `data-a="${action}"` : (o.seatClick ? `data-a="${o.seatClick}"` : '');
     const mic = (window.AvalonVoice && AvalonVoice.glyph(s.id)) || '';
@@ -1771,7 +1927,19 @@ function showEnd() {
 // ---- tiny DOM morph: patch only what changed (keeps images/animations, avoids full re-render jank) ----
 function morphAttrs(a, b) {
   for (const { name } of Array.from(a.attributes)) if (!b.hasAttribute(name)) a.removeAttribute(name);
-  for (const { name, value } of Array.from(b.attributes)) if (a.getAttribute(name) !== value) a.setAttribute(name, value);
+  for (const { name, value } of Array.from(b.attributes)) {
+    if (a.getAttribute(name) === value) continue;
+    // Token edits keep an in-flight entrance animation. Replacing the whole
+    // class attribute restarts it on every unrelated seat update.
+    if (name === 'class' && a.classList) {
+      const next = new Set(value.split(/\s+/).filter(Boolean));
+      const keep = (c) => c === 'enter' || c.startsWith('fx-');
+      for (const c of [...a.classList]) if (!next.has(c) && !keep(c)) a.classList.remove(c);
+      for (const c of next) if (!a.classList.contains(c)) a.classList.add(c);
+      continue;
+    }
+    a.setAttribute(name, value);
+  }
 }
 function morphChildren(a, b) {
   const an = a.childNodes, bn = Array.from(b.childNodes);
@@ -1828,7 +1996,7 @@ function render() {
     // avatars first would then find no placeholder to swap back onto, and the
     // next identical render would have nothing left to save.
     if (app._html !== nextHtml) $$('.rt .st[data-id] .av-wrap').forEach(wrap => { const id = wrap.closest('.st').dataset.id; if (id && !faces.has(id)) { faces.set(id, wrap); wrap.remove(); } });
-    setHTML(app, nextHtml); enterIds.clear();
+    setHTML(app, nextHtml);
     faces.forEach((wrap, id) => {
       const st = document.querySelector('.rt .st[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
       if (!st) return;
@@ -1854,6 +2022,7 @@ function render() {
       if (!(S && S.settings && S.settings.mic === true)) AvalonVoice.stripIcons();
       else AvalonVoice.afterRender();
     }
+    paintUnshown();
   }
   else if (view === 'rules') { app.innerHTML = rulesHtml(); mountRules(); }
   else if (view === 'history') { app.innerHTML = '<div class="card center muted">載入中…</div>'; loadHistory(); }
@@ -1900,14 +2069,13 @@ function homeHtml() {
     <div class="bigcard create" data-a="create"><div class="ic">⚔️</div><b>建立房間</b><span>我做房主</span></div>
     <div class="bigcard join" data-a="join"><div class="ic">🛡️</div><b>加入房間</b><span>輸入 4 位房間號</span></div>
   </div>`}
-  <button type="button" class="support-entry" data-a="go" data-v="support">支持我哋</button>
   <div class="card menu" style="margin-top:14px">
-    <div class="item" data-a="go" data-v="support"><span class="ic">☕</span><span class="grow">支持我哋</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="history"><span class="ic">📜</span><span class="grow">歷史記錄</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="stats"><span class="ic">📊</span><span class="grow">數據統計</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="skins"><span class="ic">🎴</span><span class="grow">角色皮膚</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="board"><span class="ic">🏆</span><span class="grow">排行榜</span><span class="chev">›</span></div>
     <div class="item" data-a="go" data-v="rules"><span class="ic">📖</span><span class="grow">規則介紹</span><span class="chev">›</span></div>
+    <div class="item" data-a="go" data-v="support"><span class="ic">☕</span><span class="grow">支持我哋</span><span class="chev">›</span></div>
     <div class="item" data-a="about"><span class="ic">ℹ️</span><span class="grow">版本</span><span class="muted small">v3.1</span><span class="chev">›</span></div>
   </div>
   <div class="footer"><span class="credit">HK阿瓦隆 · by Amigosparty · v3.1</span><br><span class="credit2 sponsor">${AMIGOS} Amigosparty · Teddy Design Limited</span><br><span class="credit2"><a href="/privacy" target="_blank" rel="noopener">私隱政策</a> · <a href="/terms" target="_blank" rel="noopener">使用條款</a></span></div>`;
@@ -1917,6 +2085,26 @@ function supportIcon(kind) {
   if (kind === 'heart') return `<span class="support-ic heart"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 38s-12-7.2-12-16a7 7 0 0 1 12-4 7 7 0 0 1 12 4c0 8.8-12 16-12 16z" fill="#1aa58a"/></svg></span>`;
   if (kind === 'spark') return `<span class="support-ic spark"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6l3.2 10.2L38 18l-8.2 6.2L32 36 24 29.2 16 36l2.2-11.8L10 18l10.8-1.8z" fill="#f0a04a"/></svg></span>`;
   return `<span class="support-ic emo">${supportEmoSvg(40)}</span>`;
+}
+function supportCharmTile(k) {
+  const it = PENDANTS.find(x => x[0] === k);
+  const name = it ? it[1] : k;
+  const known = account && Array.isArray(account.supportFrames);
+  const free = !!PD_ICE[k];
+  const got = known && supportFrameIds().includes(k);
+  const mark = free ? '免費' : (got ? '已有' : '');
+  const fx = pdFxCls(k);
+  return `<div class="support-charm${free ? ' free' : ''}${got ? ' got' : ''}" data-frame="${k}"><div class="pdv${fx}">${PD_BACK[k] ? `<img class="pov back" src="${pdSrc(k, 1)}" alt="">` : ''}<span class="pdcirc"><img src="/img/av/fox.webp" alt=""></span><img class="pov${free ? ' ice' : ''}" src="${pdSrc(k)}" alt="">${pdPalHtml(k)}</div><b>${name}</b>${mark ? `<em>${mark}</em>` : ''}</div>`;
+}
+function supportOffer() {
+  const known = account && Array.isArray(account.supportFrames);
+  const n = supportFrameIds().length;
+  if (!known) {
+    return `<div class="support-offer"><b>購買會隨機解鎖六款圓框掛件</b><span>付 HK$15，伺服器核對到付款之後，會從下面十款裡隨機送出六款。購買前不會公布是哪六款。朔雪之映、逆光之劍人人可用，不計入這六款。</span></div>`;
+  }
+  const title = n === 6 ? '你抽到的六款圓框掛件' : (n ? `你抽到的 ${n} 款圓框掛件` : '這十款你已靠對局解鎖');
+  const body = n ? '下面標了「已有」的就是這次抽到的。再次支持不會重新抽取。' : '沒有尚未解鎖的圓框可以再抽。再次支持也不會重抽。';
+  return `<div class="support-offer got"><b>${title}</b><span>${body}</span></div>`;
 }
 function supportHtml() {
   const rows = [
@@ -1930,8 +2118,10 @@ function supportHtml() {
     <h1>請開發者喝杯咖啡</h1>
     <p class="support-intro">熬夜改 bug 的時候，這杯咖啡很管用。謝謝你！</p>
     ${supportNote ? `<p class="support-status">${esc(supportNote)}</p>` : ''}
+    ${supportOffer()}
+    <div class="support-charms">${SUPPORT_FRAMES.map(supportCharmTile).join('')}</div>
     <div class="support-list">${rows.map(([id, icon, name, desc]) => `<div class="support-row" data-benefit="${id}" data-owned="${owned(id) ? '1' : '0'}">${supportIcon(icon)}<div><b>${name}</b><span>${desc}</span></div>${owned(id) ? '<em>已有</em>' : ''}</div>`).join('')}</div>
-    <p class="support-note">可以重複支持：第一次送下面這些，之後每次只補上你還沒有的，已經有的不會再送一次。</p>
+    <p class="support-note">可以重複支持：第一次送下面這些，並隨機解鎖六款圓框掛件。之後每次只補上你還沒有的，已經有的不會再送一次，抽過的圓框也不會再抽。</p>
     <button type="button" class="btn support-pay" data-a="supportpay">HK$15 支持</button>
   </section>`;
 }
@@ -2030,6 +2220,9 @@ function cfgSheetHtml() {
     ${s.advanced ? `<div class="small muted" style="margin-top:8px">進階模式會改寫上方預設陣容</div>${[['percival','派西維爾'],['morgana','莫甘娜'],['mordred','莫德雷德'],['oberon','奧伯倫']].map(([k, nm]) => `<div class="toggle"><div class="grow"><b>${nm}</b></div><button class="sw ${s[k] ? 'on' : ''}" data-a="tg" data-k="${k}" ${dis}></button></div>`).join('')}` : ''}
     <button class="btn" data-a="cfgclose" style="margin-top:12px">完成</button>`;
 }
+function releaseOpen() {
+  return '<div class="release-row"><button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button></div>';
+}
 function lobbyHtml() {
   const n = S.capacity, x = S.seated, s = S.settings, host = S.isHost;
   const me = (S.seats || []).find(p => p && p.id === S.meId);
@@ -2042,7 +2235,7 @@ function lobbyHtml() {
       cls: p => (p.isHost || p.id === S.hostId ? 'host' : ''),
       sub: p => (p.isHost || p.id === S.hostId ? '<span class="hostpill">房主</span>' : '') + (p.id === S.meId ? '<span class="mepill">我</span>' : ''),
       center: `<div class="seatcount"><b>${x}<small>/${n}</small></b><span>已就座</span></div>` })}
-    ${host ? '<button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button>' : ''}
+    ${host ? releaseOpen() : ''}
     </div>
   <div class="card cfgcard" data-a="cfg">
     <div class="row between"><h3 style="margin:0">${n} 人局</h3><span class="small gold">${host ? '調整 ›' : '查看 ›'}</span></div>
@@ -2139,8 +2332,8 @@ function gameHtml() {
     center,
   });
   return `${(window.AvalonVoice && AvalonVoice.barHtml()) || ''}${floorCard}${S.isHost ? `<div class="card micmode"><div class="toggle"><div class="grow"><b>麥克風模式</b><div class="muted small">${S.settings && S.settings.mic ? '已開啟。每人要自己點頭像右下角。' : '未開啟。頭像上不會顯示咪。'}</div></div><button type="button" class="sw ${S.settings && S.settings.mic ? 'on' : ''}" data-a="tg" data-k="mic" aria-label="麥克風模式"></button></div></div>` : ''}${!me ? '<div class="specbar" data-spec="live">👁 觀戰中 · 唔會看到隱藏身分</div>' : ''}<div class="card">${trackHtml(g)}</div>
-  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:42px 10px 16px">${table}${ended ? '' : markLegend()}${S.isHost && !ended ? '<button type="button" class="btn ghost release-open" data-a="releaselist">釋出座位</button>' : ''}</div>
-  <div class="card thist" id="teamhist">${teamHistoryHtml(g)}</div>
+  <div class="card${pickLive ? ' pick-live' : ''}" style="padding:42px 10px 16px">${table}${S.isHost && !ended ? releaseOpen() : ''}</div>
+  <div class="card thist" id="teamhist">${teamHistoryHtml(g)}${ended ? '' : markLegend()}</div>
   ${ladyChainHtml(g.ladyLog, g.seats, ended) ? `<div class="card">${ladyChainHtml(g.ladyLog, g.seats, ended)}</div>` : ''}
   ${panel ? `<div class="card${pickLive ? ' pick-ready' : ''}${g.phase === 'vote' ? ' vote-panel' : ''}">${panel}</div>` : ''}
   ${ended ? `<div id="detail">${detailHtml(liveRecord(g))}</div>` : ''}
@@ -2434,7 +2627,14 @@ async function canvasDrawAv(x, load, p, cx, cy, rad) {
   }
   x.restore();
   const k = p && p.pendant;
-  if (k && k !== 'none') {
+  if (k === 'coffee') {
+    const cup = await load(coffeeCupUrl());
+    if (cup) {
+      const d = rad * 2;
+      const w = d * COFFEE_PLACE.size;
+      x.drawImage(cup, cx - rad + d * COFFEE_PLACE.left, cy - rad + d * COFFEE_PLACE.top, w, w);
+    }
+  } else if (k && k !== 'none') {
     if (PD_BACK[k]) { const bi = await load(pdSrc(k, 1)); if (bi) x.drawImage(bi, cx - ov / 2, cy - ov / 2, ov, ov); }
     if (PD_IMG[k]) { const pi = await load(pdSrc(k)); if (pi) x.drawImage(pi, cx - ov / 2, cy - ov / 2, ov, ov); }
   }
@@ -2876,5 +3076,5 @@ document.addEventListener('click', async (e) => {
   }
 });
 render();
-window.__av = { av, roundTable, makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
+window.__av = { av, roundTable, canvasDrawAv, makeStory, storySheet, get S() { return S; }, render, makePoster, replayUrl, inviteUrl, showQuest, closeModal, go, showRole, reviewHtml, knows: (r) => { rulesTab = 'knows'; wkRole = r; go('rules'); } };
 })();

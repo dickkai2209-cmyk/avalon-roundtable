@@ -137,6 +137,8 @@ const hit = (a, b) => a && b && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b 
     })()`);
     const beforeOpen = await cdp.eval(`(() => { const w = document.querySelector('.pe-av .av-wrap'); return { cls: w.className, audio: !!document.querySelector('audio,video'), pov: !!document.querySelector('.pe-av .pov'), img: !!document.querySelector('.pe-av .av img') }; })()`);
     assert(beforeOpen.img && beforeOpen.pov && !/fx-/.test(beforeOpen.cls) && !beforeOpen.audio, 'editor shows own avatar and pendant with no autoplayed effect');
+    await cdp.eval(`document.querySelector('.pe-tabs [data-t="fx"]').click()`);
+    await cdp.eval(`(() => { const body = document.querySelector('.pe-body'); body.style.maxHeight = '140px'; const max = Math.max(0, body.scrollHeight - body.clientHeight); body.scrollTop = Math.min(40, max); })()`);
     const keys = ['snow', 'howl', 'spark', 'petals', 'fire', 'lightning', 'gold', 'spot', 'none'];
     for (const k of keys) {
       const scrollBefore = await cdp.eval(`document.querySelector('.pe-body').scrollTop`);

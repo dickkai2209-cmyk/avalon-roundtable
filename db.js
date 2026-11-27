@@ -9,7 +9,7 @@ const JSON_FILE = path.join(DATA_DIR, 'db.json');
 const PHOTO_DIR = path.join(DATA_DIR, 'photos');
 const BCRYPT_ROUNDS = 10;
 // never pull the photo BYTEA on ordinary user lookups (it is served separately via /api/avatar)
-const UCOLS = 'id,username,username_norm,password_hash,guest_key,pub_id,name,avatar,bg,fx,pendant,skins,created_at,updated_at,veto_cards,google_sub,email,support_benefits,(photo IS NOT NULL) AS has_photo';
+const UCOLS = 'id,username,username_norm,password_hash,guest_key,pub_id,name,avatar,bg,fx,pendant,skins,created_at,updated_at,veto_cards,google_sub,email,support_benefits,support_frames,(photo IS NOT NULL) AS has_photo';
 const UCOLS_U = UCOLS.split(',').map(c => c.startsWith('(') ? '(u.photo IS NOT NULL) AS has_photo' : 'u.' + c).join(',');
 
 let mode = 'json';
@@ -78,6 +78,7 @@ async function init() {
         ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT UNIQUE;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS support_benefits JSONB NOT NULL DEFAULT '[]';
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS support_frames JSONB;
         CREATE TABLE IF NOT EXISTS support_payments (
           ref TEXT PRIMARY KEY,
           user_id TEXT NOT NULL,
@@ -146,6 +147,7 @@ function pubUser(u) {
     vetoCards: u.veto_cards == null ? 1 : u.veto_cards,
     name: u.name, avatar: u.avatar, bg: u.bg, fx: u.fx, pendant: u.pendant,
     benefits: support.normalizeBenefits(u.support_benefits),
+    supportFrames: support.framesState(u.support_frames),
     skins: typeof u.skins === 'string' ? JSON.parse(u.skins) : (u.skins || {}),
     hasPhoto: u.avatar === 'photo' || !!(u.has_photo || u.photo || (mode === 'json' && fs.existsSync(path.join(PHOTO_DIR, u.id + '.webp')))),
     photoUrl: u.avatar === 'photo' ? `/api/avatar/${u.id}?v=${u.updated_at ? new Date(u.updated_at).getTime() : 0}` : null,
@@ -200,7 +202,7 @@ async function createGuest({ guestKey, name, avatar, bg, fx, pendant, skins }) {
   const u = {
     id, username: null, username_norm: null, password_hash: null, guest_key: key, pub_id: pub,
     name: name || '', avatar: avatar || 'fox', bg: bg || '#f3d9a4', fx: fx || 'spot',
-    pendant: pendant || 'none', skins: skins || {}, support_benefits: [], veto_cards: 1, created_at: new Date().toISOString(),
+    pendant: pendant || 'none', skins: skins || {}, support_benefits: [], support_frames: null, veto_cards: 1, created_at: new Date().toISOString(),
   };
   try {
     if (mode === 'pg') {
@@ -547,43 +549,101 @@ async function purgeTestData() {
   saveJson(); return { users: ids.size, games: g0 - mem.games.length, rooms };
 }
 function parseBenefits(u) { return support.normalizeBenefits(u && u.support_benefits); }
+function statsPlain(raw) {
+  return { played: Number(raw && raw.played) || 0, won: Number(raw && raw.won) || 0, mvp: Number(raw && raw.mvp) || 0 };
+}
 
-// One successful payment fills only the benefits this account does not already own.
-// The same Stripe ref is a no-op. Card data is never stored.
-async function grantSupport(userId, ref, eventId) {
-  ref = String(ref || '');
-  if (!ref || !userId) return { missing: true, added: [], owned: [] };
+// Roll once when a full supporter has no persisted set. Later loads return the same ids.
+async function ensureSupportFrames(user) {
+  if (!user) return user;
+  if (support.framesState(user.support_frames) != null) return user;
+  const owned = support.normalizeBenefits(user.support_benefits);
+  if (!support.BENEFIT_IDS.every(id => owned.includes(id))) return user;
+  const stats = await getStats(user.id);
   if (mode === 'pg') {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const cur = await client.query(`SELECT support_benefits FROM users WHERE id=$1 FOR UPDATE`, [userId]);
-      if (!cur.rows[0]) { await client.query('ROLLBACK'); return { missing: true, added: [], owned: [] }; }
+      const cur = await client.query(`SELECT support_benefits, support_frames FROM users WHERE id=$1 FOR UPDATE`, [user.id]);
+      if (!cur.rows[0]) { await client.query('ROLLBACK'); return user; }
+      const have = support.normalizeBenefits(cur.rows[0].support_benefits);
+      const existing = support.framesState(cur.rows[0].support_frames);
+      if (existing != null || !support.BENEFIT_IDS.every(id => have.includes(id))) {
+        await client.query('COMMIT');
+        user.support_frames = cur.rows[0].support_frames;
+        return user;
+      }
+      const st = await client.query(`SELECT played, won, mvp FROM user_stats WHERE user_id=$1`, [user.id]);
+      const frames = support.pickSupportFrames(statsPlain(st.rows[0] || stats));
+      await client.query(`UPDATE users SET support_frames=$2::jsonb, updated_at=now() WHERE id=$1 AND support_frames IS NULL`, [user.id, JSON.stringify(frames)]);
+      await client.query('COMMIT');
+      user.support_frames = frames;
+      return user;
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch (err) {}
+      throw e;
+    } finally { client.release(); }
+  }
+  const u = mem.users.find(x => x.id === user.id);
+  if (!u) return user;
+  if (support.framesState(u.support_frames) != null) { user.support_frames = u.support_frames; return user; }
+  if (!support.BENEFIT_IDS.every(id => support.normalizeBenefits(u.support_benefits).includes(id))) return user;
+  const frames = support.pickSupportFrames(statsPlain(mem.stats[user.id] || stats));
+  if (support.framesState(u.support_frames) == null) {
+    u.support_frames = frames;
+    saveJson();
+  }
+  user.support_frames = u.support_frames;
+  return user;
+}
+
+// One successful payment fills only the benefits this account does not already own.
+// The same Stripe ref is a no-op for benefits. The frame set is chosen at most once.
+// Card data is never stored.
+async function grantSupport(userId, ref, eventId) {
+  ref = String(ref || '');
+  if (!ref || !userId) return { missing: true, added: [], owned: [], frames: null };
+  if (mode === 'pg') {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const cur = await client.query(`SELECT support_benefits, support_frames FROM users WHERE id=$1 FOR UPDATE`, [userId]);
+      if (!cur.rows[0]) { await client.query('ROLLBACK'); return { missing: true, added: [], owned: [], frames: null }; }
       const owned = support.normalizeBenefits(cur.rows[0].support_benefits);
+      const existing = support.framesState(cur.rows[0].support_frames);
+      const st = await client.query(`SELECT played, won, mvp FROM user_stats WHERE user_id=$1`, [userId]);
       const ins = await client.query(
         `INSERT INTO support_payments (ref, user_id, event_id) VALUES ($1,$2,$3) ON CONFLICT (ref) DO NOTHING RETURNING ref`,
         [ref, userId, eventId || null]
       );
-      if (!ins.rows.length) { await client.query('COMMIT'); return { duplicate: true, added: [], owned }; }
-      const merged = support.mergeBenefits(owned);
-      await client.query(`UPDATE users SET support_benefits=$2::jsonb, updated_at=now() WHERE id=$1`, [userId, JSON.stringify(merged.owned)]);
+      const duplicate = !ins.rows.length;
+      const merged = duplicate ? { owned, added: [] } : support.mergeBenefits(owned);
+      const frames = existing == null ? support.pickSupportFrames(statsPlain(st.rows[0])) : existing;
+      if (!duplicate || existing == null) {
+        await client.query(`UPDATE users SET support_benefits=$2::jsonb, support_frames=$3::jsonb, updated_at=now() WHERE id=$1`, [userId, JSON.stringify(merged.owned), JSON.stringify(frames)]);
+      }
       await client.query('COMMIT');
-      return { duplicate: false, added: merged.added, owned: merged.owned };
+      return { duplicate, added: merged.added, owned: merged.owned, frames };
     } catch (e) {
       try { await client.query('ROLLBACK'); } catch (err) {}
       throw e;
     } finally { client.release(); }
   }
   const u = mem.users.find(x => x.id === userId);
-  if (!u) return { missing: true, added: [], owned: [] };
+  if (!u) return { missing: true, added: [], owned: [], frames: null };
   mem.supportPayments = mem.supportPayments || [];
   const owned = support.normalizeBenefits(u.support_benefits);
-  if (mem.supportPayments.some(p => p.ref === ref)) return { duplicate: true, added: [], owned };
-  const merged = support.mergeBenefits(owned);
-  u.support_benefits = merged.owned;
-  mem.supportPayments.push({ ref, user_id: userId, event_id: eventId || null, created_at: new Date().toISOString() });
-  saveJson();
-  return { duplicate: false, added: merged.added, owned: merged.owned };
+  const existing = support.framesState(u.support_frames);
+  const duplicate = mem.supportPayments.some(p => p.ref === ref);
+  const merged = duplicate ? { owned, added: [] } : support.mergeBenefits(owned);
+  const frames = existing == null ? support.pickSupportFrames(statsPlain(mem.stats[userId])) : existing;
+  if (!duplicate || existing == null) {
+    u.support_benefits = merged.owned;
+    u.support_frames = frames;
+    if (!duplicate) mem.supportPayments.push({ ref, user_id: userId, event_id: eventId || null, created_at: new Date().toISOString() });
+    saveJson();
+  }
+  return { duplicate, added: merged.added, owned: merged.owned, frames };
 }
 
 async function findGMCandidates() {
@@ -592,7 +652,7 @@ async function findGMCandidates() {
 }
 module.exports = {
   isGM, findGMCandidates, purgeTestData, flush, saveRoom, deleteRoom, loadRooms,
-  init, mode: () => mode, pubUser, parseBenefits, grantSupport,
+  init, mode: () => mode, pubUser, parseBenefits, grantSupport, ensureSupportFrames,
   getUser, getUserByUsername, getUserByGuestKey, getUserByPubId, getUserByToken,
   createGuest, updateUser, setPhoto, getPhoto,
   validUsername, validPassword, registerOrUpgrade, verifyLogin,

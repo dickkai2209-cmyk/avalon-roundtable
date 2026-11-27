@@ -266,6 +266,7 @@ function bot(key, name) {
     const seats5 = five.bots.map(b => b.st.meId);
     await setSize(375, 812);
     await asUser(five.people[0]);
+    assert(!(await evalj(`!!document.querySelector('.markleg')`)), 'a finished game hides the seat-mark legend');
     await dock('host');
     await setSize(390, 844);
     await dock('host');
@@ -286,9 +287,9 @@ function bot(key, name) {
     assert(five.bots[0].st.isHost && five.bots[0].st.seated === 5 && five.bots[0].st.capacity === 5, 'the host is back in a full lobby');
     const lobby5 = await evalj(`(() => {
       const start = document.querySelector('[data-a="start"]');
-      return { start: start && start.textContent, disabled: start && start.disabled, seats: document.querySelectorAll('.rt .st:not(.empty)').length, wait: !!document.querySelector('.end-wait') };
+      return { start: start && start.textContent, disabled: start && start.disabled, seats: document.querySelectorAll('.rt .st:not(.empty)').length, wait: !!document.querySelector('.end-wait'), leg: !!document.querySelector('.markleg') };
     })()`);
-    assert(lobby5.seats === 5 && lobby5.start && !lobby5.disabled && !lobby5.wait && /開始遊戲/.test(lobby5.start), 'the host can start the kept-seat lobby ' + JSON.stringify(lobby5));
+    assert(lobby5.seats === 5 && lobby5.start && !lobby5.disabled && !lobby5.wait && !lobby5.leg && /開始遊戲/.test(lobby5.start), 'the host can start the kept-seat lobby without the mark legend ' + JSON.stringify(lobby5));
 
     const ten = await people(10, 'n10');
     await finish(ten.bots);

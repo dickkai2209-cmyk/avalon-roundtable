@@ -79,8 +79,6 @@ function bot(key, name) {
     if (!(await bots[i].act('sit', { seat: i + 1 })).ok) throw new Error('sit');
   }
   await spec.emit('join', { code });
-  if (!(await bots[0].act('start')).ok) throw new Error('start');
-  for (let i = 0; i < 40 && !(bots[0].st.game && bots[0].st.game.me); i++) await sleep(40);
   const gme = () => bots[0].st.game;
   async function until(pred, label) {
     for (let i = 0; i < 80; i++) { if (pred()) return; await sleep(40); }
@@ -115,7 +113,15 @@ function bot(key, name) {
   async function asUser(person) {
     const profile = JSON.stringify({ name: person.name || person.user.name, avatar: 'fox', bg: '#fff4e8', fx: 'spot', pendant: 'crown' });
     await evalj(`localStorage.setItem('cc.token', ${JSON.stringify(person.token)}); localStorage.setItem('cc.pid', ${JSON.stringify(person.user.id)}); localStorage.setItem('cc.profile', ${JSON.stringify(profile)}); location.replace(${JSON.stringify(APP + '?m=' + Date.now())})`);
-    for (let i = 0; i < 50; i++) { if (await evalj(`!!document.querySelector('.rt .st .av, [data-a="create"]')`).catch(() => false) && await evalj(`!!document.querySelector('.markleg, .specbar')`).catch(() => false)) return; await sleep(120); }
+    for (let i = 0; i < 50; i++) {
+      const ready = await evalj(`(() => {
+        const table = !!document.querySelector('.rt .st .av, .rt .st .av-empty');
+        const room = !!document.querySelector('[data-a="start"], [data-a="ready"], .markleg, .specbar, #teamhist');
+        return table && room;
+      })()`).catch(() => false);
+      if (ready) return;
+      await sleep(120);
+    }
     throw new Error('no table for ' + (person.name || ''));
   }
   async function quiet() {
@@ -129,6 +135,7 @@ function bot(key, name) {
     await sleep(80);
   }
   async function shot(name) { await quiet(); const { data } = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(OUT, name), Buffer.from(data, 'base64')); }
+  async function shotAt(name) { const { data } = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(OUT, name), Buffer.from(data, 'base64')); }
   const nums = () => evalj(`JSON.stringify([...document.querySelectorAll('.rt > .no')].map(n => { const r = n.getBoundingClientRect(); return [n.dataset.seat, Math.round(r.left), Math.round(r.top), !!n.closest('.st')]; }))`);
   const view = () => evalj(`(() => {
     const leg = document.querySelector('.markleg');
@@ -140,13 +147,67 @@ function bot(key, name) {
     return { leg: leg ? leg.innerText.replace(/\\s+/g,'') : '', sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, seats, badge: !!document.querySelector('.sbadge') };
   })()`);
   const covers = (box, x, y) => box && x >= box.l && x <= box.r && y >= box.t && y <= box.b;
+  const place = () => evalj(`(() => {
+    const leg = document.querySelector('.markleg');
+    const hist = document.querySelector('#teamhist');
+    const table = document.querySelector('.rt') && document.querySelector('.rt').closest('.card');
+    if (!leg || !hist || !table) return { missing: true, leg: !!leg, hist: !!hist, table: !!table };
+    const h3 = hist.querySelector('h3');
+    const bits = [...hist.querySelectorAll('.th-row, .th-empty')];
+    const content = bits[bits.length - 1] || null;
+    const lr = leg.getBoundingClientRect();
+    const cr = content ? content.getBoundingClientRect() : null;
+    const hr = h3.getBoundingClientRect();
+    const tr = table.getBoundingClientRect();
+    const faces = [...document.querySelectorAll('.rt .st .av, .rt .st .nm, .rt > .no')].map(el => el.getBoundingClientRect());
+    const hitFace = faces.some(r => lr.left < r.right - 1 && lr.right > r.left + 1 && lr.top < r.bottom - 1 && lr.bottom > r.top + 1);
+    const after = content && (content.compareDocumentPosition(leg) & Node.DOCUMENT_POSITION_FOLLOWING);
+    return {
+      inTable: table.contains(leg),
+      inHist: hist.contains(leg),
+      after: !!after,
+      belowHead: lr.top >= hr.bottom - 1,
+      belowContent: !!(cr && lr.top >= cr.bottom - 1),
+      belowTable: lr.top >= tr.bottom - 1,
+      hitFace,
+      text: leg.innerText.replace(/\\s+/g, ''),
+      sw: document.documentElement.scrollWidth,
+      cw: document.documentElement.clientWidth,
+    };
+  })()`);
+  async function showHist() {
+    await quiet();
+    await evalj(`(() => {
+      const main = document.querySelector('main');
+      const hist = document.querySelector('#teamhist');
+      const bar = document.querySelector('.topbar');
+      if (!main || !hist) return;
+      const top = bar ? bar.getBoundingClientRect().bottom : 0;
+      main.scrollTop += hist.getBoundingClientRect().top - top - 8;
+    })()`);
+    await sleep(80);
+  }
 
   try {
     for (let i = 0; i < 40 && !(await evalj(`!!document.querySelector('[data-a="create"]')`).catch(() => false)); i++) await sleep(100);
     await setSize(375, 812);
     await asUser(people[0]);
+    const lobby = await evalj(`(() => {
+      const leg = document.querySelector('.markleg');
+      return { leg: !!leg, hist: !!document.querySelector('#teamhist'), start: !!document.querySelector('[data-a="start"]'), voted: (document.body.innerText || '').includes('已投票') };
+    })()`);
+    assert(!lobby.leg && !lobby.hist && lobby.start && !lobby.voted, 'the lobby has no mark legend (' + JSON.stringify(lobby) + ')');
+    await shot('legend-lobby-375.png');
+
+    if (!(await bots[0].act('start')).ok) throw new Error('start');
+    for (let i = 0; i < 40 && !(bots[0].st.game && bots[0].st.game.me); i++) await sleep(40);
+    for (let i = 0; i < 50; i++) { if (await evalj(`!!document.querySelector('.markleg') && !!document.querySelector('#teamhist')`).catch(() => false)) break; await sleep(120); }
+    let spot = await place();
+    assert(!spot.missing && !spot.inTable && spot.inHist && spot.after && spot.belowHead && spot.belowContent && spot.belowTable && !spot.hitFace, 'mid-game legend sits below 組隊記錄 (' + JSON.stringify(spot) + ')');
+    assert(spot.text.includes('隊長') && spot.text.includes('湖中仙女') && spot.text.includes('王者之劍') && spot.text.includes('隊員') && spot.text.includes('已投票'), 'legend uses the five labels');
+    assert(spot.sw <= spot.cw + 1, '375 does not overflow before a proposal');
+
     let v = await view();
-    assert(v.leg.includes('隊長') && v.leg.includes('湖中仙女') && v.leg.includes('王者之劍') && v.leg.includes('隊員') && v.leg.includes('已投票'), 'legend uses the five labels');
     assert(v.seats.filter(s => s.lead).length === 1 && v.seats.find(s => s.lead).crown && v.seats.find(s => s.lead).crown.title === '隊長', 'the leader wears the crown');
     assert(v.seats.filter(s => s.lady).length === 1 && v.seats.find(s => s.lady).wreath.title === '湖中仙女', 'the lady holder wears the wreath');
     assert(v.seats.every(s => !s.sword && !s.cast && !s.ring), 'sword, vote and team marks are absent before a proposal');
@@ -207,6 +268,34 @@ function bot(key, name) {
     assert(v.seats.every(s => !s.cast && !s.ring), 'checks and team rings clear when the proposal fails');
     assert(v.seats.filter(s => s.lead).length === 1 && v.seats.find(s => s.lead).crown, 'the crown moves to the next leader');
     assert(await nums() === before, 'the number ring does not move');
+    spot = await place();
+    assert(!spot.missing && !spot.inTable && spot.inHist && spot.after && spot.belowHead && spot.belowContent && spot.belowTable && !spot.hitFace, 'legend stays under the recorded team history (' + JSON.stringify(spot) + ')');
+    const histText = await evalj(`document.querySelector('#teamhist').innerText`);
+    assert(histText.includes('組隊記錄') && histText.includes('否決') && histText.indexOf('組隊記錄') < histText.indexOf('已投票'), '組隊記錄 is above the mark legend');
+    await setSize(375, 812);
+    await showHist();
+    await shotAt('legend-history-375.png');
+    const clearOf = async (tag) => {
+      const clear = await evalj(`(() => {
+        const main = document.querySelector('main');
+        const before = main.scrollTop;
+        main.scrollTop = main.scrollHeight;
+        const leg = document.querySelector('.markleg').getBoundingClientRect();
+        const fab = document.querySelector('.myrole-fab');
+        const limit = fab ? fab.getBoundingClientRect().top : main.getBoundingClientRect().bottom;
+        const faces = [...document.querySelectorAll('.rt .st .av, .rt .st .nm')].map(el => el.getBoundingClientRect());
+        const hit = faces.some(r => leg.left < r.right - 1 && leg.right > r.left + 1 && leg.top < r.bottom - 1 && leg.bottom > r.top + 1);
+        main.scrollTop = before;
+        return { legB: Math.round(leg.bottom), limit: Math.round(limit), clear: leg.bottom <= limit + 1, hit, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth };
+      })()`);
+      assert(clear.clear && !clear.hit && clear.sw <= clear.cw + 1, tag + ' legend clears the role button and faces (' + JSON.stringify(clear) + ')');
+    };
+    await clearOf('375');
+    await setSize(390, 844);
+    await showHist();
+    await shotAt('legend-history-390.png');
+    await clearOf('390');
+    await setSize(375, 812);
 
     await propose(true);
     await until(() => gme().phase === 'sword', 'sword');

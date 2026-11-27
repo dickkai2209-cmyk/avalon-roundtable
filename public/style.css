@@ -117,6 +117,14 @@ input.code-inp{text-transform:uppercase;letter-spacing:10px;text-align:center;fo
 @keyframes crown{0%{transform:translateY(-14px) scale(1.6);opacity:0}100%{transform:none;opacity:1}}
 .rt .st.enter{animation:enter 1.2s ease}
 @keyframes enter{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.15)}100%{transform:none}}
+@media (prefers-reduced-motion: reduce){
+  .rt .st.enter{animation:none}
+  .rt .st.fx-spot::before,.rt .st.fx-gold::before,.rt .st.fx-spark::before,
+  .rt .st.fx-petals::before,.rt .st.fx-petals::after,
+  .rt .st.fx-fire .av,.rt .st.fx-lightning::before,
+  .rt .st.fx-howl,.rt .st.fx-howl::before,.rt .st.fx-howl::after,
+  .rt .st.fx-snow::before,.rt .st.fx-snow::after,.rt .st.fx-silver::before{animation:none}
+}
 .fx-spot::before,.fx-gold::before,.fx-spark::before{content:"";position:absolute;left:50%;top:-30px;width:90px;height:110px;margin-left:-45px;pointer-events:none;animation:fx 2.4s ease forwards;z-index:0}
 .fx-spot::before{background:radial-gradient(ellipse at 50% 0,rgba(255,250,220,.75),transparent 70%);clip-path:polygon(40% 0,60% 0,100% 100%,0 100%)}
 .fx-gold::before{background:radial-gradient(circle at 50% 55%,rgba(246,220,150,.85),transparent 60%)}
@@ -708,6 +716,7 @@ main{padding:8px 16px 96px}
 .markleg i.sword .mark,.markleg i.sword svg{width:14px;height:22px}
 .markleg i.ring{border:2px solid #2f6fe8;border-radius:50%;box-sizing:border-box}
 .markleg i.cast{background:rgba(8,14,28,.72);border-radius:50%}
+.thist .markleg{margin:14px 0 0;padding:12px 0 0;border-top:1px solid var(--line2)}
 @media (prefers-reduced-motion: reduce){
   .rt .st .mark.crown .halo,.rt .st .mark.crown .glint,.rt .st .mark.wreath .glow{animation:none}
   .rt .st .mark.crown .halo{opacity:.9;transform:translate(-50%,-50%)}
@@ -782,7 +791,7 @@ img,canvas,svg,video{max-width:100%}
 @media (min-width:360px){.prof-actions{width:94px}.prof-actions .pa{font-size:12px;padding:7px 6px}}
 
 /* ---- profile editor (WeChat-style) ---- */
-.sheet:has(.pe){padding:14px 16px 0;display:flex;flex-direction:column;max-height:92vh}
+.sheet:has(.pe){padding:14px max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));display:flex;flex-direction:column;max-height:92vh}
 .pe{display:flex;flex-direction:column;min-height:0;flex:1}
 .pe h2{margin:0 0 12px}
 .pe-top{display:flex;align-items:center;gap:12px;background:#f4f5f7;border-radius:16px;padding:22px 14px 18px;margin-bottom:12px;overflow:visible}
@@ -793,7 +802,8 @@ img,canvas,svg,video{max-width:100%}
 .pe-nick .inp{padding:8px 48px 8px 10px !important;font-size:16px !important;background:#fff !important}
 .pe-hint{font-size:11px;color:#9aa0b2;margin-top:4px}
 .pe-cnt{position:absolute;right:10px;top:22px;font-size:11px;color:#9aa0b2}
-.pe-tabs{margin:0 0 12px}
+.pe-tabs{margin:0 0 12px;flex-wrap:nowrap;max-width:100%}
+.pe-tabs button{flex:1 1 0;min-width:0;white-space:nowrap;padding:8px 1px;font-size:13px;letter-spacing:0;line-height:1.25;text-align:center}
 .pe-body{flex:1;overflow:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch}
 .pe-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
 .pe-grid button{position:relative;border:1.5px solid #eceef4;background:#fff;border-radius:14px;padding:8px 4px 6px;cursor:pointer;color:#1d2333}
@@ -1400,7 +1410,16 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
 .modal:has(.actconf){z-index:80 !important;background:rgba(16,20,32,.62)}
 .sheet:has(.actconf){animation:none;opacity:1;background:#fff;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
-.release-open{margin-top:10px}
+/* Host opener only. Compact, bottom-right of the table card, so the bottom
+   seat's name and number keep a clear gap. Hidden once the next-game dock is up. */
+.release-row{display:flex;justify-content:flex-end;align-items:center;margin:40px 0 0;min-height:44px}
+.release-row .btn.ghost.release-open{
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+  width:auto;max-width:68%;min-height:44px;margin:0;padding:0 16px;border-radius:999px;
+  font-size:14px;font-weight:800;line-height:1;letter-spacing:0;box-shadow:none;
+}
+.release-row .release-open:focus-visible{outline:2px solid #1d2333;outline-offset:2px}
+body:has(.end-next) .release-row{display:none}
 .rt .st.claim .claimpill{display:inline-block;margin-top:2px;font-size:10px;line-height:14px;padding:0 6px;border-radius:7px;background:#eef3ff;color:#2f6be0;font-weight:800}
 .toast{z-index:90}
 .voicebar{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e3e6ef;border-radius:14px;padding:8px 10px;margin:8px 0}
@@ -1575,8 +1594,10 @@ body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))
 .supb{display:inline-block;margin-left:6px;vertical-align:1px;font-size:10px;font-weight:800;line-height:16px;padding:0 6px;border-radius:999px;color:#0f766e;background:#d8f6ee;border:1px solid #b7eadf}
 .namecard .name{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px}
 
-/* Coffee charm sits beside the face, not over it. */
-.av-wrap>.pov.coffee{left:auto;right:-22%;top:auto;bottom:-8%;width:46%;height:46%;z-index:4}
+/* Coffee cup sits on the crown: centred, saucer just inside the circle. Same box in the picker, on seats, and in the crop ring. */
+.av-wrap>.pov.coffee,
+.pdv>.pov.coffee,
+.crop-ring>.pov.coffee{left:21%;right:auto;top:-46%;bottom:auto;width:58%;height:58%;z-index:4}
 
 /* Silver-white spotlight when a supporter sits in the lobby. It fades and stays off the name. */
 .fx-silver{position:relative}
@@ -1589,8 +1610,6 @@ body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))
   .fx-silver::before{animation:none;opacity:.55}
 }
 
-.support-entry{display:flex;align-items:center;justify-content:center;width:100%;margin-top:12px;border:0;border-radius:14px;background:#1677ff;color:#fff;font:inherit;font-weight:800;font-size:16px;line-height:1.2;padding:13px 14px;cursor:pointer}
-.support-entry:active{transform:translateY(1px)}
 .support{padding:6px 0 calc(8px + env(safe-area-inset-bottom))}
 .support h1{margin:8px 2px 6px;font-size:22px;line-height:1.25;font-weight:800;letter-spacing:0;color:#1d2333}
 .support-intro,.support-note,.support-status{margin:0 2px;color:#8a909c;font-size:14px;line-height:1.45}
@@ -1609,3 +1628,18 @@ body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))
 .support-ic .pov.coffee{position:static;width:34px;height:34px;left:auto;right:auto;top:auto;bottom:auto}
 .support-note{margin-top:14px}
 .support .support-pay{background:#1677ff;color:#fff;border-radius:12px;height:48px;margin-top:16px;font-size:17px;font-weight:800;letter-spacing:0}
+.support-offer{margin:10px 0 0;padding:10px 12px;border-radius:14px;background:#e7f0ff}
+.support-offer b{display:block;font-size:15px;line-height:1.35;font-weight:800;color:#1d2333}
+.support-offer span{display:block;margin-top:4px;font-size:13px;line-height:1.4;color:#3d4b66}
+.support-offer.got{background:#e7f8f3}
+.support-charms{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 6px;margin-top:10px;padding:12px 6px 2px}
+.support-charm{min-width:0;text-align:center;background:#f3f4f8;border-radius:12px;padding:4px 2px 6px}
+.support-charm.got{background:#e7f8f3}
+.support-charm.free{background:#eef6ff}
+.support-charm .pdv{position:relative;width:48px;height:48px;margin:6px auto 2px;overflow:visible}
+.support-charm .pdcirc{position:absolute;inset:0;border-radius:50%;overflow:hidden;background:#fff;border:1.5px solid #e3e6ef;z-index:1}
+.support-charm .pdcirc img{width:100%;height:100%;object-fit:cover;object-position:center;border-radius:50%;display:block;pointer-events:none}
+.support-charm .pov,.support-charm .pov.back{z-index:3;pointer-events:none}
+.support-charm b{display:block;font-size:11px;line-height:1.25;font-weight:800;color:#1d2333}
+.support-charm em{display:block;margin-top:1px;font-style:normal;font-size:10px;line-height:1.2;font-weight:800;color:#0f766e}
+.support{overflow:visible}

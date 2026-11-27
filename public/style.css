@@ -962,7 +962,8 @@ img,canvas,svg,video{max-width:100%}
 /* ---- t113-t117 layout patch ---- */
 
 /* Sticky topbar. Other pages: back | centered title | conn.
-   In a room: back + logo + 圓桌 + code | centered 釋出座位 | 邀請 ⋯ conn. */
+   In a room: back, then a small gap, then logo + 圓桌 + code.
+   釋出座位 sits with 邀請 and ⋯ on the right, not in the center. */
 .topbar{display:grid;grid-template-columns:minmax(36px,auto) minmax(0,1fr) minmax(36px,auto);align-items:center;gap:4px;height:52px;padding:env(safe-area-inset-top) 6px 0;box-sizing:content-box;max-width:100vw;overflow:hidden}
 .topbar .icon-btn{position:relative;left:auto;flex-shrink:0;padding:2px 8px}
 .top-left,.top-right,.top-center{grid-row:1;display:flex;align-items:center;min-width:0}
@@ -978,10 +979,11 @@ img,canvas,svg,video{max-width:100%}
 .top-room-acts.hidden{display:none}
 .top-room-acts .rbtn{padding:4px 10px;font-size:13px;white-space:nowrap;line-height:1.2}
 .topbar .conn{position:static;margin:0 2px 0 2px;flex-shrink:0}
-.topbar.in-room{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);column-gap:6px;padding-left:4px;padding-right:4px}
+.topbar.in-room{display:flex;align-items:center;justify-content:flex-start;column-gap:0;padding-left:4px;padding-right:4px}
 .topbar:not(.in-room) #backBtn,.topbar:not(.in-room) .top-right{position:relative;z-index:2}
-.topbar.in-room .top-left{gap:1px;z-index:2}
-.topbar.in-room .top-right{z-index:2}
+.topbar.in-room .top-left{flex:1 1 auto;gap:10px;min-width:0;z-index:2}
+.topbar.in-room .top-center{flex:0 0 auto;margin-right:4px}
+.topbar.in-room .top-right{flex:0 0 auto;gap:4px;z-index:2}
 .topbar.in-room .title{position:static;left:auto;top:auto;height:auto;transform:none;justify-content:flex-start;flex:0 1 auto;font-size:14px;gap:4px;letter-spacing:0}
 .topbar.in-room .icon-btn{padding:6px 2px;font-size:28px}
 .topbar.in-room .top-code{letter-spacing:0;padding:0}

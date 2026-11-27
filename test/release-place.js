@@ -223,6 +223,7 @@ function bot(key, name) {
         codeText: code ? code.textContent.trim() : '',
         headerBottom: header ? header.getBoundingClientRect().bottom : 0,
         clusterRight: Math.max(back ? box(back).r : 0, logo ? box(logo).r : 0, title ? box(title).r : 0),
+        chevronGap: (back && logo) ? box(logo).l - box(back).r : 0,
         toolsLeft: Math.min(inv ? box(inv).l : 9999, more ? box(more).l : 9999),
         toolsRight: conn ? box(conn).r : 0,
         backLeft: back ? box(back).l : 99,
@@ -246,12 +247,15 @@ function bot(key, name) {
     assert(m.display !== 'block' || b.w < m.iw * 0.5, tag + ' opener is not a stretched block');
     assert(b.w >= 64 && b.w <= 120, tag + ' opener is compact (' + b.w.toFixed(0) + '×' + b.h.toFixed(0) + ')');
     assert(b.h >= 28 && b.h <= 40, tag + ' opener stays easy to tap (' + b.h.toFixed(0) + ')');
-    assert(Math.abs((b.l + b.r) / 2 - m.iw / 2) <= 6, tag + ' opener is centered in the top bar (' + ((b.l + b.r) / 2).toFixed(1) + ')');
+    const inviteGap = m.toolsLeft - b.r;
+    assert((b.l + b.r) / 2 > m.iw * 0.58, tag + ' opener sits on the right, not in the center (' + ((b.l + b.r) / 2).toFixed(1) + ')');
+    assert(inviteGap >= 2 && inviteGap <= 10, tag + ' opener sits against 邀請 (' + inviteGap.toFixed(1) + 'px)');
     assert(b.t >= m.insetTop - 1 && b.b <= m.headerBottom + 1, tag + ' opener sits inside the top bar below the safe area');
     assert(m.relClip <= 1 && m.titleClip <= 1, tag + ' header text is not clipped');
     assert(/圓桌/.test(m.titleText) && m.codeText.length === 4 && m.titleText.includes(m.codeText) && m.orderOk, tag + ' back, logo, 圓桌 and the room code read left to right');
+    assert(m.chevronGap >= 8 && m.chevronGap <= 16, tag + ' 圓桌 sits a little clear of the back chevron (' + m.chevronGap.toFixed(1) + 'px)');
     assert(m.backLeft <= 8 && m.clusterRight <= b.l - 4, tag + ' left cluster clears 釋出座位 (' + (b.l - m.clusterRight).toFixed(1) + ')');
-    assert(b.r <= m.toolsLeft - 4 && m.toolsRight <= m.iw + 1 && m.sw <= m.cw + 1, tag + ' 釋出座位 clears 邀請 and the menu (' + (m.toolsLeft - b.r).toFixed(1) + ')');
+    assert(m.toolsRight <= m.iw + 1 && m.sw <= m.cw + 1, tag + ' the right cluster stays on screen');
     if (m.bar) assert(b.b <= m.bar.t - 4, tag + ' opener stays above the lobby bar (' + b.b.toFixed(0) + '/' + m.bar.t.toFixed(0) + ')');
     if (m.fab) assert(!overlap(b, m.fab) && gap(b, m.fab) >= 8, tag + ' opener stays clear of the identity chip');
     const bottom = m.seats.slice().sort((a, c) => c.cy - a.cy)[0];

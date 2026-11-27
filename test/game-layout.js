@@ -254,7 +254,8 @@ function bot(key, name) {
         titleText: title ? title.textContent.replace(/\\s+/g, ' ').trim() : '',
         headerBottom: header ? header.getBoundingClientRect().bottom : 0,
         clusterRight: Math.max(back ? box(back).r : 0, logo ? box(logo).r : 0, title ? box(title).r : 0, code ? box(code).r : 0),
-        toolsLeft: Math.min(inv ? box(inv).l : 9999, more ? box(more).l : 9999, conn ? box(conn).l : 9999),
+        chevronGap: (back && logo) ? box(logo).l - box(back).r : 0,
+        toolsLeft: Math.min(inv ? box(inv).l : 9999, more ? box(more).l : 9999),
         toolsRight: conn ? box(conn).r : (more ? box(more).r : 0),
         backLeft: back ? box(back).l : 99,
         orderOk: !!(back && logo && title && code && box(back).r <= box(logo).l + 1 && box(logo).r <= box(title).l + 2),
@@ -399,14 +400,17 @@ function bot(key, name) {
     assert(b && g.release === '釋出座位', tag + ' host release control is in the header');
     assert(!g.releaseInCard, tag + ' release control is not on the table');
     assert(g.releaseHit === 'release', tag + ' release control is the top hit (' + g.releaseHit + ')');
-    assert(Math.abs((b.l + b.r) / 2 - g.iw / 2) <= 6, tag + ' release control is centered (' + ((b.l + b.r) / 2).toFixed(1) + ')');
+    const inviteGap = g.toolsLeft - b.r;
+    assert((b.l + b.r) / 2 > g.iw * 0.58, tag + ' release control sits on the right (' + ((b.l + b.r) / 2).toFixed(1) + ')');
+    assert(inviteGap >= 2 && inviteGap <= 10, tag + ' release control sits against 邀請 (' + inviteGap.toFixed(1) + 'px)');
     assert(b.t >= g.insetTop - 1 && b.b <= g.headerBottom + 1, tag + ' release control sits inside the top bar');
     assert(b.h >= 28 && b.h <= 40, tag + ' release control is a compact tap target (' + b.h.toFixed(0) + ')');
     assert(b.w >= 60 && b.w <= 130, tag + ' release label stays readable (' + b.w.toFixed(0) + ')');
     assert(g.relClip <= 1 && g.titleClip <= 1, tag + ' header text is not clipped');
     assert(/圓桌/.test(g.titleText) && g.orderOk, tag + ' back, logo, 圓桌 and the room code read left to right');
+    assert(g.chevronGap >= 8 && g.chevronGap <= 16, tag + ' 圓桌 sits a little clear of the back chevron (' + g.chevronGap.toFixed(1) + 'px)');
     assert(g.backLeft <= 8 && g.clusterRight <= b.l - 4, tag + ' left cluster clears 釋出座位 (' + (b.l - g.clusterRight).toFixed(1) + ')');
-    assert(b.r <= g.toolsLeft - 4 && g.toolsRight <= g.iw + 1, tag + ' 釋出座位 clears 邀請 and the menu (' + (g.toolsLeft - b.r).toFixed(1) + ')');
+    assert(g.toolsRight <= g.iw + 1, tag + ' the right cluster stays on screen');
     assert(g.sw <= g.cw + 1, tag + ' header does not overflow the screen');
     const bottom = g.seats.slice().sort((a, c) => c.cy - a.cy)[0];
     const name = nameBox(bottom);

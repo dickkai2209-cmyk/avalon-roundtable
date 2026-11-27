@@ -224,6 +224,7 @@ function bot(key, name) {
         center: ctr ? box(ctr) : null, centerText: ctr ? ctr.innerText.replace(/\\s+/g, ' ').trim() : '',
         legend: legend ? legend.innerText.replace(/\\s+/g, ' ').trim() : '',
         release: release ? release.textContent.trim() : '',
+        releaseBox: release ? box(release) : null,
         nums, seats
       };
     })()`);
@@ -357,6 +358,27 @@ function bot(key, name) {
         assert(num && num.b <= zoneB + 1 && num.t >= g2.main.t - 1, tag + ' seat ' + s.seat + ' number stays visible (' + (num && num.b.toFixed(1)) + ')');
       }
       assert(moved.lowest <= moved.limit + 1, tag + ' bottom faces and names can scroll clear (' + moved.lowest.toFixed(1) + '/' + moved.limit.toFixed(1) + ')');
+    }
+    assertReleasePlace(tag, g);
+  }
+  function assertReleasePlace(tag, g) {
+    const b = g.releaseBox;
+    assert(b && g.release === '釋出座位', tag + ' host release control is on the table');
+    assert(b.w <= g.card.w * 0.55 && b.w >= 72, tag + ' release control is compact (' + b.w.toFixed(0) + '/' + g.card.w.toFixed(0) + ')');
+    assert(b.h >= 36 && b.h <= 56, tag + ' release control stays easy to tap (' + b.h.toFixed(0) + ')');
+    assert(b.l >= g.card.l + g.card.w * 0.42, tag + ' release control sits on the right (' + b.l.toFixed(0) + ')');
+    assert(g.card.r - b.r <= 24 && b.r <= g.card.r + 1, tag + ' release control is inset at the card edge');
+    assert(g.card.b - b.b <= 28 && b.b > g.card.t + g.card.h * 0.55, tag + ' release control sits at the bottom of the card');
+    const bottom = g.seats.slice().sort((a, c) => c.cy - a.cy)[0];
+    const name = nameBox(bottom);
+    const num = g.nums.find(n => n.seat === bottom.seat);
+    assert(name && !overlap(name, b) && gap(name, b) >= 8, tag + ' bottom seat name stays clear of 釋出座位 (' + (name ? gap(name, b).toFixed(1) : 'missing') + ')');
+    if (num) assert(!overlap(num, b) && gap(num, b) >= 8, tag + ' bottom seat number stays clear (' + (num && gap(num, b).toFixed(1)) + ')');
+    for (const s of g.seats) {
+      const face = faceBox(s);
+      const nm = nameBox(s);
+      if (face) assert(!overlap(face, b) && gap(face, b) >= 6, tag + ' seat ' + s.seat + ' face stays clear of 釋出座位');
+      if (nm) assert(!overlap(nm, b) && gap(nm, b) >= 6, tag + ' seat ' + s.seat + ' name stays clear of 釋出座位 (' + gap(nm, b).toFixed(1) + ')');
     }
   }
   async function asUser(person) {

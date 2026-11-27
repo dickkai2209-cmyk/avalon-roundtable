@@ -66,14 +66,26 @@ const serverSrc = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 const cssSrc = fs.readFileSync(path.join(root, 'public/style.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
 
-assert(html.includes('style.css?v=59') && html.includes('app.js?v=67'), 'cache bust moves past the versions on main');
-assert(!html.includes('style.css?v=58') && !html.includes('app.js?v=66') && !html.includes('style.css?v=57') && !html.includes('app.js?v=65'), 'live cache versions are not reused');
+assert(html.includes('style.css?v=60') && html.includes('app.js?v=68'), 'cache bust moves past the versions on main');
+assert(!html.includes('style.css?v=59') && !html.includes('app.js?v=67') && !html.includes('style.css?v=58') && !html.includes('app.js?v=66'), 'live cache versions are not reused');
 assert(appSrc.includes('const PD_V = 6'), 'pendant image cache key bumped');
-assert(cssSrc.includes('iceSweep') && cssSrc.includes('pdSheen') && cssSrc.includes('pdPalSway') && cssSrc.includes('prefers-reduced-motion') && cssSrc.includes('pd-ice') && cssSrc.includes('.pd-pal'), 'frame motion and companions honor reduced motion');
+assert(cssSrc.includes('iceSweep') && cssSrc.includes('pdSheen') && cssSrc.includes('pdPalSway') && cssSrc.includes('prefers-reduced-motion') && cssSrc.includes('pd-ice') && cssSrc.includes('.pd-pal'), 'frame motion and charms honor reduced motion');
+const palCss = cssSrc.slice(cssSrc.indexOf('.pd-pal{'), cssSrc.indexOf('.pd-pal svg'));
+assert(!palCss.includes('width:28%') && palCss.includes('width:52%') && palCss.includes('drop-shadow'), 'charms are a large moderate size with a separating halo');
 const palBlock = appSrc.slice(appSrc.indexOf('const PD_PAL'), appSrc.indexOf('function pdFxCls'));
-const PALS = { foxqiu: 'fox', foxheart: 'fox', foxdance: 'fox', skydragon: 'dragon', whiteling: 'white', darkling: 'dark', fairylake: 'fairy' };
-for (const [k, v] of Object.entries(PALS)) assert(palBlock.includes(`${k}: '${v}'`), 'companion for ' + k);
-for (const k of ['starmoon', 'starplain', 'frostmirror', 'icesword', 'odineye']) assert(!palBlock.includes(k), k + ' stays without a companion');
+const PALS = {
+  foxqiu: 'fox', foxheart: 'heart', starmoon: 'moon', starplain: 'stars',
+  whiteling: 'white', darkling: 'dark', skydragon: 'dragon', foxdance: 'dance',
+  frostmirror: 'snow', icesword: 'sword', fairylake: 'fairy', odineye: 'eye',
+};
+assert(Object.keys(PALS).length === FRAMES.length && new Set(Object.values(PALS)).size === FRAMES.length, 'every round frame has its own charm');
+for (const [k, v] of Object.entries(PALS)) assert(palBlock.includes(`${k}: '${v}'`), 'charm for ' + k);
+const svgBlock = appSrc.slice(appSrc.indexOf('const PD_PAL_SVG'), appSrc.indexOf('function pdPalHtml'));
+const drawings = [...svgBlock.matchAll(/`([^`]*)`/g)].map(m => m[1]);
+assert(drawings.length === 12 && new Set(drawings).size === 12, 'twelve unique charm drawings');
+for (const v of Object.values(PALS)) assert(svgBlock.includes('\n  ' + v + ':'), 'svg for ' + v);
+for (const drawing of drawings) assert(/stroke-width="(?:[3-9]|[1-9]\d)/.test(drawing), 'charm silhouette is bold');
+assert(!svgBlock.includes('class="fur"'), 'fox frames no longer share one fox drawing');
 assert(appSrc.includes('mvpTotal() >= 10') && serverSrc.includes("f.pendant === 'laurel' && st.mvp < 10"), 'laurel still needs 10 earned MVP');
 assert(serverSrc.includes('if (db.isGM(user)) return null'), 'GM bypass stays after the laurel check');
 
@@ -308,8 +320,8 @@ class Page {
     assert(foxLock.off && foxLock.need === '玩 9 場解鎖', 'a 0-game account still shows the 狐祈千秋 requirement ' + JSON.stringify(foxLock));
     assert(String(foxLock.filter).includes('grayscale') && Number(foxLock.opacity) < 0.7, 'locked 狐祈千秋 art is greyed ' + JSON.stringify(foxLock));
     assert(foxLock.topGap >= 0 && foxLock.topGap <= 8 && foxLock.rightGap >= 0 && foxLock.rightGap <= 8, 'the 狐祈千秋 lock sits in the card corner ' + JSON.stringify(foxLock));
-    await cdp.eval(`document.querySelector('[data-pd="frostmirror"]').scrollIntoView({ block: 'center' });`);
-    await cdp.eval(`Promise.all([...document.querySelectorAll('.pe-grid img, .pe-av img')].map(i => i.decode().catch(() => 0)))`);
+    await cdp.eval(`document.querySelector('[data-pd="foxqiu"]').scrollIntoView({ block: 'start' });`);
+    await cdp.eval(`Promise.all([...document.querySelectorAll('.sheet img')].map(i => i.decode().catch(() => 0)))`);
     await sleep(150);
     await cdp.shot('picker-frames-375');
     await size(390, 844);
@@ -324,10 +336,30 @@ class Page {
     assert(iceMotion.sweep === 'iceSweep' && iceMotion.glow === 'iceGlow', 'ice picker preview is moving (' + JSON.stringify(iceMotion) + ')');
     const palPick = await cdp.eval(`(() => {
       const pal = (k) => { const n = document.querySelector('[data-pd="' + k + '"] .pd-pal'); return n ? n.dataset.pal : ''; };
-      return { foxqiu: pal('foxqiu'), dragon: pal('skydragon'), white: pal('whiteling'), dark: pal('darkling'), fairy: pal('fairylake'), moon: pal('starmoon'), ice: pal('icesword'), eye: pal('odineye') };
+      const keys = ${JSON.stringify(Object.keys(PALS))};
+      const out = {};
+      for (const k of keys) out[k] = pal(k);
+      return out;
     })()`);
-    assert(palPick.foxqiu === 'fox' && palPick.dragon === 'dragon' && palPick.white === 'white' && palPick.dark === 'dark' && palPick.fairy === 'fairy', 'animal frames show a companion in the picker ' + JSON.stringify(palPick));
-    assert(!palPick.moon && !palPick.ice && !palPick.eye, 'star, ice and eye frames have no companion ' + JSON.stringify(palPick));
+    for (const [k, v] of Object.entries(PALS)) assert(palPick[k] === v, 'picker charm for ' + k + ' is ' + v + ' (' + palPick[k] + ')');
+    assert(new Set(Object.values(palPick)).size === 12, 'picker charms are all different');
+    const pickerClear = await cdp.eval(`(() => {
+      const overlap = (a, b) => a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
+      const cards = [...document.querySelectorAll('[data-pd]')].filter(b => b.querySelector('.pd-pal'));
+      const names = cards.map(b => ({ k: b.dataset.pd, r: b.querySelector('b').getBoundingClientRect(), text: b.querySelector('b').textContent }));
+      const bad = [];
+      for (const card of cards) {
+        const pal = card.querySelector('.pd-pal').getBoundingClientRect();
+        const face = card.querySelector('.pdcirc').getBoundingClientRect();
+        const cx = face.left + face.width / 2, cy = face.top + face.height / 2, rad = face.width / 2 - 1;
+        const qx = Math.max(pal.left, Math.min(cx, pal.right));
+        const qy = Math.max(pal.top, Math.min(cy, pal.bottom));
+        if ((qx - cx) ** 2 + (qy - cy) ** 2 < rad * rad) bad.push(card.dataset.pd + ' face');
+        for (const n of names) if (overlap(pal, n.r)) bad.push(card.dataset.pd + ' covers ' + n.text);
+      }
+      return bad.slice(0, 8);
+    })()`);
+    assert(!pickerClear.length, 'picker charms stay off faces and frame names ' + JSON.stringify(pickerClear));
 
     await cdp.eval(`const m = document.querySelector('.modal'); if (m) { m.classList.add('hidden'); const sheet = document.querySelector('#sheet'); if (sheet) sheet.innerHTML = ''; }`);
     await size(375, 812);
@@ -457,10 +489,13 @@ class Page {
             const qy = Math.max(pr.top, Math.min(cy, pr.bottom));
             palFace = (qx - cx) ** 2 + (qy - cy) ** 2 < rad * rad;
           }
+          const ratio = pr && face.width ? pr.width / face.width : 0;
           out.push({
             k, name, hit, faceHit, palFace,
             pal: pal ? pal.dataset.pal : '',
             want: pals[k] || '',
+            ratio: Math.round(ratio * 100) / 100,
+            onName: overlap(pr, nr),
             sheen: getComputedStyle(wrap, '::after').animationName,
             ellipsis: nm.scrollWidth > nm.clientWidth + 1,
             text: nm.textContent,
@@ -472,8 +507,10 @@ class Page {
     for (const row of clearFrames) {
       assert(row.hit === 0, row.k + ' does not paint on ' + row.name + ' (' + row.hit + ')');
       assert(row.faceHit === 0, row.k + ' leaves the face hole clear');
-      assert(!row.palFace, row.k + ' companion stays off the face');
-      assert(row.pal === row.want, row.k + ' companion is ' + row.want + ' (' + row.pal + ')');
+      assert(!row.palFace, row.k + ' charm stays off the face');
+      assert(!row.onName, row.k + ' charm stays off ' + row.name);
+      assert(row.ratio >= 0.48 && row.ratio < 0.85, row.k + ' charm is a large moderate size (' + row.ratio + ')');
+      assert(row.pal === row.want, row.k + ' charm is ' + row.want + ' (' + row.pal + ')');
       assert(!row.ellipsis && row.text === row.name, row.k + ' keeps the full name ' + row.text);
       const moving = row.k === 'frostmirror' || row.k === 'icesword' ? 'iceSweep' : 'pdSheen';
       assert(row.sheen === moving, row.k + ' sheen is ' + moving + ' (' + row.sheen + ')');
@@ -488,49 +525,92 @@ class Page {
       await cdp.eval(`Promise.all([...document.querySelectorAll('.rt .st img')].map(i => i.decode().catch(() => 0)))`);
       await sleep(60);
     };
+    for (const [k] of FRAMES) {
+      await wear(k, k === 'icesword' ? 'Dickson' : '龍吟九霄呀哈');
+      await cdp.shot('seat-charm-' + k + '-375');
+    }
     await wear('icesword', 'Dickson');
     await cdp.shot('seat-icesword-dickson-375');
+    const swordRead = await cdp.eval(`(() => {
+      const pal = document.querySelector('.rt .st .pd-pal');
+      const face = document.querySelector('.rt .st .av').getBoundingClientRect();
+      const pr = pal.getBoundingClientRect();
+      return { kind: pal.dataset.pal, ratio: Math.round(pr.width / face.width * 100) / 100, text: document.querySelector('.rt .st .nm').textContent };
+    })()`);
+    assert(swordRead.kind === 'sword' && swordRead.ratio >= 0.48 && swordRead.ratio < 0.85 && swordRead.text === 'Dickson', '逆光之劍 shows a readable sword beside Dickson ' + JSON.stringify(swordRead));
     await size(390, 844);
     await sleep(80);
     await cdp.shot('seat-icesword-dickson-390');
     await size(375, 812);
-    await wear('foxqiu', '龍吟九霄呀哈');
-    await cdp.shot('seat-fox-pal-375');
-    await wear('skydragon', 'Dickson');
-    await cdp.shot('seat-dragon-pal-375');
-    await wear('whiteling', '瑞獸白靈呀');
-    await cdp.shot('seat-white-pal-375');
-    await wear('darkling', '瑞獸玄靈呀');
-    await cdp.shot('seat-dark-pal-375');
-    await wear('fairylake', '妖精之湖呀');
-    await cdp.shot('seat-fairy-pal-375');
-    await size(390, 844);
-    await wear('foxqiu', '龍吟九霄呀哈');
-    await cdp.shot('seat-fox-pal-390');
-    await wear('skydragon', 'Dickson');
-    await cdp.shot('seat-dragon-pal-390');
-    await size(375, 812);
-    await wear('foxheart', 'Dickson');
-    await cdp.shot('seat-heart-motion-a');
-    await sleep(1400);
-    await cdp.shot('seat-heart-motion-b');
+    const crowd = await cdp.eval(`(() => {
+      const keys = ${JSON.stringify(FRAMES.map(x => x[0]))};
+      const names = ['Dickson', '龍吟九霄呀哈'];
+      const overlap = (a, b) => a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
+      const faceHit = (pal, face) => {
+        const cx = face.left + face.width / 2, cy = face.top + face.height / 2, rad = face.width / 2 - 1;
+        const qx = Math.max(pal.left, Math.min(cx, pal.right));
+        const qy = Math.max(pal.top, Math.min(cy, pal.bottom));
+        return (qx - cx) ** 2 + (qy - cy) ** 2 < rad * rad;
+      };
+      const probe = document.createElement('div');
+      probe.className = 'card tbl';
+      probe.style.cssText = 'position:fixed;left:0;top:0;width:100%;z-index:40;background:#fff';
+      document.body.appendChild(probe);
+      const bad = [];
+      for (let n = 8; n <= 8; n++) {
+        for (const focus of keys) {
+          for (let seat = 1; seat <= n; seat++) {
+            const seats = Array.from({ length: n }, (_, i) => ({ id: 'p' + i, seat: i + 1, name: names[i % 2], pendant: i + 1 === seat ? focus : keys[i % keys.length], avatar: 'fox', bg: '#fff7ea', online: true }));
+            probe.innerHTML = window.__av.roundTable(seats);
+            const people = [...probe.querySelectorAll('.rt .st')].filter(s => s.querySelector('.pd-pal'));
+            const nameBoxes = people.map(s => s.querySelector('.nm').getBoundingClientRect());
+            people.forEach((s, i) => {
+              const pal = s.querySelector('.pd-pal').getBoundingClientRect();
+              const face = s.querySelector('.av').getBoundingClientRect();
+              const nm = s.querySelector('.nm');
+              if (nm.scrollWidth > nm.clientWidth + 1) bad.push(focus + '@' + seat + ' ellipsis ' + nm.textContent);
+              if (faceHit(pal, face)) bad.push(focus + '@' + seat + ' face');
+              nameBoxes.forEach((box, j) => { if (overlap(pal, box)) bad.push('seat ' + (i + 1) + ' ' + focus + ' covers seat ' + (j + 1) + ' ' + people[j].querySelector('.nm').textContent + ' overlapY=' + Math.round(box.bottom - pal.top)); });
+            });
+          }
+        }
+      }
+      probe.remove();
+      return bad.slice(0, 8);
+    })()`);
+    assert(!crowd.length, 'charms stay off every name and face around the table ' + JSON.stringify(crowd));
+    await cdp.eval(`(() => {
+      const keys = ${JSON.stringify(FRAMES.map(x => x[0]))};
+      const names = ['Dickson', '龍吟九霄呀哈', 'Dickson', '星樓望月呀', 'Dickson', '龍吟九霄呀哈', 'Dickson', '奧丁之眼呀'];
+      const seats = keys.slice(0, 8).map((k, i) => ({ id: 'p' + i, seat: i + 1, name: names[i], pendant: k, avatar: 'fox', bg: '#fff7ea', online: true }));
+      const probe = document.createElement('div');
+      probe.id = 'charm-probe';
+      probe.className = 'card tbl';
+      probe.style.cssText = 'position:fixed;left:0;top:0;width:100%;z-index:40;background:#fff';
+      probe.innerHTML = window.__av.roundTable(seats);
+      document.body.appendChild(probe);
+    })()`);
+    await sleep(80);
+    await cdp.shot('seat-eight-charms-375');
+    await cdp.eval(`document.getElementById('charm-probe').remove()`);
+    await wear('icesword', 'Dickson');
     await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
     await sleep(40);
     const reducedSheen = await cdp.eval(`(() => {
       const wrap = document.querySelector('.rt .st .av-wrap');
       const pal = wrap.querySelector('.pd-pal');
-      return { sheen: getComputedStyle(wrap, '::after').animationName, pal: pal ? getComputedStyle(pal).animationName : '', opacity: getComputedStyle(wrap, '::after').opacity };
+      return { sheen: getComputedStyle(wrap, '::after').animationName, pal: pal ? getComputedStyle(pal).animationName : '', kind: pal ? pal.dataset.pal : '', opacity: getComputedStyle(wrap, '::after').opacity };
     })()`);
-    assert(reducedSheen.sheen === 'none' && reducedSheen.pal === 'none' && Number(reducedSheen.opacity) === 0, 'reduced motion freezes the sheen and the companion (' + JSON.stringify(reducedSheen) + ')');
-    await cdp.shot('seat-sheen-reduced-375');
+    assert(reducedSheen.sheen === 'none' && reducedSheen.pal === 'none' && reducedSheen.kind === 'sword' && Number(reducedSheen.opacity) === 0, 'reduced motion freezes the sheen and the sword charm (' + JSON.stringify(reducedSheen) + ')');
+    await cdp.shot('seat-sword-reduced-375');
     await cdp.send('Emulation.setEmulatedMedia', { features: [] });
 
-    await put(tokens[gm.id], { pendant: 'foxqiu', avatar: 'fox', name: 'Dickson' });
-    await put(tokens[rich.id], { pendant: 'skydragon', avatar: 'dragonet', name: '龍吟九霄' });
-    await boot(tokens[gm.id], { name: 'Dickson', avatar: 'fox', bg: '#ffffff', fx: 'none', pendant: 'foxqiu' });
+    await put(tokens[gm.id], { pendant: 'icesword', avatar: 'fox', name: 'Dickson' });
+    await put(tokens[rich.id], { pendant: 'skydragon', avatar: 'dragonet', name: '龍吟九霄呀哈' });
+    await boot(tokens[gm.id], { name: 'Dickson', avatar: 'fox', bg: '#ffffff', fx: 'none', pendant: 'icesword' });
     await cdp.eval(`document.querySelector('[data-a="create"]').click()`);
     const hostReady = await cdp.eval(`new Promise(r => { const t = setInterval(() => { const img = document.querySelector('.rt .st .av img'); if (img && document.querySelector('.top-code') && document.querySelector('.rt .st .pd-pal')) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 12000); })`, 20000);
-    assert(hostReady, 'host is seated with the fox companion');
+    assert(hostReady, 'host is seated with the sword charm');
     const code = await cdp.eval(`document.querySelector('.top-code').textContent.trim()`);
     const { io } = require('socket.io-client');
     const sock = io(APP, { transports: ['websocket'], forceNew: true });
@@ -543,7 +623,7 @@ class Page {
     const sat = await emit('act', { type: 'sit', data: { seat: 2 } });
     assert(sat && sat.ok, 'neighbor sat beside the host ' + JSON.stringify(sat).slice(0, 180));
     const pairReady = await cdp.eval(`new Promise(r => { const t = setInterval(() => { const seats = [...document.querySelectorAll('.rt .st .pd-pal')]; if (seats.length >= 2) { clearInterval(t); r(1); } }, 40); setTimeout(() => r(0), 8000); })`);
-    assert(pairReady, 'two animal pendants are on the table');
+    assert(pairReady, 'two charms are on the table');
     const pairGeom = await cdp.eval(`(() => {
       const seats = [...document.querySelectorAll('.rt .st')].filter(s => s.querySelector('.pd-pal'));
       const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
@@ -556,15 +636,15 @@ class Page {
       });
     })()`);
     for (const row of pairGeom) {
-      assert(!row.palOnOwn && !row.palOnAny && !row.ellipsis, 'companion stays off every name (' + JSON.stringify(row) + ')');
-      assert(row.text === 'Dickson' || row.text === '龍吟九霄', 'adjacent seat keeps its name ' + row.text);
+      assert(!row.palOnOwn && !row.palOnAny && !row.ellipsis, 'charm stays off every name (' + JSON.stringify(row) + ')');
+      assert(row.text === 'Dickson' || row.text === '龍吟九霄呀哈', 'adjacent seat keeps its name ' + row.text);
     }
     await cdp.eval(`Promise.all([...document.images].map(i => i.decode().catch(() => 0)))`);
     await sleep(80);
-    await cdp.shot('seat-pair-fox-dragon-375');
+    await cdp.shot('seat-pair-sword-neighbor-375');
     await size(390, 844);
     await sleep(80);
-    await cdp.shot('seat-pair-fox-dragon-390');
+    await cdp.shot('seat-pair-sword-neighbor-390');
     sock.close();
 
     const art = '/opt/cursor/artifacts';

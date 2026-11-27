@@ -24,7 +24,8 @@ process.on('exit', killAll);
 const html = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
 const appSrc = fs.readFileSync(path.join(ROOT, 'public/app.js'), 'utf8');
 const voiceSrc = fs.readFileSync(path.join(ROOT, 'public/voice.js'), 'utf8');
-assert(html.includes('style.css?v=83') && html.includes('app.js?v=83'), 'style and app cache are 83');
+assert(html.includes('style.css?v=84') && html.includes('app.js?v=84'), 'style and app cache are 84');
+assert(!html.includes('style.css?v=83') && !html.includes('app.js?v=83'), 'previous audio cache 83 is not reused');
 assert(html.includes('voice.js?v=5') && !html.includes('voice.js?v=6'), 'voice.js cache stays 5');
 for (let v = 68; v <= 76; v++) assert(!html.includes('style.css?v=' + v), 'style cache ' + v + ' is not reused');
 for (let v = 76; v <= 82; v++) assert(!html.includes('app.js?v=' + v), 'app cache ' + v + ' is not reused');
@@ -34,7 +35,8 @@ assert(audioSrc.includes('Original music') && audioSrc.includes('No samples'), '
 assert(!/getUserMedia|RTCPeerConnection|AvalonVoice|voice:mic|voice:signal/.test(audioSrc), 'mixer does not touch the voice graph');
 assert(audioSrc.includes('AUDIO_DEFAULT_VOL = 0.4') && audioSrc.includes('AUDIO_BGM_BASE = 0.2') && audioSrc.includes('AUDIO_SFX_BASE = 0.62'), 'modest gain constants');
 assert(voiceSrc.includes('getUserMedia') && voiceSrc.includes('RTCPeerConnection'), 'voice chat file is still the WebRTC mixer');
-assert(html.includes('id="audioCtl"') && html.includes('id="audioVol"') && html.includes('aria-label="遊戲音量"'), 'volume control is in the top bar');
+assert(!html.includes('id="audioCtl"') && !html.includes('audio-ctl') && !html.includes('audioMute'), 'header has no volume control');
+assert(appSrc.includes('audioMenuHtml()') && appSrc.includes('id="audioCtl"') && appSrc.includes('aria-label="遊戲音量"') && appSrc.includes('唔會關房間咪'), 'mute and volume live in the room menu');
 
 function get(url) { return new Promise((resolve, reject) => { http.get(url, (res) => { let d = ''; res.on('data', (c) => d += c); res.on('end', () => resolve(d)); }).on('error', reject); }); }
 class CDP {
@@ -109,41 +111,66 @@ async function mk(name) {
     await sleep(40);
     return pt;
   }
-  async function layout(tag, safeTop) {
+  async function headerClean(tag) {
+    const box = await cdp.eval(`(() => {
+      const bar = document.querySelector('.topbar');
+      const doc = document.documentElement;
+      const invite = bar.querySelector('[data-a="invite"]');
+      const more = bar.querySelector('[data-a="menu"]');
+      const conn = bar.querySelector('#conn');
+      const code = document.querySelector('.top-code');
+      const cr = code ? code.getBoundingClientRect() : null;
+      return {
+        audio: !!bar.querySelector('#audioCtl, .audio-ctl, .audio-mute, input[type=range]'),
+        text: /音量|audio-ctl|audioMute/.test(bar.innerHTML),
+        invite: invite && invite.textContent,
+        more: more && more.getAttribute('aria-label'),
+        conn: !!conn,
+        sw: doc.scrollWidth, cw: doc.clientWidth,
+        code: cr && { w: cr.width, r: cr.right, iw: innerWidth },
+      };
+    })()`);
+    assert(!box.audio && !box.text, tag + ' header has no speaker or volume control ' + JSON.stringify(box));
+    assert(box.invite === '邀請' && box.more === '更多' && box.conn, tag + ' keeps 邀請, ⋯, and the connection dot ' + JSON.stringify(box));
+    assert(box.sw <= box.cw + 1, tag + ' header has no horizontal overflow');
+    assert(box.code && box.code.w >= 24 && box.code.r <= box.code.iw + 1, tag + ' room code stays visible ' + JSON.stringify(box.code));
+  }
+  async function menuFit(tag, safeTop) {
     const box = await cdp.eval(`(() => {
       const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; };
       const hit = (a, b) => !!(a && b && a.w > 1 && b.w > 1 && a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b - 0.5 && a.b > b.t + 0.5);
-      const audio = box(document.querySelector('#audioCtl'));
+      const audio = box(document.querySelector('.room-menu #audioCtl'));
       const faces = [...document.querySelectorAll('.rt .st .av, .rt .st .av-wrap')].map(box);
       const nums = [...document.querySelectorAll('.rt > .no')].map(box);
-      const actions = [...document.querySelectorAll('[data-a="start"], [data-a="ready"], [data-a="propose"], [data-a="vote"], [data-a="quest"], .myrole-fab, .bottombar .btn')].map((el) => ({ a: el.getAttribute('data-a') || 'fab', ...box(el) }));
+      const actions = [...document.querySelectorAll('[data-a="start"], [data-a="ready"], [data-a="propose"], [data-a="vote"], .myrole-fab, .bottombar .btn')].map((el) => ({ a: el.getAttribute('data-a') || 'fab', ...box(el) }));
       const code = box(document.querySelector('.top-code'));
-      const conn = box(document.querySelector('#conn'));
-      const bar = box(document.querySelector('.topbar'));
       const doc = document.documentElement;
+      const slider = document.querySelector('.room-menu #audioVol');
+      const mute = document.querySelector('.room-menu #audioMute');
       return {
-        audio, code, conn, bar,
+        audio, inMenu: !!document.querySelector('.room-menu #audioCtl'),
+        headerAudio: !!document.querySelector('.topbar #audioCtl, .topbar .audio-ctl'),
+        label: mute && mute.getAttribute('aria-label'),
+        slider: slider && !slider.disabled,
+        copy: (document.querySelector('.room-menu .audio-copy') || {}).innerText || '',
         sw: doc.scrollWidth, cw: doc.clientWidth, iw: innerWidth, ih: innerHeight,
         faceHits: faces.filter((f) => hit(audio, f)).length,
         numHits: nums.filter((f) => hit(audio, f)).length,
+        numYs: nums.map((n) => Math.round(n.t)),
+        faceYs: faces.map((f) => Math.round(f.t)),
         actHits: actions.filter((f) => hit(audio, f)).map((f) => f.a),
-        codeHit: hit(audio, code), connHit: hit(audio, conn),
-        faces: faces.length, nums: nums.length,
-        label: (document.querySelector('#audioMute') || {}).getAttribute && document.querySelector('#audioMute').getAttribute('aria-label'),
-        modal: document.querySelector('#modal') && !document.querySelector('#modal').classList.contains('hidden'),
+        codeHit: hit(audio, code),
       };
     })()`);
-    assert(box.audio && box.audio.w >= 60 && box.audio.h >= 28, tag + ' volume control is visible ' + JSON.stringify(box.audio));
-    assert(box.audio.t >= safeTop - 1, tag + ' control sits below the safe area (' + box.audio.t + ' vs ' + safeTop + ')');
-    assert(box.bar && box.audio.b <= box.bar.b + 1 && box.audio.r <= box.iw + 1, tag + ' control stays inside the top bar');
-    assert(box.sw <= box.cw + 1, tag + ' no horizontal overflow ' + box.sw + '/' + box.cw);
-    assert(box.faceHits === 0 && box.numHits === 0, tag + ' control does not cover faces or seat numbers ' + JSON.stringify(box));
-    assert(box.actHits.length === 0, tag + ' control does not cover primary actions ' + JSON.stringify(box.actHits));
-    assert(!box.codeHit && box.code && box.code.w >= 24 && box.code.r <= box.iw + 1, tag + ' room code stays visible ' + JSON.stringify(box.code));
-    assert(!box.connHit, tag + ' control does not cover the connection dot');
-    assert(!box.modal, tag + ' shot is not covered by a modal');
-    assert(box.faces >= 5 && box.nums >= 5, tag + ' table shows faces and seat numbers ' + box.faces + '/' + box.nums);
-    return box;
+    assert(box.inMenu && !box.headerAudio, tag + ' volume control is only inside the menu');
+    assert(box.audio && box.audio.w >= 200 && box.audio.h >= 48 && box.audio.b <= box.ih + 1 && box.audio.r <= box.iw + 1, tag + ' volume row is on screen ' + JSON.stringify(box.audio));
+    assert(box.audio.t >= safeTop - 1, tag + ' volume row is under the safe area (' + box.audio.t + ' vs ' + safeTop + ')');
+    assert(box.slider && box.label && box.label.includes('遊戲'), tag + ' mute and slider are visible');
+    assert(box.copy.includes('遊戲音量') && box.copy.includes('咪'), tag + ' menu explains music vs room mic');
+    assert(box.sw <= box.cw + 1, tag + ' menu has no horizontal overflow');
+    assert(box.faceHits === 0 && box.numHits === 0, tag + ' volume row does not cover faces or seat numbers ' + JSON.stringify(box));
+    assert(box.actHits.length === 0, tag + ' volume row does not cover primary actions ' + JSON.stringify(box.actHits));
+    assert(!box.codeHit, tag + ' volume row does not cover the room code');
   }
 
   await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
@@ -152,7 +179,7 @@ async function mk(name) {
   await waitFor(`document.querySelector('#app')`);
   await cdp.eval(`localStorage.setItem('cc.profile', JSON.stringify({ name:'主持人', avatar:'fox', bg:'#ffffff', fx:'none', pendant:'none' })); localStorage.removeItem('cc.audio'); localStorage.removeItem('cc.token');`);
   await cdp.send('Page.reload', { ignoreCache: true });
-  await waitFor(`window.AvalonAudio && document.querySelector('[data-a="create"]') && document.querySelector('#conn').classList.contains('on') && document.querySelector('#audioCtl')`);
+  await waitFor(`window.AvalonAudio && document.querySelector('[data-a="create"]') && document.querySelector('#conn').classList.contains('on') && !document.querySelector('#audioCtl')`);
   const fresh = await cdp.eval(`({ d: AvalonAudio.debug(), nag: !!document.querySelector('.audio-nag, #audioNag, [data-audio-nag]'), text: document.body.innerText })`);
   assert(fresh.d.contextState === 'idle' && fresh.d.started === false && fresh.d.bgmPlaying === false, 'autoplay is blocked until a gesture ' + JSON.stringify(fresh.d));
   assert(fresh.d.defaultVol === 0.4 && fresh.d.vol === 0.4 && fresh.d.muted === false, 'default volume is the modest 40%');
@@ -196,9 +223,14 @@ async function mk(name) {
   await cdp.eval('window.scrollTo(0,0)');
   for (const w of [375, 390]) {
     await setPhone(w);
-    const box = await layout('lobby ' + w, SAFE[w].top);
-    await cdp.shot('audio-lobby-' + w);
-    assert(box.label && box.label.includes('關閉'), 'lobby ' + w + ' mute control is labelled');
+    await headerClean('lobby header ' + w);
+    await cdp.shot('audio-lobby-header-' + w);
+    await clickSel('[data-a="menu"]');
+    await waitFor(`document.querySelector('.room-menu #audioCtl')`);
+    await menuFit('lobby menu ' + w, SAFE[w].top);
+    await cdp.shot('audio-lobby-menu-' + w);
+    await clickSel('#room-menu-close');
+    await waitFor(`document.querySelector('#modal').classList.contains('hidden') && !document.querySelector('#audioCtl')`);
   }
 
   await setPhone(390);
@@ -213,6 +245,8 @@ async function mk(name) {
   const live = await waitFor(`(() => { const d = AvalonVoice.debug(); return d.micOn && d.localState === 'live' ? d : null; })()`);
   assert(live.gumCalls === 1 && live.videoTracks === 0, 'voice capture is its own graph ' + JSON.stringify(live));
   const audBefore = await cdp.eval(`([...document.querySelectorAll('audio')]).map(a => ({ muted: a.muted, vol: a.volume, voice: a.dataset.voiceFrom || '' }))`);
+  await clickSel('[data-a="menu"]');
+  await waitFor(`document.querySelector('.room-menu #audioMute')`);
   await clickSel('#audioMute');
   await sleep(80);
   const mutedVoice = await cdp.eval(`({ v: AvalonVoice.debug(), a: ([...document.querySelectorAll('audio')]).map(x => ({ muted: x.muted, vol: x.volume, voice: x.dataset.voiceFrom || '' })), g: AvalonAudio.debug() })`);
@@ -223,6 +257,8 @@ async function mk(name) {
   await sleep(80);
   const restored = await cdp.eval(`({ v: AvalonVoice.debug(), g: AvalonAudio.debug() })`);
   assert(restored.g.muted === false && restored.v.micOn === true && restored.v.gumCalls === live.gumCalls, 'unmuting game audio leaves the mic publishing');
+  await clickSel('#room-menu-close');
+  await waitFor(`document.querySelector('#modal').classList.contains('hidden')`);
   await clickSel('[data-a="cfg"]');
   await waitFor(`document.querySelector('[data-a="tg"][data-k="mic"]')`);
   await clickSel('[data-a="tg"][data-k="mic"]');
@@ -248,8 +284,14 @@ async function mk(name) {
   await cdp.eval('window.scrollTo(0,0)');
   for (const w of [375, 390]) {
     await setPhone(w);
-    await layout('game ' + w, SAFE[w].top);
-    await cdp.shot('audio-game-' + w);
+    await headerClean('game header ' + w);
+    await cdp.shot('audio-game-header-' + w);
+    await clickSel('[data-a="menu"]');
+    await waitFor(`document.querySelector('.room-menu #audioCtl')`);
+    await menuFit('game menu ' + w, SAFE[w].top);
+    await cdp.shot('audio-game-menu-' + w);
+    await clickSel('#room-menu-close');
+    await waitFor(`document.querySelector('#modal').classList.contains('hidden')`);
   }
   const gameAudio = await cdp.eval(`AvalonAudio.debug()`);
   assert(gameAudio.scene === 'game' && gameAudio.activeScene === 'game' && gameAudio.bgmPlaying, 'in-game BGM is the table loop ' + JSON.stringify({ scene: gameAudio.scene, active: gameAudio.activeScene, on: gameAudio.bgmPlaying }));
@@ -299,20 +341,29 @@ async function mk(name) {
   await clickSel('#backBtn');
   const back = await cdp.eval(`AvalonAudio.debug().played.slice(-2)`);
   assert(back.includes('cancel'), 'back plays the cancel cue ' + JSON.stringify(back));
-
+  if (await cdp.eval(`!!document.querySelector('[data-a="toroom"]')`)) {
+    await clickSel('[data-a="toroom"]');
+    await waitFor(`document.querySelector('[data-a="menu"]')`);
+  }
+  await clickSel('[data-a="menu"]');
+  await waitFor(`document.querySelector('.room-menu #audioMute')`);
   await clickSel('#audioMute');
   const storedMute = await cdp.eval(`JSON.parse(localStorage.getItem('cc.audio'))`);
   assert(storedMute.m === 1 && storedMute.v === 0.4, 'mute is stored on the device ' + JSON.stringify(storedMute));
   await cdp.send('Page.reload', { ignoreCache: true });
-  await waitFor(`window.AvalonAudio && document.querySelector('#audioCtl') && document.querySelector('#conn').classList.contains('on')`);
+  await waitFor(`window.AvalonAudio && document.querySelector('[data-a="menu"], [data-a="create"]') && document.querySelector('#conn').classList.contains('on') && !document.querySelector('#audioCtl')`);
   const held = await cdp.eval(`AvalonAudio.debug()`);
   assert(held.muted === true && held.vol === 0.4 && held.contextState === 'idle', 'reloaded page keeps mute and still waits for a gesture ' + JSON.stringify(held));
   await clickSel('#topTitle');
   await sleep(200);
   const heldAfter = await cdp.eval(`AvalonAudio.debug()`);
   assert(heldAfter.contextState === 'running' && heldAfter.targetGain === 0 && heldAfter.bgmPlaying === false, 'a gesture does not unmute a stored mute ' + JSON.stringify(heldAfter));
-  await cdp.eval(`(() => { const m = document.getElementById('modal'); if (m && !m.classList.contains('hidden')) { const b = m.querySelector('#ok, #cc, #room-menu-close, .btn'); if (b) b.click(); } })()`);
+  await cdp.eval(`(() => { const m = document.getElementById('modal'); if (m && !m.classList.contains('hidden')) { const b = m.querySelector('#room-menu-close, #ok, #cc'); if (b) b.click(); } })()`);
   await sleep(80);
+  if (!await cdp.eval(`!!document.querySelector('.room-menu #audioMute')`)) {
+    await clickSel('[data-a="menu"]');
+    await waitFor(`document.querySelector('.room-menu #audioMute')`);
+  }
   const hit = await cdp.eval(`(() => { const b = document.getElementById('audioMute'); const r = b.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2; const el = document.elementFromPoint(x, y); return { x, y, w: r.width, h: r.height, owns: !!(el && (el === b || b.contains(el))), hit: el && (el.id || el.className || el.tagName), modal: !document.getElementById('modal').classList.contains('hidden') }; })()`);
   assert(hit.owns, 'mute button is what a tap hits ' + JSON.stringify(hit));
   await clickSel('#audioMute');
@@ -331,6 +382,10 @@ async function mk(name) {
   await sleep(180);
   const reducedClick = await cdp.eval(`AvalonAudio.debug()`);
   assert(reducedClick.played.length > 0 && reducedClick.bgmPlaying === false && reducedClick.contextState === 'running', 'reduced motion still plays a short cue and does not start BGM ' + JSON.stringify({ played: reducedClick.played, on: reducedClick.bgmPlaying, state: reducedClick.contextState }));
+  if (!await cdp.eval(`!!document.querySelector('.room-menu #audioVol')`)) {
+    await clickSel('[data-a="menu"]');
+    await waitFor(`document.querySelector('.room-menu #audioVol')`);
+  }
   await cdp.eval(`{ const s = document.getElementById('audioVol'); s.value = '48'; s.dispatchEvent(new Event('input', { bubbles: true })); }`);
   await waitFor(`AvalonAudio.debug().bgmPlaying && AvalonAudio.debug().bgmOptIn === true`);
   const opted = await cdp.eval(`JSON.parse(localStorage.getItem('cc.audio'))`);
@@ -341,7 +396,11 @@ async function mk(name) {
   await waitFor(`AvalonAudio.debug().bgmPlaying && AvalonAudio.debug().contextState === 'running'`);
   assert(true, 'stored opt-in still plays BGM under reduced motion after a gesture');
 
-  for (const w of [375, 390]) assert(fs.existsSync(path.join(OUT, 'audio-lobby-' + w + '.png')) && fs.existsSync(path.join(OUT, 'audio-game-' + w + '.png')), 'still ' + w);
+  for (const w of [375, 390]) {
+    for (const name of ['audio-lobby-header-', 'audio-lobby-menu-', 'audio-game-header-', 'audio-game-menu-']) {
+      assert(fs.existsSync(path.join(OUT, name + w + '.png')), 'still ' + name + w);
+    }
+  }
   console.log('AUDIO TESTS PASSED');
   killAll();
   process.exit(0);

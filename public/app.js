@@ -726,7 +726,7 @@ function openRoomMenu() {
   const more = document.querySelector('.top-more');
   if (more) more.setAttribute('aria-expanded', 'true');
   openModal(`<div class="room-menu" role="dialog" aria-modal="true" aria-labelledby="room-menu-title">
-    <h2 id="room-menu-title">房間選單</h2><div class="mlist">
+    <h2 id="room-menu-title">房間選單</h2>${audioMenuHtml()}<div class="mlist">
     ${row('rules', '📖', '查看規則', '遊戲流程、角色能力、擴展玩法')}
     ${row('ref', '🔄', '刷新房間', '畫面唔同步或卡住時，重新連線並向伺服器攞最新狀態')}
     ${isGM() && !S.isHost ? row('seize', '👑', '搶房主', '接手房主權限，座位同對局保持不變') : ''}
@@ -756,6 +756,8 @@ function openRoomMenu() {
     };
     const dis = el.querySelector('[data-x=dis]'); if (dis) dis.onclick = (e) => { e.preventDefault(); e.stopPropagation(); if (confirm('確定解散房間？所有人將被移出。')) { closeModal(); act('dissolve'); } };
     $('#room-menu-close', el).onclick = (e) => { e.preventDefault(); closeModal(); };
+    audioBindControls();
+    audioPaint();
     trapSheetKeys(el, () => closeModal());
     const first = el.querySelector('.mrow');
     if (first && first.focus) first.focus({ preventScroll: true });
@@ -2960,6 +2962,9 @@ function audioApply() {
   audioMaster.gain.setValueAtTime(cur, now);
   audioMaster.gain.linearRampToValueAtTime(target, now + (target === 0 ? 0.12 : 0.08));
 }
+function audioMenuHtml() {
+  return `<div id="audioCtl" class="audio-ctl"><button type="button" id="audioMute" class="audio-mute" aria-pressed="false" aria-label="關閉遊戲音樂同音效"></button><div class="audio-copy"><b>遊戲音量</b><span>音樂同按鈕聲，唔會關房間咪</span></div><label class="audio-vol"><span class="sr-only">遊戲音量</span><input type="range" id="audioVol" min="0" max="100" value="40" step="1" aria-label="遊戲音量"></label></div>`;
+}
 function audioPaint() {
   const btn = document.getElementById('audioMute');
   const slider = document.getElementById('audioVol');
@@ -3275,18 +3280,26 @@ function audioDebug() {
     error: audioError,
   };
 }
-function audioBind() {
+function audioBindControls() {
   const btn = document.getElementById('audioMute');
   const slider = document.getElementById('audioVol');
-  if (!btn || btn.dataset.bound) return;
-  btn.dataset.bound = '1';
-  btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); audioGesture(); audioToggle(); });
-  if (slider) {
+  if (btn && !btn.dataset.bound) {
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); audioGesture(); audioToggle(); });
+  }
+  if (slider && !slider.dataset.bound) {
+    slider.dataset.bound = '1';
     slider.addEventListener('input', () => {
       audioGesture();
       audioSetVol(Number(slider.value) / 100, true);
     });
   }
+}
+let audioDocBound = false;
+function audioBind() {
+  if (audioDocBound) return;
+  audioDocBound = true;
+  audioBindControls();
   document.addEventListener('pointerdown', () => audioGesture(), true);
   document.addEventListener('keydown', (e) => { if (!e.repeat) audioGesture(); }, true);
   document.addEventListener('click', (e) => { audioGesture(); audioFromClick(e); }, true);

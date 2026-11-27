@@ -593,13 +593,13 @@ main{padding:8px 16px 96px}
 .pdc .sp{position:absolute;left:6px;top:5px;font-size:12px;z-index:5}
 .pdc .ck{position:absolute;right:6px;top:6px;width:18px;height:18px;border-radius:50%;background:#3b82f6;color:#fff;font-size:11px;line-height:18px;font-weight:800;z-index:5}
 .pdc.off .pov{filter:grayscale(1);opacity:.48}.pdc.off .pdcirc{opacity:1;filter:none}
-/* Slim round frames: a short sheen stays on the ring, off the face and the name. */
+/* Slimmer round frames: sheen stays on the thinner ring. Stops are fractions of the farthest-corner radius, so 44% is already outside the face (42%) and 56% ends at the outer rim, short of the name. */
 .av-wrap.pd-ice::after,.pdv.pd-ice::after,.crop-ring.pd-ice::after,
 .av-wrap.pd-sheen::after,.pdv.pd-sheen::after,.crop-ring.pd-sheen::after{
   content:"";position:absolute;left:-33.33%;top:-33.33%;width:166.67%;height:166.67%;border-radius:50%;
   pointer-events:none;z-index:4;
-  -webkit-mask:radial-gradient(circle, transparent 0 30%, #000 32%, #000 40%, transparent 43%);
-  mask:radial-gradient(circle, transparent 0 30%, #000 32%, #000 40%, transparent 43%);
+  -webkit-mask:radial-gradient(circle, transparent 0 44%, #000 47%, #000 53%, transparent 56%);
+  mask:radial-gradient(circle, transparent 0 44%, #000 47%, #000 53%, transparent 56%);
 }
 .av-wrap.pd-ice::after,.pdv.pd-ice::after,.crop-ring.pd-ice::after{
   background:conic-gradient(from 0deg, transparent 0 76%, rgba(255,255,255,.85) 84%, transparent 92%);

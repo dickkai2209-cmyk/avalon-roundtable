@@ -1,4 +1,5 @@
-// Leader pick glows gold. The vote chips show avatar, seat number and name.
+// Leader pick plants a pennant and a star ring. The same mark stays through the vote.
+// The vote chips show avatar, seat number and name.
 // The avoid card is only on the lobby screen, never after the game starts.
 const { spawn } = require('child_process');
 const http = require('http');
@@ -123,19 +124,40 @@ function bot(key, name) {
         const cx = ar.left + ar.width / 2, cy = ar.top + ar.height / 2;
         const hit = document.elementFromPoint(cx, cy);
         const edge = document.elementFromPoint(cx + ar.width * 0.22, cy);
-        const sparks = [...s.querySelectorAll('.gspark')].map(el => box(el));
+        const stars = [...s.querySelectorAll('.gstar')].map(el => {
+          const b = box(el);
+          const st = getComputedStyle(el);
+          return { l: b.l, t: b.t, r: b.r, b: b.b, w: b.w, h: b.h, anim: st.animationName, op: parseFloat(st.opacity) };
+        });
         const ring = getComputedStyle(s.querySelector('.av-wrap'), '::before');
         const avs = getComputedStyle(av);
         const crown = s.querySelector('.mark.crown');
         const pov = s.querySelector('.pov');
+        const flagEl = s.querySelector('.pick-flag');
+        const flag = flagEl ? box(flagEl) : null;
+        const flagSvg = flagEl && flagEl.querySelector('svg');
+        const cheek = document.elementFromPoint(cx + ar.width * 0.4, cy);
+        const centerHit = document.elementFromPoint(cx, cy);
+        const nm = s.querySelector('.nm');
+        const nameBox = nm ? box(nm) : null;
+        const num = document.querySelector('.rt > .no[data-seat="' + s.dataset.seat + '"]');
+        const pal = s.querySelector('.pd-pal');
+        let charm = null;
+        if (pal) {
+          const pr = pal.getBoundingClientRect();
+          const wr = pal.parentElement.getBoundingClientRect();
+          charm = { l: pr.left, t: pr.top, r: pr.right, b: pr.bottom, w: pr.width / wr.width, left: (pr.left - wr.left) / wr.width, top: (pr.top - wr.top) / wr.height };
+        }
         return {
           seat: s.dataset.seat, gold: s.classList.contains('gold-pick'), lead: s.classList.contains('is-lead'),
-          sparks: sparks.length, spark: sparks, cx, cy, aw: ar.width, ah: ar.height,
-          face: !!(hit && av.contains(hit)), edge: !!(edge && av.contains(edge)),
+          sparks: stars.length, spark: stars, cx, cy, aw: ar.width, ah: ar.height,
+          face: !!(cheek && av.contains(cheek)), edge: !!(edge && av.contains(edge)),
+          flag: !!flag, flagOn: !!(flagEl && centerHit && flagEl.contains(centerHit)),
+          flagBox: flag, flagAnim: flagSvg ? getComputedStyle(flagSvg).animationName : '',
           shadow: avs.boxShadow, anim: avs.animationName,
           ring: ring.content, ringAnim: ring.animationName, ringBg: ring.backgroundImage || ring.backgroundColor,
           crown: crown ? box(crown) : null, pendant: !!(pov && pov.getBoundingClientRect().width > 8),
-          name: (s.querySelector('.nm') || {}).textContent || ''
+          name: (nm || {}).textContent || '', nameBox, num: num ? box(num) : null, charm
         };
       });
       const probe = document.createElement('div');
@@ -148,14 +170,15 @@ function bot(key, name) {
         seats, fab: box(fab), role: box(role), card: box(card),
         sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth,
         ih: innerHeight, iw: innerWidth, top, bottom,
+        headerBottom: (document.querySelector('.topbar') || document.body).getBoundingClientRect().bottom,
         ladyBadge: !!document.querySelector('.lady-chain .badge'),
         labels: document.querySelectorAll('.rt .lbl').length
       };
     })()`);
   }
-  function assertGold(tag, view, safe) {
+  function assertGold(tag, view, safe, count = 2) {
     const picked = view.seats.filter(s => s.gold);
-    assert(picked.length === 2, tag + ' lights the two selected seats (' + picked.length + ')');
+    assert(picked.length === count, tag + ' lights the selected seats (' + picked.length + '/' + count + ')');
     assert(view.seats.filter(s => !s.gold).every(s => s.sparks === 0), tag + ' leaves the other seats plain');
     assert(view.sw <= view.cw + 1, tag + ' does not overflow');
     assert(view.top + 0.5 >= safe.top && view.bottom + 0.5 >= safe.bottom, tag + ' applies the safe area (' + view.top + '/' + view.bottom + ')');
@@ -163,7 +186,17 @@ function bot(key, name) {
     assert(!view.fab, tag + ' does not show the avoid chip while the leader is picking');
     const blockers = [view.role].filter(Boolean);
     for (const s of picked) {
-      assert(s.sparks === 3 && s.face && s.edge, tag + ' seat ' + s.seat + ' keeps the face clear of the glow');
+      assert(s.sparks === 8 && s.flag && s.flagOn && s.face, tag + ' seat ' + s.seat + ' has a center pennant and keeps a cheek of the face clear');
+      assert(s.flagBox && s.flagBox.w <= s.aw * 0.72 && s.flagBox.h <= s.ah * 0.55, tag + ' pennant stays compact (' + (s.flagBox && Math.round(s.flagBox.w)) + 'x' + (s.flagBox && Math.round(s.flagBox.h)) + ')');
+      assert(s.flagBox.l >= s.cx - s.aw / 2 - 1 && s.flagBox.r <= s.cx + s.aw / 2 + 1 && s.flagBox.t >= s.cy - s.ah / 2 - 1 && s.flagBox.b <= s.cy + s.ah / 2 + 1, tag + ' pennant stays on the portrait');
+      if (s.nameBox) assert(!overlap(s.flagBox, s.nameBox), tag + ' pennant does not cover the name');
+      if (s.num) assert(!overlap(s.flagBox, s.num), tag + ' pennant does not cover the seat numeral');
+      if (s.crown) assert(!overlap(s.flagBox, s.crown), tag + ' pennant does not cover the crown');
+      if (s.charm) {
+        assert(s.charm.w > 0.46 && s.charm.w < 0.58 && s.charm.top < -0.22 && s.charm.top > -0.42, tag + ' charm stays on the upper rim (' + s.charm.w.toFixed(2) + '/' + s.charm.top.toFixed(2) + ')');
+        assert(s.charm.left < -0.25 || s.charm.left > 0.7, tag + ' charm stays off the middle of the face');
+        assert(!overlap(s.flagBox, s.charm), tag + ' pennant does not cover the charm');
+      }
       assert(s.shadow && s.shadow !== 'none' && (s.anim === 'goldhalo' || /226,\s*178,\s*58|240,\s*193,\s*74/.test(s.shadow)), tag + ' seat ' + s.seat + ' has a gold halo');
       assert(s.ring && s.ring !== 'none', tag + ' seat ' + s.seat + ' has a gold ring');
       const r = s.aw / 2;
@@ -233,7 +266,7 @@ function bot(key, name) {
     await sleep(30);
     view = await pickView();
     const still = view.seats.filter(s => s.gold);
-    assert(still.length === 2 && still.every(s => s.anim === 'none' && s.ringAnim === 'none' && /226,\s*178,\s*58|240,\s*193,\s*74/.test(s.shadow) && s.face), 'reduced motion keeps a static gold ring and a clear face');
+    assert(still.length === 2 && still.every(s => s.anim === 'none' && s.ringAnim === 'none' && s.flagAnim === 'none' && s.flagOn && s.face && s.spark.every(sp => sp.anim === 'none' && sp.op > 0.9) && /226,\s*178,\s*58|240,\s*193,\s*74/.test(s.shadow)), 'reduced motion keeps the pennant and a static bright ring');
     await motion(false);
 
     const proposed = await evalj(`(() => { const b = document.querySelector('[data-a="propose"]'); if (!b || b.disabled) return 0; b.click(); return 1; })()`);
@@ -353,6 +386,7 @@ function bot(key, name) {
     assert(bots[0].st.game.phase === 'quest', 'an approved team reaches the mission');
     for (let i = 0; i < 30 && !await evalj(`document.body.innerText.includes('任務進行中')`).catch(() => false); i++) await sleep(50);
     await noAvoid('mission');
+    assert(await evalj(`document.querySelectorAll('.rt .pick-flag').length === 0`), 'the pennant does not follow the team into the mission');
     for (const b of bots) {
       if (!bots[0].st.game.team.includes(b.st.meId)) continue;
       const r = await b.act('quest', { success: true });
@@ -362,6 +396,104 @@ function bot(key, name) {
     assert(bots[0].st.game.phase !== 'quest', 'the mission moves on');
     for (let i = 0; i < 30 && await evalj(`document.body.innerText.includes('任務進行中')`).catch(() => true); i++) await sleep(50);
     await noAvoid('later phase ' + bots[0].st.game.phase);
+
+    const names10 = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
+    const p10 = [];
+    for (let i = 0; i < 10; i++) {
+      const guestKey = 'pf' + i + Date.now().toString(36);
+      const pendant = i === 1 ? 'frostmirror' : 'none';
+      const j = await fetch(APP + 'api/auth/guest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guestKey, profile: { name: names10[i], avatar: 'fox', bg: '#fff', fx: 'spot', pendant } }) }).then(r => r.json());
+      p10.push({ ...j, guestKey, name: names10[i], pendant });
+    }
+    const b10 = p10.map(p => bot(p.guestKey, p.name));
+    bots.push(...b10);
+    await Promise.all(b10.map(b => b.ready));
+    const made10 = await b10[0].emit('create', {});
+    for (let i = 0; i < 30 && !(b10[0].st && b10[0].st.code); i++) await sleep(40);
+    assert((await b10[0].act('capacity', { n: 10 })).ok !== false, '10-player table');
+    for (let i = 1; i < 10; i++) {
+      await b10[i].emit('join', { code: made10.room });
+      if (!(await b10[i].act('sit', { seat: i + 1 })).ok) throw new Error('sit10 ' + (i + 1));
+    }
+    if (!(await b10[0].act('start')).ok) throw new Error('start10');
+    for (let i = 0; i < 40 && !(b10[0].st.game && b10[0].st.game.me); i++) await sleep(40);
+    const lead10 = b10.find(b => b.st.meId === b10[0].st.game.leaderId);
+    await setSize(375, 812);
+    await asUser(p10[b10.indexOf(lead10)]);
+    await quiet();
+    async function frameTable() {
+      await evalj(`(() => {
+        const main = document.querySelector('main');
+        const card = document.querySelector('.rt') && document.querySelector('.rt').closest('.card');
+        const x = document.querySelector('.vote-remind-x'); if (x) x.click();
+        if (main && card) main.scrollTop += card.getBoundingClientRect().top - main.getBoundingClientRect().top;
+      })()`);
+      await sleep(50);
+    }
+    const picks = ['1', '2', '4'];
+    for (const seat of picks) {
+      const hit = await evalj(`(() => { const el = document.querySelector('.rt .st[data-seat="${seat}"][data-a="sel"]'); if (!el) return 0; el.click(); return 1; })()`);
+      assert(hit, '10p leader can select seat ' + seat);
+      await sleep(30);
+    }
+    function assertTop(tag, view) {
+      for (const n of ['1', '2', '10']) {
+        const s = view.seats.find(x => x.seat === n);
+        assert(s, tag + ' shows seat ' + n);
+        const faceTop = s.cy - s.ah / 2;
+        assert(faceTop >= view.headerBottom - 1, tag + ' seat ' + n + ' face clears the header (' + faceTop.toFixed(1) + '/' + view.headerBottom.toFixed(1) + ')');
+        if (s.nameBox) assert(s.nameBox.t >= view.headerBottom - 1 && s.nameBox.b <= view.ih - view.bottom + 1, tag + ' seat ' + n + ' name stays on screen');
+        if (s.num) assert(s.num.t >= view.headerBottom - 1, tag + ' seat ' + n + ' numeral clears the header');
+        if (s.crown) assert(s.crown.t >= view.headerBottom - 1, tag + ' seat ' + n + ' crown clears the header');
+      }
+      const a = view.seats.find(s => s.seat === '1');
+      const b = view.seats.find(s => s.seat === '10');
+      assert(a.gold && a.flagOn && !b.gold && !b.flag, tag + ' seat 10 stays plain beside selected seat 1');
+    }
+    await frameTable();
+    let ten = await pickView();
+    assertGold('10p 375', ten, SAFE[375], 3);
+    assertTop('10p 375', ten);
+    assert(ten.seats.filter(s => s.gold).length === 3, '10p selects three seats');
+    assert(ten.seats.some(s => s.gold && s.charm), '10p a selected seat keeps its hanging charm');
+    await shot('pick-flag-375.png');
+    await setSize(390, 844);
+    await frameTable();
+    ten = await pickView();
+    assertGold('10p 390', ten, SAFE[390], 3);
+    assertTop('10p 390', ten);
+    await shot('pick-flag-390.png');
+    await setSize(375, 812);
+    await motion(true);
+    await frameTable();
+    await sleep(40);
+    ten = await pickView();
+    const frozen = ten.seats.filter(s => s.gold);
+    assert(frozen.length === 3 && frozen.every(s => s.flagOn && s.anim === 'none' && s.ringAnim === 'none' && s.flagAnim === 'none' && /226,\s*178,\s*58|240,\s*193,\s*74/.test(s.shadow)), '10p reduced motion keeps the pennant and a bright static ring');
+    assertTop('10p reduced', ten);
+    await shot('pick-flag-reduced-375.png');
+    await motion(false);
+    const sent = await evalj(`(() => { const b = document.querySelector('[data-a="propose"]'); if (!b || b.disabled) return 0; b.click(); return 1; })()`);
+    assert(sent, '10p leader can submit the marked seats');
+    for (let i = 0; i < 40 && !(b10[0].st.game && b10[0].st.game.phase === 'vote'); i++) await sleep(40);
+    assert(b10[0].st.game.phase === 'vote', '10p moves to the team vote');
+    for (let i = 0; i < 40; i++) {
+      const n = await evalj(`document.querySelectorAll('.rt .st.gold-pick .pick-flag').length`).catch(() => 0);
+      if (n === 3) break;
+      await sleep(50);
+    }
+    await frameTable();
+    ten = await pickView();
+    assert(ten.seats.filter(s => s.gold && s.flagOn && s.sparks === 8).length === 3, '10p vote keeps the pennant and star ring');
+    assert(ten.seats.filter(s => !s.gold).every(s => !s.flag && s.sparks === 0), '10p vote does not mark the rest of the table');
+    assertTop('10p vote 375', ten);
+    await shot('pick-vote-375.png');
+    await setSize(390, 844);
+    await frameTable();
+    ten = await pickView();
+    assert(ten.seats.filter(s => s.gold && s.flag).length === 3, '10p 390 vote still shows the pennant');
+    assertTop('10p vote 390', ten);
+    await shot('pick-vote-390.png');
     console.log('PICK GLOW TESTS PASSED');
   } finally {
     try { ws.close(); } catch {}

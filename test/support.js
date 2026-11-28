@@ -149,8 +149,8 @@ async function hook(objType, object, id) {
   assert(!html.includes('tlogo" src="/img/amigos.webp"') && !html.includes('class="tlogo" src="/img/amigos.webp"'), 'Amigos is not the header mark');
   assert(app.includes('class="amigos-mark"') && app.includes('Amigosparty') && app.includes('Teddy Design Limited'), 'Amigos stays a sponsor credit');
   assert(app.includes('旺角霓虹'), 'card-back name 旺角霓虹 is left as venue flavour');
-  assert(html.includes('style.css?v=86') && html.includes('app.js?v=85') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'style cache is 86 and the other asset caches stay put');
-  assert(!html.includes('style.css?v=85'), 'previous style cache 85 is not reused');
+  assert(html.includes('style.css?v=87') && html.includes('app.js?v=86') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'style cache is 87, app cache is 86, and the other asset caches stay put');
+  assert(!html.includes('style.css?v=86') && !html.includes('app.js?v=85'), 'previous style cache 86 and app cache 85 are not reused');
   assert(!html.includes('style.css?v=67') && !html.includes('app.js?v=75'), 'live cache versions are not reused');
   assert(!app.includes("if (profile.pendant === 'coffee') profile.pendant = 'none'"), 'a saved coffee pendant is kept on load');
   assert(app.includes("if (it[2] === 'support') return hasBenefit('coffee')"), 'coffee still unlocks only with the support benefit');

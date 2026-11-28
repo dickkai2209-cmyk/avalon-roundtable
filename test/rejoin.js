@@ -77,8 +77,8 @@ function readDb() { return JSON.parse(fs.readFileSync(path.join(DATA, 'db.json')
   process.on('exit', stopAll);
 
   const html = await fetch(URL + '/').then((r) => r.text());
-  assert(html.includes('/app.js?v=85') && html.includes('/style.css?v=86'), 'style cache is 86 and app cache stays 85');
-  assert(!html.includes('/style.css?v=85'), 'previous style cache 85 is not reused');
+  assert(html.includes('/app.js?v=86') && html.includes('/style.css?v=87'), 'style cache is 87 and app cache is 86');
+  assert(!html.includes('/style.css?v=86') && !html.includes('/app.js?v=85'), 'previous style cache 86 and app cache 85 are not reused');
 
   const key = 'rejoin-guest-key-01';
   const made = await guest(key, '回歸', { avatar: 'panda', pendant: 'bow' });

@@ -179,7 +179,7 @@ const chainFn = app.slice(app.indexOf('function ladyChainHtml'), app.indexOf('fu
 assert(chainFn.includes('reveal && l.side'), 'mid-game public lady row still gates alignment on reveal');
 assert(app.includes('ladyRecapHtml') && app.includes('voteRecapHtml') && !app.includes('查驗同傳遞'), 'the recap uses the chain and grid');
 const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
-assert(html.includes('style.css?v=86') && html.includes('app.js?v=85') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'style cache is 86 and the other asset caches stay put');
-assert(!html.includes('style.css?v=85'), 'previous style cache 85 is not reused');
+assert(html.includes('style.css?v=87') && html.includes('app.js?v=86') && html.includes('review.js?v=2') && html.includes('voice.js?v=5'), 'style cache is 87, app cache is 86, and the other asset caches stay put');
+assert(!html.includes('style.css?v=86') && !html.includes('app.js?v=85'), 'previous style cache 86 and app cache 85 are not reused');
 
 console.log('RECAP TESTS PASSED');

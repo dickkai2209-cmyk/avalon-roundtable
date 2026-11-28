@@ -1,4 +1,4 @@
-// Global win-rate board: persisted completed-game stats, top 100, no private fields.
+// Global board: persisted completed-game stats, top 100, MVP count then win rate, no private fields.
 const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
@@ -19,11 +19,11 @@ function get(url) {
   });
 }
 function cmp(a, b) {
-  const cross = BigInt(b.won) * BigInt(a.played) - BigInt(a.won) * BigInt(b.played);
-  if (cross !== 0n) return cross > 0n ? 1 : -1;
   const am = Number(a.mvp) || 0;
   const bm = Number(b.mvp) || 0;
   if (am !== bm) return bm - am;
+  const cross = BigInt(b.won) * BigInt(a.played) - BigInt(a.won) * BigInt(b.played);
+  if (cross !== 0n) return cross > 0n ? 1 : -1;
   if (a.played !== b.played) return b.played - a.played;
   if (a.won !== b.won) return b.won - a.won;
   if (a.id < b.id) return -1;
@@ -163,7 +163,7 @@ function walk(v, where) {
   assert(names.filter(n => n === '示例乙').length === 1, 'reconnect does not duplicate a row');
   const hi = names.indexOf('精確甲');
   const lo = names.indexOf('精確乙');
-  assert(hi >= 0 && lo > hi, 'exact 1/3 ranks above 13/40 even though both round to 33% and 13/40 has more games');
+  assert(lo >= 0 && hi > lo, '13 MVP ranks above 1 MVP even though 1/3 is a higher exact rate than 13/40');
   assert(Math.round(100 / 3) === 33 && Math.round(1300 / 40) === 33, 'the exact-rate pair displays the same rounded percent');
   const one = direct.find(p => p.name === '示例丙');
   assert(one && one.won === 1 && one.played === 1, 'a single win stays visible as 1/1');
@@ -176,11 +176,13 @@ function walk(v, where) {
   const poor = direct.find(p => p.name === '冠軍少');
   assert(rich && poor && rich.won === 2 && poor.won === 2 && rich.played === 2 && poor.played === 2 && rich.mvp === 2 && poor.mvp === 1, 'same exact rate rows carry different MVP counts');
   assert(names.indexOf('冠軍多') < names.indexOf('冠軍少'), 'same exact win rate ranks more MVP first');
-  const king = direct.find(p => p.name === '勝率王');
+  const kingStats = saved.stats[rateKing.id];
   const whale = direct.find(p => p.name === 'MVP鯨魚');
-  assert(king && whale && king.won === 9 && king.played === 10 && king.mvp === 0 && whale.mvp === 5 && whale.won === 1 && whale.played === 5, 'a higher exact rate can have fewer MVP');
-  assert(names.indexOf('勝率王') < names.indexOf('MVP鯨魚'), 'a higher exact win rate still ranks above more MVP');
-  assert(Math.round(king.won * 100 / king.played) === 90 && Math.round(one.won * 100 / one.played) === 100, 'displayed percents stay rounded, including a 1/1 100%');
+  assert(kingStats && whale && kingStats.won === 9 && kingStats.played === 10 && (kingStats.mvp || 0) === 0 && whale.mvp === 5 && whale.won === 1 && whale.played === 5, 'a higher exact rate can have fewer MVP');
+  assert(names.includes('MVP鯨魚') && !names.includes('勝率王'), '5 MVP stays on the board and 0 MVP at 90% does not outrank every earned MVP');
+  assert(names.indexOf('MVP鯨魚') < names.indexOf('示例甲'), '5 MVP at 20% ranks above 3 MVP at 100%');
+  assert(names.indexOf('示例乙') < names.indexOf('真玩家'), 'equal MVP keeps the higher exact win rate first');
+  assert(Math.round(kingStats.won * 100 / kingStats.played) === 90 && Math.round(one.won * 100 / one.played) === 100, 'displayed percents stay rounded, including a 1/1 100%');
 
   const eligible = [
     alpha, beta, gamma, google, finished, tieA, tieB, exactHi, exactLo, anchored, mvpRich, mvpPoor, rateKing, mvpWhale, ...fillers,
@@ -190,7 +192,9 @@ function walk(v, where) {
   });
   eligible.sort(cmp);
   const expectNames = eligible.slice(0, 100).map(p => p.name);
-  assert(JSON.stringify(names) === JSON.stringify(expectNames), 'order is exact rate, then MVP, then games, then wins, then id');
+  assert(JSON.stringify(names) === JSON.stringify(expectNames), 'order is MVP, then exact rate, then games, then wins, then id');
+  assert(db2.cmpBoard({ id: 'm', played: 5, won: 1, mvp: 5 }, { id: 'r', played: 10, won: 9, mvp: 0 }) < 0, 'cmpBoard ranks more MVP ahead of a higher win rate');
+  assert(db2.cmpBoard({ id: 'a', played: 2, won: 2, mvp: 2 }, { id: 'b', played: 10, won: 2, mvp: 2 }) < 0, 'cmpBoard keeps the win-rate cross-multiply when MVP is tied');
   assert(eligible[100] && !names.includes(eligible[100].name), 'player 101 is omitted');
   const tieOrder = [tieA, tieB].sort((a, b) => a.id < b.id ? -1 : 1).map(u => u.name);
   assert(names.indexOf(tieOrder[0]) < names.indexOf(tieOrder[1]), 'equal rate, MVP, and games break ties by stable id');
@@ -351,8 +355,13 @@ function walk(v, where) {
     assert(ui.pin && ui.pin.above && ui.pin.state === 'unranked' && ui.pin.text.includes('你的排名') && ui.pin.text.includes('未上榜') && ui.pin.text.includes('0%') && ui.pin.text.includes('MVP 次數 0') && ui.pin.text.includes('0勝/0場') && !ui.pin.text.includes('示例甲'), '0 games pins 未上榜 with zeroed stats and does not borrow another player');
     assert(!ui.body, 'fixture names are not rendered');
     const top = ui.rows[0];
-    assert(top.text.includes('示例甲') && top.text.includes('100%') && top.text.includes('3勝/3場') && top.text.includes('MVP 3') && top.text.indexOf('MVP 3') < top.text.indexOf('100%') && top.av.includes('/img/av/panda.webp') && top.pd.includes('/img/pd/crown.webp'), 'first row shows rank, avatar, pendant, nickname, MVP left of the percent, and record');
-    assert(top.label.includes('MVP 3 次') && top.label.includes('100%'), 'the row label names the MVP count and the rounded rate');
+    assert(top.text.includes('精確乙') && top.text.includes('33%') && top.text.includes('13勝/40場') && top.text.includes('MVP 13') && top.text.indexOf('MVP 13') < top.text.indexOf('33%'), 'first row is the most MVP, with the win rate still visible');
+    const alphaUi = ui.rows.find(r => r.text.includes('示例甲'));
+    const whaleUi = ui.rows.find(r => r.text.includes('MVP鯨魚'));
+    assert(alphaUi && whaleUi && ui.rows.indexOf(whaleUi) < ui.rows.indexOf(alphaUi), 'the phone list puts 5 MVP above 3 MVP at 100%');
+    assert(alphaUi.text.includes('MVP 3') && alphaUi.text.includes('100%') && alphaUi.text.indexOf('MVP 3') < alphaUi.text.indexOf('100%') && alphaUi.av.includes('/img/av/panda.webp') && alphaUi.pd.includes('/img/pd/crown.webp'), 'a higher win rate still shows its percent, avatar, and pendant under a lower MVP count');
+    assert(top.label.includes('MVP 13 次') && top.label.includes('33%'), 'the first row label names the MVP count and the rounded rate');
+    assert(alphaUi.label.includes('MVP 3 次') && alphaUi.label.includes('100%'), 'a lower row label still names its MVP count and win rate');
     const gammaRow = await cdp.eval(`(() => { const li = [...document.querySelectorAll('.lb li')].find(el => el.innerText.includes('示例丙')); return li ? li.innerText.replace(/\\s+/g, ' ') : ''; })()`);
     assert(gammaRow.includes('100%') && gammaRow.includes('1勝/1場') && gammaRow.includes('MVP 1') && gammaRow.indexOf('MVP 1') < gammaRow.indexOf('100%'), 'one win out of one game is shown as 100% with MVP on its left');
     const pair = await cdp.eval(`(() => {
@@ -393,8 +402,11 @@ function walk(v, where) {
         const clearName = rec.left >= nr.right - 1;
         const clearRank = rec.left >= rr.right - 0.5;
         const inside = rec.right <= card.right + 1.5 && rr.left >= card.left - 1;
-        if (!(same && left && below && face && clearName && clearRank && inside && mr.width > 0 && pr.width > 0)) {
-          bad.push({ name: nm.textContent, same, left, below, face, clearName, clearRank, inside, gap: Math.round((pr.left - mr.right) * 10) / 10 });
+        const mvpPx = parseFloat(getComputedStyle(mvp).fontSize);
+        const pctPx = parseFloat(getComputedStyle(pct).fontSize);
+        const mvpLarger = mvpPx > pctPx && pr.width > 0;
+        if (!(same && left && below && face && clearName && clearRank && inside && mr.width > 0 && pr.width > 0 && mvpLarger)) {
+          bad.push({ name: nm.textContent, same, left, below, face, clearName, clearRank, inside, mvpLarger, mvpPx, pctPx, gap: Math.round((pr.left - mr.right) * 10) / 10 });
           if (bad.length >= 4) break;
         }
       }
@@ -411,16 +423,22 @@ function walk(v, where) {
       const rank = pin.querySelector('.lb-me-rank').getBoundingClientRect();
       const av = pin.querySelector('.av').getBoundingClientRect();
       const nm = pin.querySelector('.nm').getBoundingClientRect();
-      const rate = pin.querySelector('.lb-me-rate').getBoundingClientRect();
+      const mvpEl = pin.querySelector('.lb-me-mvp');
+      const mvp = mvpEl.getBoundingClientRect();
+      const rateEl = pin.querySelector('.lb-me-rate');
+      const rate = rateEl.getBoundingClientRect();
       const label = pin.querySelector('.lb-me-k').getBoundingClientRect();
       const subs = [...pin.querySelectorAll('.lb-me-sub')].map(el => el.getBoundingClientRect());
+      const mvpPx = parseFloat(getComputedStyle(mvpEl.querySelector('b')).fontSize);
+      const ratePx = parseFloat(getComputedStyle(rateEl).fontSize);
       return {
         inside, overflow,
         clearRank: av.left >= rank.right - 1,
-        clearName: rate.left >= nm.right - 1,
-        rateInside: rate.right <= box.right - 4,
+        clearName: mvp.left >= nm.right - 1,
+        rateInside: mvp.right <= box.right - 4 && rate.right <= box.right - 4 && rate.width > 0,
         labelAbove: label.bottom <= Math.min(rank.top, av.top) + 2,
         under: subs.length === 2 && subs[0].top >= nm.bottom - 1 && subs[1].top >= subs[0].bottom - 1,
+        mvpLarger: mvpPx > ratePx,
         gap: Math.round((av.left - rank.right) * 10) / 10,
       };
     })()`;
@@ -461,13 +479,13 @@ function walk(v, where) {
     const fit375 = await cdp.eval(fitExpr);
     const pin375 = await cdp.eval(pinFitExpr);
     assert(!fit375.overflow && fit375.bad.length === 0, '375 board keeps MVP left of the percent without covering the face ' + JSON.stringify(fit375));
-    assert(pin375.inside && !pin375.overflow && pin375.clearRank && pin375.clearName && pin375.rateInside && pin375.labelAbove && pin375.under, '375 pin card keeps the rank, face, name, and win rate apart ' + JSON.stringify(pin375));
+    assert(pin375.inside && !pin375.overflow && pin375.clearRank && pin375.clearName && pin375.rateInside && pin375.labelAbove && pin375.under && pin375.mvpLarger, '375 pin card keeps the rank, face, name, MVP count, and win rate apart ' + JSON.stringify(pin375));
     await shot('pin-me-unranked-375');
     await setPhone(390, 844);
     const fit390 = await cdp.eval(fitExpr);
     const pin390 = await cdp.eval(pinFitExpr);
     assert(!fit390.overflow && fit390.bad.length === 0, '390 board keeps MVP left of the percent without covering the face ' + JSON.stringify(fit390));
-    assert(pin390.inside && !pin390.overflow && pin390.clearRank && pin390.clearName && pin390.rateInside && pin390.labelAbove && pin390.under, '390 pin card keeps the rank, face, name, and win rate apart ' + JSON.stringify(pin390));
+    assert(pin390.inside && !pin390.overflow && pin390.clearRank && pin390.clearName && pin390.rateInside && pin390.labelAbove && pin390.under && pin390.mvpLarger, '390 pin card keeps the rank, face, name, MVP count, and win rate apart ' + JSON.stringify(pin390));
     await shot('pin-me-unranked-390');
 
     await openBoard(tokAlpha);
@@ -496,12 +514,12 @@ function walk(v, where) {
     await setPhone(375, 812);
     const rankedFit375 = await cdp.eval(pinFitExpr);
     const rankedList375 = await cdp.eval(fitExpr);
-    assert(rankedFit375.inside && !rankedFit375.overflow && rankedFit375.clearRank && rankedFit375.clearName && rankedFit375.rateInside && rankedFit375.labelAbove && rankedFit375.under, '375 ranked pin stays inside the card ' + JSON.stringify(rankedFit375));
+    assert(rankedFit375.inside && !rankedFit375.overflow && rankedFit375.clearRank && rankedFit375.clearName && rankedFit375.rateInside && rankedFit375.labelAbove && rankedFit375.under && rankedFit375.mvpLarger, '375 ranked pin stays inside the card ' + JSON.stringify(rankedFit375));
     assert(!rankedList375.overflow && rankedList375.bad.length === 0, '375 list still fits under the pin ' + JSON.stringify(rankedList375));
     await shot('pin-me-ranked-375');
     await setPhone(390, 844);
     const rankedFit390 = await cdp.eval(pinFitExpr);
-    assert(rankedFit390.inside && !rankedFit390.overflow && rankedFit390.clearRank && rankedFit390.clearName && rankedFit390.rateInside && rankedFit390.labelAbove && rankedFit390.under, '390 ranked pin stays inside the card ' + JSON.stringify(rankedFit390));
+    assert(rankedFit390.inside && !rankedFit390.overflow && rankedFit390.clearRank && rankedFit390.clearName && rankedFit390.rateInside && rankedFit390.labelAbove && rankedFit390.under && rankedFit390.mvpLarger, '390 ranked pin stays inside the card ' + JSON.stringify(rankedFit390));
     await shot('pin-me-ranked-390');
 
     await openBoard(tokOut);

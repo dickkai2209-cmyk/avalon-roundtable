@@ -1262,7 +1262,7 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
   .acct-row .acct-out{padding-left:12px;padding-right:12px}
 }
 
-/* Global win-rate board: pinned personal rank, then the top 100 */
+/* Global board: pinned personal rank, then the top 100. MVP count leads; win rate stays visible. */
 .lb-me{background:#eef4ff;border-radius:16px;padding:12px 12px 14px;margin:2px 0 8px}
 .lb-me-k{margin:0;color:#2f6be0;font-size:15px;font-weight:800;line-height:1.2}
 .lb-me-out{margin:10px 0 2px;color:#5c6578;font-size:14px;line-height:1.45}
@@ -1273,8 +1273,9 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .lb-me-main{flex:1;min-width:0}
 .lb-me-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
 .lb-me-top .nm{flex:1;min-width:0;font-size:18px;font-weight:800;line-height:1.2;color:#1d2333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lb-me-rate{flex:none;font-size:22px;font-weight:800;line-height:1;color:#1d2333;font-variant-numeric:tabular-nums;white-space:nowrap}
-.lb-me-rate span{font-size:14px;font-weight:800;margin-left:1px}
+.lb-me-mvp{flex:none;display:inline-flex;align-items:baseline;gap:3px;color:#8a5f12;font-size:12px;font-weight:800;line-height:1;white-space:nowrap}
+.lb-me-mvp b{font-size:22px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.lb-me-rate{margin-top:2px;font-size:13px;font-weight:700;line-height:1.35;color:#5c6578;white-space:nowrap}
 .lb-me-sub{margin-top:2px;font-size:13px;line-height:1.35;color:#6b7286;white-space:nowrap}
 .lb{list-style:none;margin:0;padding:0}
 .lb li{display:flex;align-items:center;flex-wrap:nowrap;gap:10px;padding:12px 0;border-bottom:1px solid var(--line2)}
@@ -1284,9 +1285,9 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
 .lb-main{flex:1;min-width:0}
 .lb-main .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:8px}
 .lb-rec{flex:none;text-align:right;font-variant-numeric:tabular-nums}
-.lb-rate{display:flex;align-items:baseline;justify-content:flex-end;flex-wrap:nowrap;gap:6px;white-space:nowrap;line-height:1.2}
-.lb-mvp{flex:none;font-size:12px;font-weight:800;color:#8a5f12;letter-spacing:0}
-.lb-rec b{flex:none;font-size:16px;font-weight:800;line-height:1.2}
+.lb-rate{display:flex;align-items:center;justify-content:flex-end;flex-wrap:nowrap;gap:6px;white-space:nowrap;line-height:1}
+.lb-mvp{flex:none;font-size:18px;font-weight:800;color:#8a5f12;letter-spacing:0;line-height:1}
+.lb-rec b{flex:none;font-size:13px;font-weight:700;line-height:1;color:#5c6578}
 .lb-wl{display:block;margin-top:1px;font-size:12px;color:var(--muted);white-space:nowrap}
 .lb-empty{padding:18px 0 8px}
 @media (max-width:390px){
@@ -1297,7 +1298,7 @@ body:has(.myrole-fab) main,body:has(.veto-fab) main{
   .lb-me-rank{width:60px;font-size:26px}
   .lb-me-rank.long{font-size:16px}
   .lb-me-top .nm{font-size:17px}
-  .lb-me-rate{font-size:20px}
+  .lb-me-mvp b{font-size:20px}
 }
 
 /* In-app confirm for lake inspection and assassination. No native browser dialog. */
@@ -1479,47 +1480,72 @@ body:has(.end-next) main{padding-bottom:calc(72px + env(safe-area-inset-bottom))
 .near-item span{font-size:12px;color:#6b7286}
 .near-live{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;background:#eef3ff;color:#3b6fd9;font-style:normal;font-size:11px;font-weight:800;line-height:16px;vertical-align:1px}
 
-/* Leader pick: a thin gold ring and three rim sparkles. The face stays open. */
+/* Leader team pick: a bright star ring plus a compact pennant on the portrait.
+   The name sits above the lower stars. Crown, wreath, sword and charms stay on top. */
+.rt .st.gold-pick{--star-r:calc(var(--av, 58px) * .72)}
+.rt .st.gold-pick .st-meta{position:relative;z-index:6}
 .rt .st.gold-pick .av{
-  box-shadow:0 0 0 2px #fff6d0,0 0 0 4px #e2b23a,0 0 12px 2px rgba(226,178,58,.78);
-  animation:goldhalo 1.6s ease-in-out infinite;
+  box-shadow:0 0 0 3px #fffef8,0 0 0 8px #f0c14a,0 0 0 11px #e2b23a,0 0 18px 3px rgba(240,193,74,.95);
+  animation:goldhalo 1.35s ease-in-out infinite;
 }
 .rt .st.gold-pick .av-wrap::before{
   content:"";
   position:absolute;
-  inset:-5px;
+  inset:-9px;
   border-radius:50%;
   pointer-events:none;
   z-index:0;
-  background:conic-gradient(from 20deg,rgba(255,236,170,0) 0deg,rgba(255,250,230,.98) 16deg,rgba(226,178,58,0) 42deg,rgba(255,236,170,0) 130deg,rgba(255,252,240,1) 156deg,rgba(226,178,58,0) 188deg,rgba(255,236,170,0) 250deg,rgba(255,248,220,.95) 286deg,rgba(226,178,58,0) 322deg);
-  -webkit-mask:radial-gradient(circle,transparent 60%,#000 68%,#000 82%,transparent 92%);
-  mask:radial-gradient(circle,transparent 60%,#000 68%,#000 82%,transparent 92%);
-  animation:goldspin 2.8s linear infinite;
+  background:conic-gradient(from 0deg,#fff 0deg,#ffe9a0 8deg,rgba(226,178,58,0) 18deg,rgba(255,248,220,0) 32deg,#fff 40deg,#f0c14a 50deg,rgba(226,178,58,0) 62deg,rgba(255,248,220,0) 78deg,#fffef6 88deg,#ffe08a 98deg,rgba(226,178,58,0) 110deg,rgba(255,248,220,0) 128deg,#fff 138deg,#f0c14a 150deg,rgba(226,178,58,0) 164deg,rgba(255,248,220,0) 180deg,#fffef8 190deg,#ffe9a0 202deg,rgba(226,178,58,0) 214deg,rgba(255,248,220,0) 230deg,#fff 240deg,#f6c445 254deg,rgba(226,178,58,0) 268deg,rgba(255,248,220,0) 284deg,#fffef6 294deg,#ffe08a 308deg,rgba(226,178,58,0) 322deg,rgba(255,248,220,0) 340deg,#fff 350deg,#f0c14a 360deg);
+  -webkit-mask:radial-gradient(circle,transparent 58%,#000 66%,#000 84%,transparent 96%);
+  mask:radial-gradient(circle,transparent 58%,#000 66%,#000 84%,transparent 96%);
+  animation:goldspin 2.6s linear infinite;
 }
-.rt .st.gold-pick .gspark{
+.rt .st.gold-pick .pick-flag{
   position:absolute;
-  width:7px;height:7px;
-  margin:-3.5px 0 0 -3.5px;
-  pointer-events:none;
+  left:50%;
+  top:calc(var(--av, 58px) / 2);
+  width:calc(var(--av, 58px) * .64);
+  height:calc(var(--av, 58px) * .40);
+  transform:translate(-50%,-50%);
   z-index:5;
-  background:#fffef8;
-  clip-path:polygon(50% 0,63% 37%,100% 50%,63% 63%,50% 100%,37% 63%,0 50%,37% 37%);
-  filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 3px rgba(226,178,58,.95));
-  animation:goldglint 1.5s ease-in-out infinite;
+  filter:drop-shadow(0 1px 1px rgba(40,24,4,.55)) drop-shadow(0 0 1px #fff);
 }
-.rt .st.gold-pick .gspark.a{left:calc(50% - var(--av, 58px) * 0.7);top:calc(var(--av, 58px) * 0.58)}
-.rt .st.gold-pick .gspark.b{left:calc(50% + var(--av, 58px) * 0.7);top:calc(var(--av, 58px) * 0.7);animation-delay:.45s}
-.rt .st.gold-pick .gspark.c{left:calc(50% - var(--av, 58px) * 0.62);top:calc(var(--av, 58px) * 0.84);animation-delay:.9s}
+.rt .st.gold-pick .pick-flag svg{
+  width:100%;height:100%;display:block;overflow:visible;
+  transform-origin:12% 50%;
+  animation:flagflutter 1.5s ease-in-out infinite;
+}
+.rt .st.gold-pick .gstar{
+  position:absolute;
+  width:16px;height:16px;
+  margin:-8px 0 0 -8px;
+  pointer-events:none;
+  z-index:4;
+  background:#fffef8;
+  clip-path:polygon(50% 0,62% 35%,100% 50%,62% 65%,50% 100%,38% 65%,0 50%,38% 35%);
+  filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 3px rgba(240,193,74,1));
+  animation:startwinkle 1.25s ease-in-out infinite;
+}
+.rt .st.gold-pick .gstar.s0{left:calc(50% + var(--star-r) * .3827);top:calc(var(--av, 58px) / 2 - var(--star-r) * .9239)}
+.rt .st.gold-pick .gstar.s1{left:calc(50% + var(--star-r) * .9239);top:calc(var(--av, 58px) / 2 - var(--star-r) * .3827);animation-delay:.16s}
+.rt .st.gold-pick .gstar.s2{left:calc(50% + var(--star-r) * .9239);top:calc(var(--av, 58px) / 2 + var(--star-r) * .3827);animation-delay:.32s}
+.rt .st.gold-pick .gstar.s3{left:calc(50% + var(--star-r) * .3827);top:calc(var(--av, 58px) / 2 + var(--star-r) * .9239);animation-delay:.48s}
+.rt .st.gold-pick .gstar.s4{left:calc(50% - var(--star-r) * .3827);top:calc(var(--av, 58px) / 2 + var(--star-r) * .9239);animation-delay:.64s}
+.rt .st.gold-pick .gstar.s5{left:calc(50% - var(--star-r) * .9239);top:calc(var(--av, 58px) / 2 + var(--star-r) * .3827);animation-delay:.8s}
+.rt .st.gold-pick .gstar.s6{left:calc(50% - var(--star-r) * .9239);top:calc(var(--av, 58px) / 2 - var(--star-r) * .3827);animation-delay:.96s}
+.rt .st.gold-pick .gstar.s7{left:calc(50% - var(--star-r) * .3827);top:calc(var(--av, 58px) / 2 - var(--star-r) * .9239);animation-delay:1.12s}
 @keyframes goldhalo{
-  0%,100%{box-shadow:0 0 0 2px #fff6d0,0 0 0 4px #e2b23a,0 0 10px 1px rgba(226,178,58,.55)}
-  50%{box-shadow:0 0 0 2px #fff,0 0 0 5px #f0c14a,0 0 16px 3px rgba(246,208,92,.92)}
+  0%,100%{box-shadow:0 0 0 3px #fffef8,0 0 0 7px #e2b23a,0 0 14px 2px rgba(226,178,58,.82)}
+  50%{box-shadow:0 0 0 3px #fff,0 0 0 10px #f0c14a,0 0 22px 5px rgba(240,193,74,.98)}
 }
 @keyframes goldspin{to{transform:rotate(1turn)}}
-@keyframes goldglint{0%,100%{opacity:.4;transform:scale(.72)}50%{opacity:1;transform:scale(1)}}
+@keyframes startwinkle{0%,100%{opacity:.85;transform:scale(.78)}50%{opacity:1;transform:scale(1.16)}}
+@keyframes flagflutter{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(4deg)}}
 @media (prefers-reduced-motion: reduce){
-  .rt .st.gold-pick .av{animation:none;box-shadow:0 0 0 2px #fff6d0,0 0 0 4px #e2b23a,0 0 12px 2px rgba(226,178,58,.85)}
+  .rt .st.gold-pick .av{animation:none;box-shadow:0 0 0 3px #fffef8,0 0 0 8px #f0c14a,0 0 0 11px #e2b23a,0 0 18px 3px rgba(240,193,74,.95)}
   .rt .st.gold-pick .av-wrap::before{animation:none;background:#f0c14a}
-  .rt .st.gold-pick .gspark{animation:none;opacity:.95;transform:none}
+  .rt .st.gold-pick .gstar{animation:none;opacity:1;transform:none}
+  .rt .st.gold-pick .pick-flag svg{animation:none;transform:none}
 }
 
 /* Team-approval vote keeps the light name chips and adds the seat number beside the name. */
